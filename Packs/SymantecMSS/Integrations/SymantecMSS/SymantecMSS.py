@@ -7,9 +7,13 @@ from CommonServerUserPython import *
 import xml
 import tempfile
 import contextlib
-import OpenSSL.crypto
+from cryptography.hazmat.primitives.serialization import pkcs12
+from cryptography.hazmat.primitives import serialization
+
 from xml.sax.saxutils import escape
+import defusedxml.ElementTree as defused_ET
 import re
+import time
 
 ''' GLOBALS/PARAMS '''
 
@@ -25,13 +29,20 @@ def pfx_to_pem(pfx, pfx_password):
     """ Decrypts the .pfx file to be used with requests. """
     with tempfile.NamedTemporaryFile(suffix=".pem") as t_pem:
         f_pem = open(t_pem.name, "wb")
-        p12 = OpenSSL.crypto.load_pkcs12(pfx, pfx_password)
-        f_pem.write(OpenSSL.crypto.dump_privatekey(OpenSSL.crypto.FILETYPE_PEM, p12.get_privatekey()))
-        f_pem.write(OpenSSL.crypto.dump_certificate(OpenSSL.crypto.FILETYPE_PEM, p12.get_certificate()))
-        ca = p12.get_ca_certificates()
-        if ca is not None:
-            for cert in ca:
-                f_pem.write(OpenSSL.crypto.dump_certificate(OpenSSL.crypto.FILETYPE_PEM, cert))
+
+        private_key, certificate, additional_certificates = pkcs12.load_key_and_certificates(pfx, str.encode(pfx_password))
+        if private_key:
+            f_pem.write(private_key.private_bytes(
+                encoding=serialization.Encoding.PEM,
+                format=serialization.PrivateFormat.TraditionalOpenSSL,
+                encryption_algorithm=serialization.NoEncryption()
+            ))
+        if certificate:
+            f_pem.write(certificate.public_bytes(serialization.Encoding.PEM))
+
+        if additional_certificates is not None:
+            for cert in additional_certificates:
+                f_pem.write(cert.public_bytes(serialization.Encoding.PEM))
         f_pem.close()
         yield t_pem.name
 
@@ -46,9 +57,10 @@ def load_server_url():
 
 def load_certificate():
     """ Loads the certificate and passphrase from the configuration """
-    cert = demisto.params()["certificate"]
+    params = demisto.params()
+    cert = params.get("certificate")
     cert = base64.b64decode(cert)
-    passphrase = demisto.params()["passphrase"] if "passphrase" in demisto.params() else ""
+    passphrase = params.get('passphrase_creds', {}).get('password') or params.get("passphrase", "")
     return cert, passphrase
 
 
@@ -85,20 +97,20 @@ def api_call(body, headers):
         res = requests.post(url=SERVER_URL + "/SWS/incidents.asmx", cert=cert, data=body, headers=headers)
         if res.status_code < 200 or res.status_code >= 300:
             raise Exception(
-                "Got status code " + str(res.status_code) + " with body " + res.content + " with headers " + str(
+                "Got status code " + str(res.status_code) + " with body " + str(res.content) + " with headers " + str(
                     res.headers))
         try:
-            return xml.etree.ElementTree.fromstring(res.content)
+            return defused_ET.fromstring(res.content)
         except xml.etree.ElementTree.ParseError as exc:
             # in case of a parsing error, try to remove problematic chars and try again.
-            demisto.debug('failed to parse request content, trying to parse without problematic chars:\n{}'.format(exc))
-            return xml.etree.ElementTree.fromstring(strip_unwanted_chars(res.content))
+            demisto.debug(f'failed to parse request content, trying to parse without problematic chars:\n{exc}')
+            return defused_ET.fromstring(strip_unwanted_chars(res.content))
 
 
 def event_to_incident(event):
     """ Converts a Symantec event to a Demisto incident """
-    incident = dict()  # type: Dict[str, Any]
-    incident["name"] = "Incident: %s (%s)" % (event["IncidentNumber"], event["Classification"])
+    incident = {}  # type: Dict[str, Any]
+    incident["name"] = "Incident: {} ({})".format(event["IncidentNumber"], event["Classification"])
     incident["occurred"] = event["TimeCreated"] + "+0%s:00" % DST
     incident["rawJSON"] = json.dumps(event)
 
@@ -194,28 +206,26 @@ def get_incidents_list(time):
 
 
 def get_incidents_list_request(time, src_ip, severities, max_incidents):
-    src_ip = "<SourceIP>%s</SourceIP>" % src_ip if src_ip else ""
-    severities = "<Severity>%s</Severity>" % severities if severities else ""
-    max_incidents = "<MaxIncidents>%s</MaxIncidents>" % max_incidents if max_incidents else ""
 
-    body = """<?xml version="1.0" encoding="utf-8"?>
-                <soap12:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" \
-                xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:soap12="http://www.w3.org/2003/05/soap-envelope">
-                    <soap12:Body>
-                        <IncidentGetList xmlns="https://www.monitoredsecurity.com/">
-                        <StartTimeStampGMT>%s</StartTimeStampGMT>
-                        %s
-                        %s
-                        %s
-                        </IncidentGetList>
-                    </soap12:Body>
-                </soap12:Envelope>""" % (time, src_ip, severities, max_incidents)
+    elem = ET.Element("soap12:Envelope", {"xmlns:xsi": "http://www.w3.org/2001/XMLSchema-instance",
+                                          "xmlns:xsd": "http://www.w3.org/2001/XMLSchema",
+                                          "xmlns:soap12": "http://www.w3.org/2003/05/soap-envelope"})
+
+    body = ET.SubElement(elem, "soap12:Body")
+    incident_get_list = ET.SubElement(body, "IncidentGetList", {"xmlns": "https://www.monitoredsecurity.com/"})
+    ET.SubElement(incident_get_list, "StartTimeStampGMT").text = str(time)
+    ET.SubElement(incident_get_list, "SourceIP").text = str(src_ip) if src_ip else ''
+    ET.SubElement(incident_get_list, "Severity").text = severities if severities else ''
+    ET.SubElement(incident_get_list, "MaxIncidents").text = str(max_incidents) if max_incidents else ''
+
+    elem_str = ET.tostring(elem, encoding="utf-8")
+
     headers = {
         "content-Type": "application/soap+xml; charset=utf-8",
-        "content-Length": str(len(body))
+        "content-Length": str(len(elem_str))
     }
 
-    root = api_call(body=body, headers=headers)
+    root = api_call(body=elem_str, headers=headers)
     incident_nodes = root.findall(SECURITY_INCIDENT_SUMMARY_NODE_XPATH)
     result = []
     for incident in incident_nodes:
@@ -281,36 +291,29 @@ def update_incident():
 
 
 def update_incident_request(num, status, resolution, ref, severity, assign_to_org, assign_to_person, comments):
-    # Create optional parameter tags if needed
-    ref = "<Reference>%s</Reference>" % (ref) if ref else ""
-    assign_to_org = "<AssignedToOrganiztion>%s</AssignedToOrganiztion>" % assign_to_org if assign_to_org else ""
-    assign_to_person = "<AssignedToPerson>%s</AssignedToPerson>" % assign_to_person if assign_to_person else ""
-    comments = "<Comments>%s</Comments>" % comments if comments else ""
+    root = ET.Element("soap12:Envelope", {"xmlns:xsi": "http://www.w3.org/2001/XMLSchema-instance",
+                                          "xmlns:xsd": "http://www.w3.org/2001/XMLSchema",
+                                          "xmlns:soap12": "http://www.w3.org/2003/05/soap-envelope"})
 
-    body = """<?xml version="1.0" encoding="utf-8"?>
-                <soap12:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" \
-                xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:soap12="http://www.w3.org/2003/05/soap-envelope">
-                  <soap12:Body>
-                    <UpdateIncidentWorkflow xmlns="https://www.monitoredsecurity.com/">
-                      <IncidentNumber>%s</IncidentNumber>
-                      <Status>%s</Status>
-                      <Resolution>%s</Resolution>
-                      %s
-                      <Severity>%s</Severity>
-                      %s
-                      %s
-                      %s
-                    </UpdateIncidentWorkflow>
-                  </soap12:Body>
-                </soap12:Envelope>""" % (num, status, resolution, ref, severity, assign_to_org, assign_to_person,
-                                         escape(comments))
+    body = ET.SubElement(root, "soap12:Body")
+    update_incident_workflow = ET.SubElement(body, "UpdateIncidentWorkflow", {"xmlns": "https://www.monitoredsecurity.com/"})
+    ET.SubElement(update_incident_workflow, "IncidentNumber").text = str(num)
+    ET.SubElement(update_incident_workflow, "Status").text = str(status)
+    ET.SubElement(update_incident_workflow, "Resolution").text = str(resolution)
+    ET.SubElement(update_incident_workflow, "Reference").text = str(ref) if ref else ''
+    ET.SubElement(update_incident_workflow, "Severity ").text = str(severity)
+    ET.SubElement(update_incident_workflow, "AssignedToOrganiztion").text = str(assign_to_org) if assign_to_org else ''
+    ET.SubElement(update_incident_workflow, "AssignedToPerson").text = str(assign_to_person) if assign_to_person else ''
+    ET.SubElement(update_incident_workflow, "Comments").text = escape(comments) if comments else ''
+
+    elem_str = ET.tostring(root, encoding="utf-8")
     headers = {
         "content-Type": "application/soap+xml; charset=utf-8",
-        "content-Length": str(len(body))
+        "content-Length": str(len(elem_str))
     }
 
-    res = api_call(body=body, headers=headers)
-    res_string_xml = xml.etree.ElementTree.tostring(res)
+    res = api_call(body=elem_str, headers=headers)
+    res_string_xml = ET.tostring(res)
     res_string_json = xml2json(res_string_xml)
     dict_res = json.loads(res_string_json)
     res = dict_res["Envelope"]["Body"]["UpdateIncidentWorkflowResponse"]["UpdateIncidentWorkflowResult"]
@@ -321,9 +324,12 @@ def query_incident_cmd():
     result = query_incident(demisto.args()["number"], workflow_query=True)
 
     # Create minimal signature list
+    data = result.get("SignatureList", {}).get("Signature") or []
+    if not isinstance(data, list):
+        data = [data]
     sigs = []
-    for sig in result["SignatureList"]["Signature"]:
-        sig_dict = dict()  # type: Dict[str, Any]
+    for sig in data:
+        sig_dict = {}  # type: Dict[str, Any]
         sig_dict["SourceIPString"] = sig["SourceIPString"]
         sig_dict["SignatureName"] = sig["SignatureName"]
         sig_dict["VendorSignature"] = sig["VendorSignature"]
@@ -430,46 +436,45 @@ def query_incident(num, workflow_query=False):
 
 
 def query_incident_request(num):
-    body = """<?xml version="1.0" encoding="utf-8"?>
-                <soap12:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" \
-                xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:soap12="http://www.w3.org/2003/05/soap-envelope">
-                    <soap12:Body>
-                        <IncidentQuery xmlns="https://www.monitoredsecurity.com/">
-                            <IncidentNumber>%s</IncidentNumber>
-                        </IncidentQuery>
-                    </soap12:Body>
-                </soap12:Envelope>""" % num
+    root = ET.Element("soap12:Envelope", {"xmlns:xsi": "http://www.w3.org/2001/XMLSchema-instance",
+                                          "xmlns:xsd": "http://www.w3.org/2001/XMLSchema",
+                                          "xmlns:soap12": "http://www.w3.org/2003/05/soap-envelope"})
+
+    body = ET.SubElement(root, "soap12:Body")
+    incident_query = ET.SubElement(body, "IncidentQuery", {"xmlns": "https://www.monitoredsecurity.com/"})
+    ET.SubElement(incident_query, "IncidentNumber").text = str(num)
+    elem_str = ET.tostring(root, encoding="utf-8")
     headers = {
         "content-Type": "application/soap+xml; charset=utf-8",
-        "content-Length": str(len(body))
+        "content-Length": str(len(elem_str))
     }
 
-    query = api_call(body=body, headers=headers)
+    query = api_call(body=elem_str, headers=headers)
     query_node = query.find(SECURITY_INCIDENT_NODE_XPATH)
-    string_query_xml = xml.etree.ElementTree.tostring(query_node)
+    string_query_xml = ET.tostring(query_node)
     string_query_json = xml2json(string_query_xml)
     dict_query = json.loads(string_query_json)["SecurityIncident"]
     return dict_query
 
 
 def query_incident_workflow_request(num):
-    body = """<?xml version="1.0" encoding="utf-8"?>
-                <soap12:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" \
-                xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:soap12="http://www.w3.org/2003/05/soap-envelope">
-                    <soap12:Body>
-                        <IncidentWorkflowQuery xmlns="https://www.monitoredsecurity.com/">
-                            <IncidentNumber>%s</IncidentNumber>
-                        </IncidentWorkflowQuery>
-                    </soap12:Body>
-                </soap12:Envelope>""" % num
+    root = ET.Element("soap12:Envelope", {"xmlns:xsi": "http://www.w3.org/2001/XMLSchema-instance",
+                                          "xmlns:xsd": "http://www.w3.org/2001/XMLSchema",
+                                          "xmlns:soap12": "http://www.w3.org/2003/05/soap-envelope"})
+
+    body = ET.SubElement(root, "soap12:Body")
+    incident_workflow_query = ET.SubElement(body, "IncidentWorkflowQuery", {"xmlns": "https://www.monitoredsecurity.com/"})
+    ET.SubElement(incident_workflow_query, "IncidentNumber").text = str(num)
+    elem_str = ET.tostring(root, encoding="utf-8")
+
     headers = {
         "content-Type": "application/soap+xml; charset=utf-8",
-        "content-Length": str(len(body))
+        "content-Length": str(len(elem_str))
     }
 
-    query = api_call(body=body, headers=headers)
+    query = api_call(body=elem_str, headers=headers)
     query_node = query.find(SECURITY_INCIDENT_NODE_XPATH)
-    string_query_xml = xml.etree.ElementTree.tostring(query_node)
+    string_query_xml = ET.tostring(query_node)
     string_query_json = xml2json(string_query_xml)
     dict_query = json.loads(string_query_json)["SecurityIncident"]
     return dict_query

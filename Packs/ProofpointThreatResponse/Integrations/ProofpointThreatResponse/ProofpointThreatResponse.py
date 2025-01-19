@@ -1,28 +1,31 @@
-import demistomock as demisto
-from CommonServerPython import *
-
-''' IMPORTS '''
+import demistomock as demisto  # noqa: F401
+from CommonServerPython import *  # noqa: F401
 import json
 import requests
-from datetime import date
+from datetime import date, timedelta
 
-requests.packages.urllib3.disable_warnings()
+import dateparser
+
+import urllib3
+
+urllib3.disable_warnings()
 
 ''' GLOBAL VARS '''
 TIME_FORMAT = '%Y-%m-%dT%H:%M:%SZ'
 BASE_URL = demisto.params().get('url')
 if BASE_URL and BASE_URL[-1] != '/':
     BASE_URL += '/'
-API_KEY = demisto.params().get('apikey')
+API_KEY = demisto.params().get('credentials', {}).get('password') or demisto.params().get('apikey')
 VERIFY_CERTIFICATE = not demisto.params().get('insecure')
 # How many time before the first fetch to retrieve incidents
-FIRST_FETCH, _ = parse_date_range(demisto.params().get('first_fetch', '3 days'), date_format=TIME_FORMAT)
+FIRST_FETCH, _ = parse_date_range(demisto.params().get('first_fetch', '12 hours') or '12 hours',
+                                  date_format=TIME_FORMAT)
 
 ''' COMMAND FUNCTIONS '''
 
 
 def get_list(list_id):
-    fullurl = BASE_URL + 'api/lists/{}/members.json'.format(list_id)
+    fullurl = BASE_URL + f'api/lists/{list_id}/members.json'
     res = requests.get(
         fullurl,
         headers={
@@ -33,7 +36,7 @@ def get_list(list_id):
     )
 
     if res.status_code < 200 or res.status_code >= 300:
-        return_error('Get list failed. URL: {}, StatusCode: {}'.format(fullurl, res.status_code))
+        return_error(f'Get list failed. URL: {fullurl}, StatusCode: {res.status_code}')
 
     return res.json()
 
@@ -47,7 +50,7 @@ def get_list_command():
 
 
 def add_to_list(list_id, indicator, comment, expiration):
-    fullurl = BASE_URL + 'api/lists/{}/members.json'.format(list_id)
+    fullurl = BASE_URL + f'api/lists/{list_id}/members.json'
 
     indicator = {
         'member': indicator
@@ -68,7 +71,7 @@ def add_to_list(list_id, indicator, comment, expiration):
     )
 
     if res.status_code < 200 or res.status_code >= 300:
-        return_error('Add to list failed. URL: {}, Request Body: {}'.format(fullurl, json.dumps(indicator)))
+        return_error(f'Add to list failed. URL: {fullurl}, Request Body: {json.dumps(indicator)}')
 
     return res.json()
 
@@ -83,7 +86,7 @@ def add_to_list_command():
     message = ''
     for indicator in indicators:
         add_to_list(list_id, indicator, comment, expiration)
-        message += '{} added successfully to {}\n'.format(indicator, list_id)
+        message += f'{indicator} added successfully to {list_id}\n'
 
     demisto.results(message)
 
@@ -97,7 +100,7 @@ def block_ip_command():
     message = ''
     for ip in ips:
         add_to_list(list_id, ip, None, expiration)
-        message += '{} added successfully to block_ip list\n'.format(ip)
+        message += f'{ip} added successfully to block_ip list\n'
 
     demisto.results(message)
 
@@ -111,7 +114,7 @@ def block_domain_command():
     message = ''
     for domain in domains:
         add_to_list(list_id, domain, None, expiration)
-        message += '{} added successfully to block_domain list\n'.format(domain)
+        message += f'{domain} added successfully to block_domain list\n'
 
     demisto.results(message)
 
@@ -125,7 +128,7 @@ def block_url_command():
     message = ''
     for url in urls:
         add_to_list(list_id, url, None, expiration)
-        message += '{} added successfully to block_url list\n'.format(url)
+        message += f'{url} added successfully to block_url list\n'
 
     demisto.results(message)
 
@@ -139,7 +142,7 @@ def block_hash_command():
     message = ''
     for h in hashes:
         add_to_list(list_id, h, None, expiration)
-        message += '{} added successfully to block_hash list\n'.format(h)
+        message += f'{h} added successfully to block_hash list\n'
 
     demisto.results(message)
 
@@ -149,7 +152,7 @@ def search_indicators(list_id, indicator_filter):
     found_items = []
     for item in list_indicators:
         item_indicator = demisto.get(item, 'host.host')
-        if indicator_filter in item_indicator:
+        if item_indicator and indicator_filter in item_indicator:
             found_items.append(item)
 
     return found_items
@@ -167,10 +170,10 @@ def search_indicator_command():
 def delete_indicator(list_id, indicator_filter):
     indicator = search_indicators(list_id, indicator_filter)
     if len(indicator) == 0:
-        return_error('{} not exists in {}'.format(indicator_filter, list_id))
+        return_error(f'{indicator_filter} not exists in {list_id}')
 
     indicator_id = indicator.get('id')  # pylint: disable=E1101
-    fullurl = BASE_URL + 'api/lists/{}/members/{}.json'.format(list_id, indicator_id)
+    fullurl = BASE_URL + f'api/lists/{list_id}/members/{indicator_id}.json'
     res = requests.delete(
         fullurl,
         headers={
@@ -179,7 +182,7 @@ def delete_indicator(list_id, indicator_filter):
         verify=VERIFY_CERTIFICATE
     )
     if res.status_code < 200 or res.status_code >= 300:
-        return_error('Delete indicator failed. URL: {}, StatusCode: {}'.format(fullurl, res.status_code))
+        return_error(f'Delete indicator failed. URL: {fullurl}, StatusCode: {res.status_code}')
 
 
 def delete_indicator_command():
@@ -188,7 +191,7 @@ def delete_indicator_command():
     indicator = demisto.args().get('indicator')
     delete_indicator(list_id, indicator)
 
-    demisto.results('{} deleted successfully from list {}'.format(list_id, indicator))
+    demisto.results(f'{list_id} deleted successfully from list {indicator}')
 
 
 def test():
@@ -197,7 +200,9 @@ def test():
     Returns:
         'ok' if test passed, anything else will fail the test.
     """
-
+    integration_params = demisto.params()
+    if integration_params.get('isFetch') and not integration_params.get('states'):
+        raise DemistoException("Missing argument - You must provide at least one incident state.")
     get_incidents_request(
         {
             'created_after': date.today(),
@@ -217,7 +222,7 @@ def create_incident_field_context(incident):
     Returns:
         list. The parsed incident fields list
     """
-    incident_field_values = dict()
+    incident_field_values = {}
     for incident_field in incident.get('incident_field_values', []):
         incident_field_values[incident_field['name'].replace(" ", "_")] = incident_field['value']
 
@@ -235,18 +240,27 @@ def get_emails_context(event):
     """
     emails_context = []
     for email in event.get('emails', []):
+        email_obj = {
+            'sender': email.get('sender', {}).get('email'),
+            'recipient': email.get('recipient', {}).get('email'),
+            'subject': email.get('subject'),
+            'message_id': email.get('messageId'),
+            'body': email.get('body'),
+            'body_type': email.get('bodyType'),
+            'headers': email.get('headers'),
+            'urls': email.get('urls'),
+            'sender_vap': email.get('sender', {}).get('vap'),
+            'recipient_vap': email.get('recipient', {}).get('vap'),
+            'attachments': email.get('attachments'),
+        }
+        message_delivery_time = email.get('messageDeliveryTime', {})
+        if message_delivery_time and isinstance(message_delivery_time, dict):
+            email_obj['message_delivery_time'] = message_delivery_time.get('millis')
+        elif message_delivery_time and isinstance(message_delivery_time, str):
+            email_obj['message_delivery_time'] = message_delivery_time
         emails_context.append(
-            assign_params(**{
-                'sender': email.get('sender', {}).get('email'),
-                'recipient': email.get('recipient', {}).get('email'),
-                'subject': email.get('subject'),
-                'message_id': email.get('messageId'),
-                'message_delivery_time': email.get('messageDeliveryTime', {}).get('millis'),
-                'body': email.get('body'),
-                'body_type': email.get('bodyType'),
-                'headers': email.get('headers'),
-                'urls': email.get('urls')
-            }))
+            assign_params(**email_obj)
+        )
 
     return emails_context
 
@@ -321,18 +335,22 @@ def get_incident_command():
     """
     args = demisto.args()
     incident_id = args.pop('incident_id')
-    fullurl = BASE_URL + 'api/incidents/{}.json'.format(incident_id)
+    expand_events = args.get('expand_events')
+    fullurl = BASE_URL + f'api/incidents/{incident_id}.json'
     incident_data = requests.get(
         fullurl,
         headers={
             'Content-Type': 'application/json',
             'Authorization': API_KEY
         },
-        verify=VERIFY_CERTIFICATE
+        params={
+            'expand_events': expand_events,
+        },
+        verify=VERIFY_CERTIFICATE,
     )
 
     if incident_data.status_code < 200 or incident_data.status_code >= 300:
-        return_error('Get incident failed. URL: {}, StatusCode: {}'.format(fullurl, incident_data.status_code))
+        return_error(f'Get incident failed. URL: {fullurl}, StatusCode: {incident_data.status_code}')
 
     incident_data = incident_data.json()
     human_readable = create_incidents_human_readable('Incident Results:', [incident_data])
@@ -354,11 +372,7 @@ def pass_sources_list_filter(incident, sources_list):
     if len(sources_list) == 0:
         return True
 
-    for source in sources_list:
-        if source in incident.get("event_sources"):
-            return True
-
-    return False
+    return any(source in incident.get('event_sources') for source in sources_list)
 
 
 def pass_abuse_disposition_filter(incident, abuse_disposition_values):
@@ -375,9 +389,8 @@ def pass_abuse_disposition_filter(incident, abuse_disposition_values):
         return True
 
     for incident_field in incident.get('incident_field_values', []):
-        if incident_field['name'] == 'Abuse Disposition':
-            if incident_field['value'] in abuse_disposition_values:
-                return True
+        if incident_field['name'] == 'Abuse Disposition' and incident_field['value'] in abuse_disposition_values:
+            return True
 
     return False
 
@@ -432,7 +445,7 @@ def get_incidents_request(params):
                          'You may consider adding a filter argument to the command.\n'
                          'URL: {}, StatusCode: {}'.format(fullurl, incidents_list.status_code))
         else:
-            return_error('The operation failed. URL: {}, StatusCode: {}'.format(fullurl, incidents_list.status_code))
+            return_error(f'The operation failed. URL: {fullurl}, StatusCode: {incidents_list.status_code}')
 
     return incidents_list.json()
 
@@ -515,7 +528,7 @@ def get_incidents_batch_by_time_request(params):
     # while loop relevant for fetching old incidents
     while created_before < current_time and len(incidents_list) < fetch_limit:
         demisto.debug(
-            "Entered the batch loop , with fetch_limit {} and incidents list {} and incident length {} "
+            "PTR: Entered the batch loop , with fetch_limit {} and incidents list {} and incident length {} "
             "with created_after {} and created_before {}.".format(
                 str(fetch_limit), str([incident.get('id') for incident in incidents_list]), str(len(incidents_list)),
                 str(request_params['created_after']), str(request_params['created_before'])))
@@ -530,7 +543,7 @@ def get_incidents_batch_by_time_request(params):
         # updating params according to the new times
         request_params['created_after'] = created_after.isoformat().split('.')[0] + 'Z'
         request_params['created_before'] = created_before.isoformat().split('.')[0] + 'Z'
-        demisto.debug("End of the current batch loop with {} incidents".format(str(len(incidents_list))))
+        demisto.debug(f"PTR: End of the current batch loop with {str(len(incidents_list))} incidents")
 
     # fetching the last batch when created_before is bigger then current time = fetching new incidents
     if len(incidents_list) < fetch_limit:
@@ -540,7 +553,7 @@ def get_incidents_batch_by_time_request(params):
         incidents_list.extend(new_incidents)
 
         demisto.debug(
-            "Finished the last batch, with fetch_limit {} and incidents list {} and incident length {}".format(
+            "PTR: Finished the last batch, with fetch_limit {} and incidents list {} and incident length {}".format(
                 str(fetch_limit), str([incident.get('id') for incident in incidents_list]), str(len(incidents_list))))
 
     incidents_list_limit = incidents_list[:fetch_limit]
@@ -581,7 +594,7 @@ def fetch_incidents_command():
         for incident in incidents_list:
             id = incident.get('id')
             inc = {
-                'name': 'ProofPoint_TRAP - ID {}'.format(id),
+                'name': f'ProofPoint_TRAP - ID {id}',
                 'rawJSON': json.dumps(incident),
                 'occurred': incident['created_at']
             }
@@ -593,13 +606,13 @@ def fetch_incidents_command():
                 (datetime.strptime(last_fetch_time, TIME_FORMAT) - timedelta(minutes=1)).isoformat().split('.')[0] + 'Z'
             last_fetched_id[state] = id
 
-    demisto.debug("End of current fetch function with last_fetch {} and last_fetched_id {}".format(str(last_fetch), str(
+    demisto.debug("PTR: End of current fetch function with last_fetch {} and last_fetched_id {}".format(str(last_fetch), str(
         last_fetched_id)))
 
     demisto.setLastRun({'last_fetch': last_fetch})
     demisto.setLastRun({'last_fetched_incident_id': last_fetched_id})
 
-    demisto.info('extracted {} incidents'.format(len(incidents)))
+    demisto.info(f'extracted {len(incidents)} incidents')
 
     demisto.incidents(incidents)
 
@@ -624,7 +637,7 @@ def create_add_comment_human_readable(incident):
         'Action ID': incident.get('id')
     })
 
-    return tableToMarkdown('Comments added successfully to incident:{}'.format(incident_id), human_readable,
+    return tableToMarkdown(f'Comments added successfully to incident:{incident_id}', human_readable,
                            human_readable_headers, removeNull=True)
 
 
@@ -641,7 +654,7 @@ def add_comment_to_incident_command():
         "detail": details
     }
 
-    fullurl = BASE_URL + 'api/incidents/{}/comments.json'.format(incident_id)
+    fullurl = BASE_URL + f'api/incidents/{incident_id}/comments.json'
     incident_data = requests.post(
         fullurl,
         headers={
@@ -692,7 +705,7 @@ def add_user_to_incident_command():
         return_error('Add comment to incident command failed. URL: {}, '
                      'StatusCode: {}'.format(fullurl, incident_data.status_code))
 
-    return_outputs('The user was added successfully to incident {}'.format(incident_id), {}, {})
+    return_outputs(f'The user was added successfully to incident {incident_id}', {}, {})
 
 
 def parse_json_argument(argument_string_value, argument_name):
@@ -700,9 +713,9 @@ def parse_json_argument(argument_string_value, argument_name):
     try:
         parsed_arg = json.loads(argument_string_value)
     except ValueError as error:
-        return_error("The '{}' argument is not a valid json. Error: {}".format(argument_name, error))
+        return_error(f"The '{argument_name}' argument is not a valid json. Error: {error}")
     if not parsed_arg.get(argument_name):
-        return_error("The '{}' json argument should start with a key named '{}'".format(argument_name, argument_name))
+        return_error(f"The '{argument_name}' json argument should start with a key named '{argument_name}'")
 
     return parsed_arg
 
@@ -710,7 +723,7 @@ def parse_json_argument(argument_string_value, argument_name):
 def prepare_ingest_alert_request_body(args):
     json_arguments = ['attacker', 'cnc_host', 'detector', 'email', 'forensics_hosts', 'target', 'threat_info',
                       'custom_fields']
-    request_body = dict()  # type: dict
+    request_body = {}  # type: dict
     for argument_name, argument_value in args.items():
         if argument_name in json_arguments:
             parsed_argument = parse_json_argument(argument_value, argument_name)
@@ -733,7 +746,7 @@ def ingest_alert_command():
                      "either as an argument or as an integration parameter.")
 
     request_body = prepare_ingest_alert_request_body(assign_params(**args))
-    fullurl = BASE_URL + 'threat/json_event/events/{}'.format(json_source_id)
+    fullurl = BASE_URL + f'threat/json_event/events/{json_source_id}'
     alert_data = requests.post(
         fullurl,
         headers={
@@ -750,13 +763,148 @@ def ingest_alert_command():
     return_outputs('The alert was successfully ingested to TRAP', {}, {})
 
 
+def close_incident_command():
+    args = demisto.args()
+    incident_id = args.get('incident_id')
+    details = args.get('details')
+    summary = args.get('summary')
+    request_body = {
+        "summary": summary,
+        "detail": details
+    }
+
+    fullurl = BASE_URL + f'api/incidents/{incident_id}/close.json'
+    incident_data = requests.post(
+        fullurl,
+        headers={
+            'Content-Type': 'application/json',
+            'Authorization': API_KEY
+        },
+        json=request_body,
+        verify=VERIFY_CERTIFICATE
+    )
+
+    if incident_data.status_code < 200 or incident_data.status_code >= 300:
+        return_error('Incident closure failed. URL: {}, '
+                     'StatusCode: {}'.format(fullurl, incident_data.status_code))
+
+    return_outputs(f'The incident {incident_id} was successfully closed', {}, {})
+
+
+def search_quarantine():
+    arg_time = dateparser.parse(demisto.args().get('time'))
+    emailTAPtime = 0
+    if isinstance(arg_time, datetime):
+        emailTAPtime = int(arg_time.timestamp())
+    else:
+        return_error("Timestamp was bad")
+
+    lstAlert = []
+    mid = demisto.args().get('message_id')
+    recipient = demisto.args().get('recipient')
+
+    request_params = {
+        'created_after': datetime.strftime(arg_time - get_time_delta('1 hour'), TIME_FORMAT),  # for safety
+        'fetch_delta': '6 hours',
+        'fetch_limit': '50'
+    }
+
+    incidents_list = get_incidents_batch_by_time_request(request_params)
+
+    found = {'email': False, 'mid': False, 'quarantine': False}
+    resQ = []
+
+    # Collecting emails inside alert to find those with same recipient and messageId
+    for incident in incidents_list:
+        for alert in incident.get('events'):
+            for email in alert.get('emails'):
+                message_delivery_time = email.get('messageDeliveryTime', {})
+                demisto.debug(f'PTR: Got {message_delivery_time=} with type {type(message_delivery_time)}')
+                if message_delivery_time and isinstance(message_delivery_time, dict):
+                    message_delivery_time = message_delivery_time.get('millis')
+                elif message_delivery_time and isinstance(message_delivery_time, str):
+                    message_delivery_time = dateparser.parse(message_delivery_time)
+                    if message_delivery_time:
+                        message_delivery_time = int(message_delivery_time.timestamp() * 1000)
+                    else:
+                        demisto.info(f'PTR: Could not parse time of incident {incident.get("id")}, got '
+                                     f'{email.get("messageDeliveryTime", "")=}')
+                        continue
+
+                if email.get('messageId') == mid and email.get('recipient').get('email') == recipient and message_delivery_time:
+                    found['mid'] = True
+                    demisto.debug('PTR: Found the email, adding the alert')
+                    emailTRAPtimestamp = int(message_delivery_time / 1000)
+                    if emailTAPtime == emailTRAPtimestamp:
+                        demisto.debug(f'PTR: Adding the alert with id {alert.get("id")}')
+                        found['email'] = True
+                        lstAlert.append({
+                            'incidentid': incident.get('id'),
+                            'alertid': alert.get('id'),
+                            'alerttime': alert.get('received'),
+                            'incidenttime': incident.get('created_at'),
+                            'messageId': mid,
+                            'quarantine_results': incident.get('quarantine_results')
+                        })
+
+    quarantineFoundcpt = 0
+
+    # Go though the alert list, and check the quarantine results:
+    for alert in lstAlert:
+        for quarantine in alert.get('quarantine_results'):
+            if quarantine.get('messageId') == mid and quarantine.get('recipient') == recipient:
+                found['quarantine'] = True
+                tsquarantine = dateparser.parse(quarantine.get("startTime"))
+                tsalert = dateparser.parse(alert.get("alerttime"))
+                if isinstance(tsquarantine, datetime) and isinstance(tsalert, datetime):
+                    diff = (tsquarantine - tsalert).total_seconds()
+                    # we want to make sure quarantine starts 2 minuts after creating the alert.
+                    if 0 < diff < 120:
+                        resQ.append({
+                            'quarantine': quarantine,
+                            'alert': {
+                                'id': alert.get('alertid'),
+                                'time': alert.get('alerttime')
+                            },
+                            'incident': {
+                                'id': alert.get('incidentid'),
+                                'time': alert.get('incidenttime')
+                            }
+                        })
+                    else:
+                        quarantineFoundcpt += 1
+                else:
+                    demisto.debug(f"PTR: Failed to parse timestamp of incident: {alert=} {quarantine=}.")
+
+    if quarantineFoundcpt > 0:
+        return CommandResults(
+            readable_output=f"{mid} Message ID matches to {quarantineFoundcpt} emails quarantined but time alert does not match")
+    if not found['mid']:
+        return CommandResults(readable_output=f"Message ID {mid} not found in TRAP incidents")
+
+    midtxt = f'{mid} Message ID found in TRAP alerts,'
+    if not found['email']:
+        return CommandResults(
+            readable_output=f"{midtxt} but timestamp between email delivery time and time given as argument doesn't match")
+    elif not found['quarantine']:
+        demisto.debug("PTR: " + "\n".join([json.dumps(alt, indent=4) for alt in lstAlert]))
+        return CommandResults(f"{midtxt} but not in the quarantine list meaning that email has not be quarantined.")
+
+    return CommandResults(
+        outputs_prefix='ProofPointTRAP.Quarantine',
+        outputs=resQ,
+        readable_output=tableToMarkdown("Quarantine Result", resQ),
+        raw_response=resQ
+    )
+
+
 ''' EXECUTION CODE '''
 
 
 def main():
     handle_proxy(demisto.params().get('proxy'))
     command = demisto.command()
-    demisto.info('Command being called is {}'.format(command))
+    demisto.info(f'Command being called is {command}')
 
     if command == 'test-module':
         test()
@@ -802,6 +950,12 @@ def main():
 
     elif command == 'proofpoint-tr-ingest-alert':
         ingest_alert_command()
+
+    elif command == 'proofpoint-tr-close-incident':
+        close_incident_command()
+
+    elif command == 'proofpoint-tr-verify-quarantine':
+        return_results(search_quarantine())
 
 
 if __name__ == '__builtin__' or __name__ == 'builtins':

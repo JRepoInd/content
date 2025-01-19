@@ -1,11 +1,10 @@
+Deprecated. Use ***MITRE ATT&CK v2*** instead.
+
 Use the MITRE ATT&CK Feed integration to fetch indicators from MITRE ATT&CK.
 For more information click [here](https://www.mitre.org/capabilities/cybersecurity/overview/cybersecurity-blog/attck%E2%84%A2-content-available-in-stix%E2%84%A2-20-via).
 
 ## Configure MITRE ATT&CK Feed on XSOAR
 
-1. Navigate to **Settings** > **Integrations** > **Servers & Services**.
-2. Search for MITRE ATT&CK Feed.
-3. Click **Add instance** to create and configure a new integration instance.
 
 | **Parameter** | **Description** | **Required** |
 | --- | --- | --- |
@@ -20,7 +19,6 @@ For more information click [here](https://www.mitre.org/capabilities/cybersecuri
 | insecure | Whether to trust any certificate (not secure). | False |
 | proxy | Whether to use the system proxy settings. | False |
 
-4. Click **Test** to validate the connection.
 
 #### Feed timeouts:
 MITRE enforce a rate limit for connecting to their taxii server. Ensure that your fetch interval is reasonable, otherwise you will receive connection errors.

@@ -1,11 +1,12 @@
-from mock import Mock, patch
+from unittest.mock import Mock, patch
+import pytest
 
 import demistomock as demisto
-
 
 INTSIGHTS_PARAMS = {
     'server': 'https://api.test.com',
     'proxy': 'no_proxy',
+    'insecure': True,
     'credentials': {
         'identifier': "some_id",
         'password': 'some_password'
@@ -13,6 +14,7 @@ INTSIGHTS_PARAMS = {
 }
 
 
+@pytest.mark.filterwarnings('ignore::urllib3.exceptions.InsecureRequestWarning')
 @patch.object(demisto, "results")
 def test_add_comment(mocker_results, mocker):
     mocker.patch.object(demisto, 'command', return_value='intsights-test-action')
@@ -25,11 +27,12 @@ def test_add_comment(mocker_results, mocker):
 
     import IntSight
 
-    patch('IntSight.http_request', Mock())
+    mocker.patch('IntSight.http_request', Mock())
     IntSight.add_comment()
-    assert(comment == mocker_results.call_args[0][0]['Contents']['Comment'])
+    assert (comment == mocker_results.call_args[0][0]['Contents']['Comment'])
 
 
+@pytest.mark.filterwarnings('ignore::urllib3.exceptions.InsecureRequestWarning')
 @patch.object(demisto, "results")
 def test_add_tag(mocker_results, mocker):
     mocker.patch.object(demisto, 'command', return_value='intsights-test-action')
@@ -42,34 +45,34 @@ def test_add_tag(mocker_results, mocker):
     import IntSight
 
     tag_id = '1234'
-    with patch('IntSight.http_request', Mock()) as mock_http_response:
-        mock_http_response.return_value = {
-            'Details': {
-                'Tags': [
-                    {
-                        'Name': 'Test Tag',
-                        '_id': tag_id
-                    }
-                ]
-            }
+    mocker.patch('IntSight.http_request', return_value={
+        'Details': {
+            'Tags': [
+                {
+                    'Name': 'Test Tag',
+                    '_id': tag_id
+                }
+            ]
         }
-        IntSight.add_tag()
-        assert(tag_id == mocker_results.call_args[0][0]['Contents']['Tags']['ID'])
+    })
+    IntSight.add_tag()
+    assert (tag_id == mocker_results.call_args[0][0]['Contents']['Tags']['ID'])
 
 
+@pytest.mark.filterwarnings('ignore::urllib3.exceptions.InsecureRequestWarning')
 @patch.object(demisto, "results")
 def test_get_alert_takedown_status(mocker_results, mocker):
     mocker.patch.object(demisto, 'command', return_value='intsights-test-action')
     mocker.patch.object(demisto, 'params', return_value=INTSIGHTS_PARAMS)
     mocker.patch.object(demisto, 'args', return_value={'alert-id': '5e7b0b5620d02a00085ab21e'})
-
     import IntSight
 
-    patch('IntSight.http_request', Mock())
+    mocker.patch('IntSight.http_request', return_value=MockResponse(text='text'))
     IntSight.get_alert_takedown_status()
-    assert('TakedownStatus' in mocker_results.call_args[0][0]['Contents'] and not None)
+    assert ('TakedownStatus' in mocker_results.call_args[0][0]['Contents'] and not None)
 
 
+@pytest.mark.filterwarnings('ignore::urllib3.exceptions.InsecureRequestWarning')
 @patch.object(demisto, "results")
 def test_ask_analyst(mocker_results, mocker):
     mocker.patch.object(demisto, 'command', return_value='intsights-test-action')
@@ -79,11 +82,12 @@ def test_ask_analyst(mocker_results, mocker):
 
     import IntSight
 
-    patch('IntSight.http_request', Mock())
+    mocker.patch('IntSight.http_request')
     IntSight.ask_analyst()
-    assert(question == mocker_results.call_args[0][0]['Contents']['Question'])
+    assert (question == mocker_results.call_args[0][0]['Contents']['Question'])
 
 
+@pytest.mark.filterwarnings('ignore::urllib3.exceptions.InsecureRequestWarning')
 @patch.object(demisto, "results")
 def test_close_alert(mocker_results, mocker):
     mocker.patch.object(demisto, 'command', return_value='intsights-test-action')
@@ -93,25 +97,29 @@ def test_close_alert(mocker_results, mocker):
 
     import IntSight
 
-    patch('IntSight.http_request', Mock())
+    mocker.patch('IntSight.http_request')
     IntSight.close_alert()
-    assert(reason == mocker_results.call_args[0][0]['Contents']['Closed']['Reason'])
+    assert (reason == mocker_results.call_args[0][0]['Contents']['Closed']['Reason'])
 
 
-@patch.object(demisto, "results")
-def test_get_alert_image(mocker_results, mocker):
+@pytest.mark.filterwarnings('ignore::urllib3.exceptions.InsecureRequestWarning')
+def test_get_alert_image(mocker):
     mocker.patch.object(demisto, 'command', return_value='intsights-test-action')
     mocker.patch.object(demisto, 'params', return_value=INTSIGHTS_PARAMS)
+
     image_id = '123456789'
     mocker.patch.object(demisto, 'args', return_value={'image-id': image_id})
 
     import IntSight
+    mocker.patch('IntSight.http_request', return_value=MockResponse(content='abc'))
+    mocker_results = mocker.patch.object(IntSight, 'fileResult')
 
-    patch('IntSight.http_request', Mock())
+    mocker.patch('demistomock.results')
     IntSight.get_alert_image()
-    assert(image_id + '-image.jpeg' == mocker_results.call_args[0][0]['File'])
+    assert (image_id + '-image.jpeg' == mocker_results.call_args[0][0])
 
 
+@pytest.mark.filterwarnings('ignore::urllib3.exceptions.InsecureRequestWarning')
 @patch.object(demisto, "results")
 def test_takedown_request(mocker_results, mocker):
     mocker.patch.object(demisto, 'command', return_value='intsights-test-action')
@@ -121,11 +129,12 @@ def test_takedown_request(mocker_results, mocker):
 
     import IntSight
 
-    patch('IntSight.http_request', Mock())
+    mocker.patch('IntSight.http_request')
     IntSight.takedown_request()
-    assert(alert_id == mocker_results.call_args[0][0]['Contents']['ID'])
+    assert (alert_id == mocker_results.call_args[0][0]['Contents']['ID'])
 
 
+@pytest.mark.filterwarnings('ignore::urllib3.exceptions.InsecureRequestWarning')
 @patch.object(demisto, "results")
 def test_get_ioc_blocklist_status(mocker_results, mocker):
     mocker.patch.object(demisto, 'command', return_value='intsights-test-action')
@@ -139,12 +148,12 @@ def test_get_ioc_blocklist_status(mocker_results, mocker):
         "Value": "example.com",
         "Status": "Sent"
     }
-    with patch('IntSight.http_request', Mock()) as mock_http_response:
-        mock_http_response.return_value = [mock_response]
-        IntSight.get_ioc_blocklist_status()
-        assert(mock_response in mocker_results.call_args[0][0]['Contents'])
+    mocker.patch('IntSight.http_request', return_value=[mock_response])
+    IntSight.get_ioc_blocklist_status()
+    assert (mock_response in mocker_results.call_args[0][0]['Contents'])
 
 
+@pytest.mark.filterwarnings('ignore::urllib3.exceptions.InsecureRequestWarning')
 @patch.object(demisto, "results")
 def test_search_for_ioc(mocker_results, mocker):
     mocker.patch.object(demisto, 'command', return_value='intsights-test-action')
@@ -155,34 +164,56 @@ def test_search_for_ioc(mocker_results, mocker):
     import IntSight
 
     mock_response = {
-        "Value": value,
-        "Type": "Domains",
-        "Severity": {
-            "Value": "High"
-        },
-        "Whitelist": "false",
-        "FirstSeen": "2020-01-01T20:01:27.344Z",
-        "LastSeen": "2020-01-30T16:18:51.148Z",
-        "LastUpdate": "2020-02-21T23:00:51.268Z",
-        "Sources": [
+        "firstSeen": "2018-07-20T01:00:49.000Z",
+        "geolocation": "AU",
+        "lastSeen": "2022-07-14T20:03:08.256Z",
+        "lastUpdateDate": "2022-10-31T16:02:41.781Z",
+        "relatedCampaigns": [],
+        "relatedMalware": [
+            "agent",
+            "arkei",
+            "zegost"
+        ],
+        "relatedThreatActors": [],
+        "reportedFeeds": [
             {
-                "Name": "AlienVault OTX",
-                "ConfidenceLevel": 3
+                "confidenceLevel": 3,
+                "id": "123123123",
+                "name": "Cyber"
+            },
+            {
+                "confidenceLevel": 3,
+                "id": "123123",
+                "name": "Cyber1"
+            },
+            {
+                "confidenceLevel": 2,
+                "id": "123123123123123",
+                "name": "Cyber111"
+            },
+            {
+                "confidenceLevel": 3,
+                "id": "123123123123",
+                "name": "Cyber11"
             }
         ],
-        "Tags": [
-            "MyTag_1"
+        "score": 80,
+        "severity": "High",
+        "status": "Retired",
+        "tags": [
+            "njrat",
+            "Installation"
         ],
-        "SystemTags": [
-            "Phishing"
-        ]
+        "type": "IpAddresses",
+        "value": "test_value",
+        "whitelisted": True
     }
-    with patch('IntSight.http_request', Mock()) as mock_http_response:
-        mock_http_response.return_value = mock_response
-        IntSight.search_for_ioc()
-        assert(value == mocker_results.call_args[0][0]['Contents']['Value'])
+    mocker.patch('IntSight.http_request', return_value=mock_response)
+    IntSight.search_for_ioc()
+    assert (value == mocker_results.call_args[0][0]['Contents']['value'])
 
 
+@pytest.mark.filterwarnings('ignore::urllib3.exceptions.InsecureRequestWarning')
 @patch.object(demisto, "results")
 def test_remove_tag(mocker_results, mocker):
     mocker.patch.object(demisto, 'command', return_value='intsights-test-action')
@@ -192,11 +223,12 @@ def test_remove_tag(mocker_results, mocker):
 
     import IntSight
 
-    patch('IntSight.http_request', Mock())
+    mocker.patch('IntSight.http_request')
     IntSight.remove_tag()
-    assert(tag_id == mocker_results.call_args[0][0]['Contents']['Tags']['ID'])
+    assert (tag_id == mocker_results.call_args[0][0]['Contents']['Tags']['ID'])
 
 
+@pytest.mark.filterwarnings('ignore::urllib3.exceptions.InsecureRequestWarning')
 @patch.object(demisto, "results")
 def test_request_for_ioc_enrichment(mocker_results, mocker):
     mocker.patch.object(demisto, 'command', return_value='intsights-test-action')
@@ -301,12 +333,12 @@ def test_request_for_ioc_enrichment(mocker_results, mocker):
             ]
         }
     }
-    with patch('IntSight.http_request', Mock()) as mock_http_response:
-        mock_http_response.return_value = mock_response
-        IntSight.request_for_ioc_enrichment()
-        assert(mock_response['OriginalValue'] == mocker_results.call_args[0][0]['Contents']['OriginalValue'])
+    mocker.patch('IntSight.http_request', return_value=mock_response)
+    IntSight.request_for_ioc_enrichment()
+    assert (mock_response['OriginalValue'] == mocker_results.call_args[0][0]['Contents']['OriginalValue'])
 
 
+@pytest.mark.filterwarnings('ignore::urllib3.exceptions.InsecureRequestWarning')
 @patch.object(demisto, "results")
 def test_send_mail(mocker_results, mocker):
     mocker.patch.object(demisto, 'command', return_value='intsights-test-action')
@@ -321,11 +353,12 @@ def test_send_mail(mocker_results, mocker):
 
     import IntSight
 
-    patch('IntSight.http_request', Mock())
+    mocker.patch('IntSight.http_request')
     IntSight.send_mail()
-    assert(alert_id == mocker_results.call_args[0][0]['Contents']['ID'])
+    assert (alert_id == mocker_results.call_args[0][0]['Contents']['ID'])
 
 
+@pytest.mark.filterwarnings('ignore::urllib3.exceptions.InsecureRequestWarning')
 @patch.object(demisto, "results")
 def test_unassign_alert(mocker_results, mocker):
     mocker.patch.object(demisto, 'command', return_value='intsights-test-action')
@@ -338,9 +371,9 @@ def test_unassign_alert(mocker_results, mocker):
 
     import IntSight
 
-    patch('IntSight.http_request', Mock())
+    mocker.patch('IntSight.http_request')
     IntSight.unassign_alert()
-    assert(alert_id == mocker_results.call_args[0][0]['Contents']['ID'])
+    assert (alert_id == mocker_results.call_args[0][0]['Contents']['ID'])
 
 
 @patch.object(demisto, "results")
@@ -356,11 +389,12 @@ def test_change_severity(mocker_results, mocker):
 
     import IntSight
 
-    patch('IntSight.http_request', Mock())
+    mocker.patch('IntSight.http_request')
     IntSight.change_severity()
-    assert(severity == mocker_results.call_args[0][0]['Contents']['Severity'])
+    assert (severity == mocker_results.call_args[0][0]['Contents']['Severity'])
 
 
+@pytest.mark.filterwarnings('ignore::urllib3.exceptions.InsecureRequestWarning')
 @patch.object(demisto, "results")
 def test_update_ioc_blocklist_status(mocker_results, mocker):
     mocker.patch.object(demisto, 'command', return_value='intsights-test-action')
@@ -376,11 +410,12 @@ def test_update_ioc_blocklist_status(mocker_results, mocker):
 
     import IntSight
 
-    patch('IntSight.http_request', Mock())
+    mocker.patch('IntSight.http_request')
     IntSight.update_ioc_blocklist_status()
-    assert(alert_id == mocker_results.call_args[0][0]['Contents']['ID'])
+    assert (alert_id == mocker_results.call_args[0][0]['Contents']['ID'])
 
 
+@pytest.mark.filterwarnings('ignore::urllib3.exceptions.InsecureRequestWarning')
 def get_mssp_sub_accounts_http_response(method, path, **kwargs):
     if path == 'public/v1/account/used-assets':
         return {
@@ -399,6 +434,7 @@ def get_mssp_sub_accounts_http_response(method, path, **kwargs):
         return None
 
 
+@pytest.mark.filterwarnings('ignore::urllib3.exceptions.InsecureRequestWarning')
 @patch('IntSight.http_request')
 def run_mocked_https_request(mocked_http_request, action, side_effect=None, return_value=None):
     if side_effect:
@@ -409,6 +445,7 @@ def run_mocked_https_request(mocked_http_request, action, side_effect=None, retu
     action()
 
 
+@pytest.mark.filterwarnings('ignore::urllib3.exceptions.InsecureRequestWarning')
 @patch.object(demisto, "results")
 def test_get_mssp_sub_accounts(mocker_results, mocker):
     INTSIGHTS_PARAMS['mssp_sub_account_id'] = '123456789'
@@ -422,9 +459,10 @@ def test_get_mssp_sub_accounts(mocker_results, mocker):
         action=IntSight.get_mssp_sub_accounts,
         side_effect=get_mssp_sub_accounts_http_response
     )
-    assert(10 == mocker_results.call_args[0][0]['Contents'][0]['AssetsLimit'])
+    assert (10 == mocker_results.call_args[0][0]['Contents'][0]['AssetsLimit'])
 
 
+@pytest.mark.filterwarnings('ignore::urllib3.exceptions.InsecureRequestWarning')
 @patch.object(demisto, "results")
 def test_get_iocs(mocker_results, mocker):
     mocker.patch.object(demisto, 'command', return_value='intsights-test-action')
@@ -435,35 +473,57 @@ def test_get_iocs(mocker_results, mocker):
     import IntSight
 
     mock_response = {
-        "Value": value,
-        "Type": "Domains",
-        "Severity": {
-            "Value": "High"
-        },
-        "Whitelist": "false",
-        "FirstSeen": "2020-01-01T20:01:27.344Z",
-        "LastSeen": "2020-01-30T16:18:51.148Z",
-        "LastUpdate": "2020-02-21T23:00:51.268Z",
-        "Sources": [
+        "firstSeen": "2018-07-20T01:00:49.000Z",
+        "geolocation": "AU",
+        "lastSeen": "2022-07-14T20:03:08.256Z",
+        "lastUpdateDate": "2022-10-31T16:02:41.781Z",
+        "relatedCampaigns": [],
+        "relatedMalware": [
+            "agent",
+            "arkei",
+            "zegost"
+        ],
+        "relatedThreatActors": [],
+        "reportedFeeds": [
             {
-                "Name": "AlienVault OTX",
-                "ConfidenceLevel": 3
+                "confidenceLevel": 3,
+                "id": "123123123",
+                "name": "Cyber"
+            },
+            {
+                "confidenceLevel": 3,
+                "id": "123123",
+                "name": "Cyber1"
+            },
+            {
+                "confidenceLevel": 2,
+                "id": "123123123123123",
+                "name": "Cyber111"
+            },
+            {
+                "confidenceLevel": 3,
+                "id": "123123123123",
+                "name": "Cyber11"
             }
         ],
-        "Tags": [
-            "MyTag_1"
+        "score": 80,
+        "severity": "High",
+        "status": "Retired",
+        "tags": [
+            "njrat",
+            "Installation"
         ],
-        "SystemTags": [
-            "Phishing"
-        ]
+        "type": "IpAddresses",
+        "value": value,
+        "whitelisted": True
     }
 
-    with patch('IntSight.http_request', Mock()) as mock_http_response:
-        mock_http_response.return_value = mock_response
-        IntSight.search_for_ioc()
-        assert(value == mocker_results.call_args[0][0]['Contents']['Value'])
+    mocker.patch('IntSight.http_request', return_value=mock_response)
+    IntSight.search_for_ioc()
+    assert (value == mocker_results.call_args[0][0]['Contents']['value'])
 
 
+@pytest.mark.filterwarnings('ignore::urllib3.exceptions.InsecureRequestWarning')
 def get_alerts_http_response(method, path, **kwargs):
     if path == 'public/v1/data/alerts/get-complete-alert/123456789':
         return {
@@ -516,6 +576,7 @@ def get_alerts_http_response(method, path, **kwargs):
         return None
 
 
+@pytest.mark.filterwarnings('ignore::urllib3.exceptions.InsecureRequestWarning')
 @patch.object(demisto, "results")
 def test_get_alerts(mocker_results, mocker):
     mocker.patch.object(demisto, 'command', return_value='intsights-test-action')
@@ -528,9 +589,10 @@ def test_get_alerts(mocker_results, mocker):
         action=IntSight.get_alerts,
         side_effect=get_alerts_http_response
     )
-    assert(alert_id == mocker_results.call_args[0][0]['Contents'][0]['ID'])
+    assert (alert_id == mocker_results.call_args[0][0]['Contents'][0]['ID'])
 
 
+@pytest.mark.filterwarnings('ignore::urllib3.exceptions.InsecureRequestWarning')
 @patch.object(demisto, "results")
 def test_get_alert_by_id(mocker_results, mocker):
     mocker.patch.object(demisto, 'command', return_value='intsights-test-action')
@@ -581,14 +643,12 @@ def test_get_alert_by_id(mocker_results, mocker):
         "IsClosed": "false",
         "IsFlagged": "false"
     }
-    with patch('IntSight.http_request', Mock()) as mock_http_response:
-        mock_http_response.return_value = complete_alert
-
-        patch('IntSight.http_request', Mock())
-        IntSight.get_alert_by_id()
-        assert(complete_alert['_id'] == mocker_results.call_args[0][0]['Contents']['ID'])
+    mocker.patch('IntSight.http_request', return_value=complete_alert)
+    IntSight.get_alert_by_id()
+    assert (complete_alert['_id'] == mocker_results.call_args[0][0]['Contents']['ID'])
 
 
+@pytest.mark.filterwarnings('ignore::urllib3.exceptions.InsecureRequestWarning')
 @patch.object(demisto, "results")
 def test_get_alert_activity(mocker_results, mocker):
     mocker.patch.object(demisto, 'command', return_value='intsights-test-action')
@@ -618,20 +678,19 @@ def test_get_alert_activity(mocker_results, mocker):
         "SubTypes": []
     }
 
-    with patch('IntSight.http_request', Mock()) as mock_http_response:
-        mock_http_response.return_value = [
-            {
-                'ID': '5e7b0b5620d02a00085ab21e',
-                'Activities': [
-                    activity
-                ]
-            }
-        ]
-
-        IntSight.get_alert_activity()
-        assert('Activities' in mocker_results.call_args[0][0]['Contents'][0])
+    mocker.patch('IntSight.http_request', return_value=[
+        {
+            'ID': '5e7b0b5620d02a00085ab21e',
+            'Activities': [
+                activity
+            ]
+        }
+    ])
+    IntSight.get_alert_activity()
+    assert ('Activities' in mocker_results.call_args[0][0]['Contents'][0])
 
 
+@pytest.mark.filterwarnings('ignore::urllib3.exceptions.InsecureRequestWarning')
 @patch.object(demisto, "results")
 def test_assign_alert(mocker_results, mocker):
     mocker.patch.object(demisto, 'command', return_value='intsights-test-action')
@@ -645,12 +704,17 @@ def test_assign_alert(mocker_results, mocker):
     import IntSight
 
     assignee_id = '12345'
-    with patch('IntSight.http_request', Mock()) as mock_http_response:
-        mock_http_response.return_value = [
-            {
-                "Email": "email@domain.com",
-                "_id": assignee_id
-            }
-        ]
-        IntSight.assign_alert()
-        assert(assignee_id == mocker_results.call_args[0][0]['Contents']['Assignees.AssigneeID'])
+    mocker.patch('IntSight.http_request', return_value=[
+        {
+            "Email": "email@domain.com",
+            "_id": assignee_id
+        }
+    ])
+    IntSight.assign_alert()
+    assert (assignee_id == mocker_results.call_args[0][0]['Contents']['Assignees.AssigneeID'])
+
+
+class MockResponse:
+    def __init__(self, text='', content=''):
+        self.text = text
+        self.content = content

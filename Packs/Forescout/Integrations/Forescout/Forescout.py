@@ -5,14 +5,15 @@ from CommonServerUserPython import *
 
 import json
 import requests
+import urllib3
 from typing import Dict, List, Tuple, Any, Union, cast
 import xml.etree.ElementTree as ET_PHONE_HOME
 from copy import deepcopy
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, UTC
 from dateutil.parser import parse as parsedate
 
 # Disable insecure warnings
-requests.packages.urllib3.disable_warnings()
+urllib3.disable_warnings()
 
 ''' GLOBALS/PARAMS '''
 
@@ -33,6 +34,11 @@ DEX_ACCOUNT = '' if not DEX_ACCOUNT else DEX_ACCOUNT
 BASE_URL = PARAMS.get('url', '').strip().rstrip('/')
 # Should we use SSL
 USE_SSL = not PARAMS.get('insecure', False)
+try:
+    HTTP_TIMEOUT = int(demisto.params().get('timeout', 60))
+except ValueError as e:
+    demisto.debug(f'Failed casting timeout parameter to int, falling back to 60 - {e}')
+    HTTP_TIMEOUT = 60
 
 WEB_AUTH = ''
 LAST_JWT_FETCH = None
@@ -392,7 +398,7 @@ def web_api_login():
     """
     global LAST_JWT_FETCH
     global WEB_AUTH
-    if not LAST_JWT_FETCH or datetime.now(timezone.utc) >= LAST_JWT_FETCH + JWT_VALIDITY_TIME:
+    if not LAST_JWT_FETCH or datetime.now(UTC) >= LAST_JWT_FETCH + JWT_VALIDITY_TIME:
         url_suffix = '/api/login'
         headers = {'Content-Type': 'application/x-www-form-urlencoded'}
         params = {'username': WEB_API_USERNAME, 'password': WEB_API_PASSWORD}
@@ -404,7 +410,7 @@ def web_api_login():
 
 def http_request(method: str, url_suffix: str, full_url: str = None, headers: Dict = None,
                  auth: Tuple = None, params: Dict = None, data: Dict = None, files: Dict = None,
-                 timeout: float = 10, resp_type: str = 'json') -> Any:
+                 timeout: float = HTTP_TIMEOUT, resp_type: str = 'json') -> Any:
     """
     A wrapper for requests lib to send our requests and handle requests
     and responses better
@@ -452,7 +458,7 @@ def http_request(method: str, url_suffix: str, full_url: str = None, headers: Di
             data=data,
             files=files,
             headers=headers,
-            auth=auth,
+            auth=auth,  # type: ignore[arg-type]
             timeout=timeout
         )
 

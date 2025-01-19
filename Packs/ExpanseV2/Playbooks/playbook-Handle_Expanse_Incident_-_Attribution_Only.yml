@@ -3,14 +3,15 @@ version: -1
 contentitemexportablefields:
   contentitemfields: {}
 name: Handle Expanse Incident - Attribution Only
+deprecated: true
 description: |2-
+   Deprecated. No available replacement.
    Shorter version of Handle Expanse Incident playbook with only the Attribution part.
 
   There are several phases:
   1. Enrichment: all the related information from the incident is extracted and related Indicators (of types IP, CIDR, Domain, DomainGlob, Certificate) are created and enriched.
   2. Validation: the found IP and FQDN are correlated with the information available in other products:
-    - Risky or non-compliant communications to and from the IP with external IPs as flagged in Expanse's Behavior
-    - Firewall logs from Cortex Data Lake, Panorama and Splunk
+    - Firewall logs from Strata Logging Service, Panorama and Splunk
     - User information from Active Directory
     - Public IP address from AWS/GCP/Azure public IP feeds to identify the Public Cloud region and Service (i.e. us-west-1 on AWS EC2)
     - IP and FQDN from Prisma Cloud inventory
@@ -260,7 +261,6 @@ tasks:
       '#none#':
       - "167"
       - "141"
-      - "176"
     separatecontext: false
     view: |-
       {
@@ -331,49 +331,6 @@ tasks:
     ignoreworker: false
     skipunavailable: false
     quietmode: 0
-  "31":
-    id: "31"
-    taskid: 9d163411-019d-4a56-8112-fef2603e0c37
-    type: regular
-    task:
-      id: 9d163411-019d-4a56-8112-fef2603e0c37
-      version: -1
-      name: Extract Risky Flows from Behavior
-      description: Retrieve Expanse Behavior Risky Flows
-      script: '|||expanse-get-risky-flows'
-      type: regular
-      iscommand: true
-      brand: ""
-    nexttasks:
-      '#none#':
-      - "29"
-    scriptarguments:
-      created_after: {}
-      created_before: {}
-      internal_ip_range:
-        complex:
-          root: incident
-          accessor: expanseip
-      limit: {}
-      risk-rule: {}
-      tagnames: {}
-    separatecontext: false
-    view: |-
-      {
-        "position": {
-          "x": 490,
-          "y": -320
-        }
-      }
-    note: true
-    evidencedata:
-      description:
-        simple: Risky Flows from Expanse Behavior for this incident's IP
-      customfields: {}
-    timertriggers: []
-    ignoreworker: false
-    skipunavailable: false
-    quietmode: 0
   "34":
     id: "34"
     taskid: 48a88295-5fe8-4219-8bd2-61250b300ef0
@@ -383,7 +340,7 @@ tasks:
       version: -1
       name: Expanse Attribution
       description: |
-        Subplaybook for Handle Expanse Incident playbooks. Given an Expanse Issue IP, Issue Provider, Issue Domain, Issue Port and Issue Protocol hunts for internal activity related to the detected service. The playbook looks for logs on Splunk, Cortex Data Lake and Panorama. Returns a list of potential owner BUs, owner Users, Device and Notes.
+        Subplaybook for Handle Expanse Incident playbooks. Given an Expanse Issue IP, Issue Provider, Issue Domain, Issue Port and Issue Protocol hunts for internal activity related to the detected service. The playbook looks for logs on Splunk, Strata Logging Service and Panorama. Returns a list of potential owner BUs, owner Users, Device and Notes.
       playbookName: Expanse Attribution
       type: playbook
       iscommand: false
@@ -4263,7 +4220,7 @@ tasks:
       name: Prisma Cloud Correlate Alerts
       description: Search alerts in Prisma Cloud for a specific asset ID and, if present
         in XSOAR, link them.
-      playbookName: Prisma Cloud Correlate Alerts
+      playbookName: Prisma Cloud Correlate Alerts v2
       type: playbook
       iscommand: false
       brand: ""
@@ -4348,49 +4305,6 @@ tasks:
         "position": {
           "x": 490,
           "y": 5750
-        }
-      }
-    note: false
-    timertriggers: []
-    ignoreworker: false
-    skipunavailable: false
-    quietmode: 0
-  "176":
-    id: "176"
-    taskid: f29fb579-9258-4afb-876c-7fd2d031ad61
-    type: condition
-    task:
-      id: f29fb579-9258-4afb-876c-7fd2d031ad61
-      version: -1
-      name: Collect Risky Flows from Behavior?
-      description: Collect Risky Flows for the IP address from Expanse Behavior?
-      type: condition
-      iscommand: false
-      brand: ""
-    nexttasks:
-      '#default#':
-      - "29"
-      "yes":
-      - "31"
-    separatecontext: false
-    conditions:
-    - label: "yes"
-      condition:
-      - - operator: isEqualString
-          left:
-            value:
-              complex:
-                root: inputs.UseBehavior
-            iscontext: true
-          right:
-            value:
-              simple: "true"
-          ignorecase: true
-    view: |-
-      {
-        "position": {
-          "x": 917.5,
-          "y": -510
         }
       }
     note: false
@@ -5429,26 +5343,6 @@ inputs:
     simple: "True"
   required: false
   description: Write data back to Expanse?
-  playbookInputQuery:
-- key: OwnerNotificationSubject
-  value:
-    simple: New security issue on a public service owned by your team
-  required: false
-  description: Subject of the email to send to the OU Owner.
-  playbookInputQuery:
-- key: OwnerNotificationBody
-  value:
-    simple: Infosec identified a security issue on a service owned by your team and
-      exposed on Internet. Please get in touch with your Infosec team to define proper
-      remediation access.
-  required: false
-  description: Body of the email to send to the OU Owner.
-  playbookInputQuery:
-- key: UseBehavior
-  value:
-    simple: "True"
-  required: false
-  description: Enrich flows using Expanse Behavior.
   playbookInputQuery:
 - key: OrganizationUnitsToOwnerName
   value:

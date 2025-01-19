@@ -1,4 +1,3 @@
-from typing import Dict
 
 import urllib3
 from CommonServerPython import *
@@ -77,7 +76,7 @@ def initialise_scrolls_and_rules():
 
 def initialize_global_values():
 
-    global URL, MAX_INCIDENTS_TO_FETCH, COOKIE, AUTH_HEADERS,\
+    global URL, MAX_INCIDENTS_TO_FETCH, COOKIE, AUTH_HEADERS, \
         CLIENT_ID, CLIENT_SECRET, AUTH_HEADERS, DOMAIN, AUTHORIZATION
 
     CLIENT_ID = demisto.getParam('client_id')
@@ -373,7 +372,7 @@ def get_file_360_link(cid: str):
     p1 = url.find("api")
     p2 = url.find("-")
     length = len(url)
-    if(p1 < 0 or p2 < 0):
+    if (p1 < 0 or p2 < 0):
         return None
     else:
         link = url[0:p1] + url[p2 + 1:length]
@@ -435,7 +434,7 @@ def test_module(client: LoginClient):
         raise Exception('Test Failure', e)
 
 
-def fetch_incidents(loginClient: LoginClient, queryClient: QueryClient, last_run: Dict[str, int],
+def fetch_incidents(loginClient: LoginClient, queryClient: QueryClient, last_run: dict[str, int],
                     max_results: int, fetch_time):
     global SCROLL_ID_INCIDENT
     last_fetch = last_run.get('last_fetch', None)
@@ -467,7 +466,7 @@ def fetch_incidents(loginClient: LoginClient, queryClient: QueryClient, last_run
     response = res['data']['allAlerts']['allContents']['rows']
     SCROLL_ID_INCIDENT = res['data']['allAlerts']['allContents']['_scroll_id']
     count = len(response)
-    if(count == 0):
+    if (count == 0):
         newAlerts = False
     else:
         answers.extend(response)
@@ -589,7 +588,7 @@ def get_user_details(loginClient: LoginClient, queryClient: QueryClient, user: s
             max_records = res['data']['allContents']['allContents']['pagination']['totalRecords']
         SCROLL_ID_USER_DETAIL = res['data']['allContents']['allContents']['_scroll_id']
         count = len(response)
-        if(count == 0):
+        if (count == 0):
             flag = False
         else:
             answers.extend(response)
@@ -617,6 +616,7 @@ def get_user_details(loginClient: LoginClient, queryClient: QueryClient, user: s
 
 def main() -> None:
     initialize_global_values()
+    global AUTH_HEADERS
     headers = AUTH_HEADERS
     base_url = urljoin(demisto.params()['url'])
     verify_certificate = not demisto.params().get('insecure', True)

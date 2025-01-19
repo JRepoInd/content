@@ -169,7 +169,7 @@ class TestHelperFunctions:
             # invalid message_data
             e_thrown = False
             try:
-                get_publish_body("", message_data={"test": "val"})
+                get_publish_body("", message_data={"test": "val"}, delim_char=",")
             except AttributeError:
                 e_thrown = True
             assert e_thrown
@@ -177,7 +177,7 @@ class TestHelperFunctions:
             # invalid message_attributes
             e_thrown = False
             try:
-                get_publish_body(message_attributes={"test": "val"}, message_data="")
+                get_publish_body(message_attributes={"test": "val"}, message_data="", delim_char=",")
             except AttributeError:
                 e_thrown = True
             assert e_thrown
@@ -192,7 +192,7 @@ class TestHelperFunctions:
                 - return a body with no messages
             """
             expected = {"messages": [{}]}
-            assert expected == get_publish_body("", "")
+            assert expected == get_publish_body("", "", "")
 
         def test_get_publish_body__valid(self):
             """
@@ -218,7 +218,7 @@ class TestHelperFunctions:
                 "messages": [{"data": expected_data, "attributes": expected_attributes}]
             }
             assert expected == get_publish_body(
-                attrs_str, TestHelperFunctions.DECODED_B64_MESSAGE
+                attrs_str, TestHelperFunctions.DECODED_B64_MESSAGE, delim_char=",",
             )
 
     class TestAttributePairsToDict:
@@ -292,7 +292,7 @@ class TestHelperFunctions:
             Then:
                 - return an empty array tuple
             """
-            expected = tuple(([], []))
+            expected = ([], [])
             assert expected == extract_acks_and_msgs("invalid")
 
             empty_raw_msgs = {"receivedMessages": {}}
@@ -307,10 +307,10 @@ class TestHelperFunctions:
             Then:
                 - return empty ack list, and message list with no message
             """
-            expected = tuple(([], []))
+            expected = ([], [])
             assert expected == extract_acks_and_msgs({})
 
-            expected = tuple(([], [{"data": ""}]))
+            expected = ([], [{"data": ""}])
             invalid_raw_msgs = {"receivedMessages": [{}]}
             assert expected == extract_acks_and_msgs(invalid_raw_msgs)
 
@@ -429,7 +429,7 @@ class TestCommands:
             publish_message_command,
             "publish_message",
             {
-                "data": "42",
+                "data": "42\\42",
                 "project_id": "dmst-doc-prjct",
                 "topic_id": "dmst-test-topic",
             },
@@ -602,9 +602,7 @@ class TestCommands:
             res_msg_ids,
             res_acks,
             res_max_publish_time,
-        ) = try_pull_unique_messages(
-            client, sub_name, previous_msg_ids, last_run_time, retry_times=1
-        )
+        ) = try_pull_unique_messages(client, sub_name, previous_msg_ids, last_run_time, False, retry_times=1)
         assert debug_mock.call_count == 0
         assert res_msgs is None
         assert res_msg_ids is None
@@ -637,9 +635,7 @@ class TestCommands:
             res_msg_ids,
             res_acks,
             res_max_publish_time,
-        ) = try_pull_unique_messages(
-            client, sub_name, previous_msg_ids, last_run_time, retry_times=1
-        )
+        ) = try_pull_unique_messages(client, sub_name, previous_msg_ids, last_run_time, False, retry_times=1)
         assert debug_mock.call_count == 0
         assert res_msgs is None
         assert res_msg_ids is None
@@ -671,10 +667,8 @@ class TestCommands:
             res_msg_ids,
             res_acks,
             res_max_publish_time,
-        ) = try_pull_unique_messages(
-            client, sub_name, previous_msg_ids, last_run_time, retry_times=1
-        )
-        assert debug_mock.call_count == 0
+        ) = try_pull_unique_messages(client, sub_name, previous_msg_ids, last_run_time, False, retry_times=1)
+        assert not any(call.args[0].startswith('GCP_PUBSUB_MSG') for call in debug_mock.call_args_list)
         assert res_msgs == [
             {
                 "ackId": "321",
@@ -715,10 +709,8 @@ class TestCommands:
             res_msg_ids,
             res_acks,
             res_max_publish_time,
-        ) = try_pull_unique_messages(
-            client, sub_name, previous_msg_ids, last_run_time, retry_times=1
-        )
-        assert debug_mock.call_count == 1
+        ) = try_pull_unique_messages(client, sub_name, previous_msg_ids, last_run_time, False, retry_times=1)
+        assert len(list(filter(lambda x: x.args[0].startswith('GCP_PUBSUB_MSG'), debug_mock.call_args_list))) == 1
         assert res_msgs == [
             {
                 "ackId": "654",
@@ -756,10 +748,8 @@ class TestCommands:
             res_msg_ids,
             res_acks,
             res_max_publish_time,
-        ) = try_pull_unique_messages(
-            client, sub_name, previous_msg_ids, last_run_time, retry_times=1
-        )
-        assert debug_mock.call_count == 0
+        ) = try_pull_unique_messages(client, sub_name, previous_msg_ids, last_run_time, False, retry_times=1)
+        assert not any(call.args[0].startswith('GCP_PUBSUB_MSG') for call in debug_mock.call_args_list)
         assert res_msgs == [
             {
                 "ackId": "654",

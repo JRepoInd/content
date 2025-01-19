@@ -1,18 +1,22 @@
 from CommonServerPython import *
 
-''' IMPORTS '''
+""" IMPORTS """
 
 import dateparser
 from requests import Response
-from typing import Dict, Any, Union, Tuple, List
-from datetime import timezone
-from requests.exceptions import MissingSchema, InvalidSchema, InvalidURL, SSLError
+from typing import Any
+from requests.exceptions import (
+    MissingSchema,
+    InvalidSchema,
+    InvalidURL,
+    SSLError,
+)
 import urllib3
 
 # Disable insecure warnings
 urllib3.disable_warnings()
 
-''' CONSTANTS '''
+""" CONSTANTS """
 
 DEFAULT_REQUEST_TIMEOUT = 120
 REQUEST_TIMEOUT_MAX_VALUE = 9223372036
@@ -21,6 +25,7 @@ API_VERSION = 'v2.0.0'
 
 DEFAULT_SESSION_TIMEOUT = 15 * 60  # In Seconds
 DEFAULT_FETCH_LIMIT = '50'
+FORTY_EIGHT_HOURS_IN_SECOND = 172000.0  # Due to API limitations we can retrieve events only from the last 48 hours.
 CONTENT_TYPE_JSON = 'application/json'
 CONTENT_TYPE_ZIP = 'application/zip'
 DATE_FORMAT_OF_YEAR_MONTH_DAY = '%Y-%m-%d'
@@ -34,13 +39,13 @@ DEFAULT_FIRST_FETCH = '12 hours'
 ALERT_INCIDENT_TYPE = 'FireEye NX Alert'
 IPS_EVENT_INCIDENT_TYPE = 'FireEye NX IPS Event'
 
-MESSAGES: Dict[str, str] = {
+MESSAGES: dict[str, str] = {
     'BAD_REQUEST_ERROR': 'An error occurred while fetching the data.',
     'AUTHENTICATION_ERROR': 'Unauthenticated. Check the configured Username and Password.',
-    'PROXY_ERROR': 'Proxy Error - cannot connect to proxy. Either try clearing the \'Use system proxy\' check-box or '
+    'PROXY_ERROR': "Proxy Error - cannot connect to proxy. Either try clearing the 'Use system proxy' check-box or "
                    'check the host, authentication details and connection details for the proxy.',
     'BLANK_PROXY_ERROR': 'https proxy value is empty. Check XSOAR server configuration ',
-    'SSL_CERT_ERROR': 'SSL Certificate Verification Failed - try selecting \'Trust any certificate\' checkbox in the '
+    'SSL_CERT_ERROR': "SSL Certificate Verification Failed - try selecting 'Trust any certificate' checkbox in the "
                       'integration configuration.',
     'INTERNAL_SERVER_ERROR': 'The server encountered an internal error for FireEye NX and was unable to complete '
                              'your request.',
@@ -51,7 +56,7 @@ MESSAGES: Dict[str, str] = {
     'INVALID_ALERT_DETAILS': 'For fetching Alert Details Report, "infection_id" and "infection_type" '
                              'arguments are required.',
     'INVALID_REPORT_TYPE': 'The given value for report_type is invalid.',
-    'INVALID_REPORT_OUTPUT_TYPE': 'The given value for the argument type (report\'s format) is invalid. Valid value('
+    'INVALID_REPORT_OUTPUT_TYPE': "The given value for the argument type (report's format) is invalid. Valid value("
                                   's): {}.',
     'NO_RECORDS_FOUND': 'No {} were found for the given argument(s).',
     'INVALID_INT_VALUE': 'The given value for {} is invalid. Expected integer value.',
@@ -62,16 +67,16 @@ MESSAGES: Dict[str, str] = {
     'REQUEST_TIMEOUT': 'Request timed out. Check the configured HTTP(S) Request Timeout (in seconds) value.',
     'FIRST_FETCH_ARG_VALIDATION': 'The First fetch time interval should be up to 48 hour as per API limitation.',
     'INVALID_TIME_VALIDATION': 'The given value for {0} argument is invalid.',
-    'INVALID_FETCH_TYPE': 'The given value for Fetch Types is invalid. Expected Alerts or/and IPS Events '
+    'INVALID_FETCH_TYPE': 'The given value for Fetch Types is invalid. Expected Alerts or/and IPS Events ',
 }
 
-URL_SUFFIX: Dict[str, str] = {
+URL_SUFFIX: dict[str, str] = {
     'GET_TOKEN': '/auth/login',
     'GET_ARTIFACTS_METADATA': '/artifacts/{}/meta',
     'GET_ARTIFACTS': '/artifacts/{}',
     'GET_REPORTS': '/reports/report',
     'GET_ALERTS': '/alerts',
-    'GET_EVENTS': '/events'
+    'GET_EVENTS': '/events',
 }
 
 REPORT_TYPE_LABEL_NAME = {
@@ -85,7 +90,7 @@ REPORT_TYPE_LABEL_NAME = {
     'IPS Top N Attackers Report': 'ipsTopNAttacker',
     'IPS Top N Victims Report': 'ipsTopNVictim',
     'IPS Top N MVX-Correlated Report': 'ipsTopNMvxVerified',
-    ALERT_DETAILS_REPORT: 'alertDetailsReport'
+    ALERT_DETAILS_REPORT: 'alertDetailsReport',
 }
 REPORT_TYPE_ALLOWED_FORMAT = {
     'Website Callback Server Report': ['csv'],
@@ -98,7 +103,7 @@ REPORT_TYPE_ALLOWED_FORMAT = {
     'IPS Top N Attackers Report': ['pdf', 'csv'],
     'IPS Top N Victims Report': ['pdf', 'csv'],
     'IPS Top N MVX-Correlated Report': ['pdf', 'csv'],
-    ALERT_DETAILS_REPORT: ['pdf']
+    ALERT_DETAILS_REPORT: ['pdf'],
 }
 
 PLATFORM_SEVERITY_TO_SEVERITY_MAP = {
@@ -112,8 +117,17 @@ PLATFORM_SEVERITY_TO_SEVERITY_MAP = {
     '3': 1,
     '2': 1,
     '1': 1,
-    '0': 0
+    '0': 0,
 }
+
+
+def strip_blank(args: dict) -> dict:
+    nargs = {}
+    for key, value in args.items():
+        if isinstance(value, str):
+            value = value.strip()
+        nargs[key] = value
+    return nargs
 
 
 class Client(BaseClient):
@@ -123,12 +137,28 @@ class Client(BaseClient):
     Handle some exceptions externally.
     """
 
-    def __init__(self, base_url: str, verify: bool, proxy: bool, auth: Tuple[str, str], request_timeout: int):
-        super().__init__(base_url=base_url, verify=verify, proxy=proxy, auth=auth)
+    def __init__(
+        self,
+        base_url: str,
+        verify: bool,
+        proxy: bool,
+        auth: tuple[str, str],
+        request_timeout: int,
+    ):
+        super().__init__(
+            base_url=base_url, verify=verify, proxy=proxy, auth=auth
+        )
         self.request_timeout = request_timeout
 
-    def http_request(self, method: str, url_suffix: str, json_data=None, params=None,
-                     headers=None):
+    def http_request(
+        self,
+        method: str,
+        url_suffix: str,
+        json_data=None,
+        params=None,
+        headers=None,
+        ok_codes=None,
+    ):
         """
             Override http_request method from BaseClient class. This method will print an error based on status code
             and exceptions.
@@ -148,15 +178,25 @@ class Client(BaseClient):
         :type headers: ``dict``
         :param headers: Headers to send in the request. If None, will use self._headers.
 
+        :type ok_codes: ``tuple``
+        :param ok_codes: The tuple of acceptable status codes. Default is None.
+
         :return: Depends on the resp_type parameter
         :rtype: ``dict`` or ``str`` or ``requests.Response``
         """
         resp = Response()
         try:
-            resp = super()._http_request(method=method, url_suffix=url_suffix, json_data=json_data, params=params,
-                                         headers=headers, resp_type='response',
-                                         timeout=self.request_timeout,
-                                         ok_codes=(200, 201), error_handler=self.handle_error_response)
+            resp = super()._http_request(
+                method=method,
+                url_suffix=url_suffix,
+                json_data=json_data,
+                params=params,
+                headers=headers,
+                resp_type='response',
+                timeout=self.request_timeout,
+                ok_codes=ok_codes or (200, 201),
+                error_handler=self.handle_error_response,
+            )
         except MissingSchema:
             raise ValueError(MESSAGES['MISSING_SCHEMA_ERROR'])
         except InvalidSchema:
@@ -176,6 +216,8 @@ class Client(BaseClient):
                     return resp.json()
             elif self.is_supported_context_type(content_type):
                 return resp
+            return None
+        return None
 
     @staticmethod
     def is_supported_context_type(content_type: str):
@@ -184,9 +226,12 @@ class Client(BaseClient):
         :param content_type: content type of header.
         :return: boolean flag, whether content type is supported or not.
         """
-        if content_type == 'application/pdf' or content_type == 'text/csv' or content_type == CONTENT_TYPE_ZIP:
-            return True
-        return False
+        return (
+            content_type == 'application/pdf'
+            or content_type == 'text/csv'
+            or content_type == CONTENT_TYPE_ZIP
+            or content_type == 'application/octet-stream'
+        )
 
     @staticmethod
     def handle_demisto_exception(e):
@@ -218,10 +263,15 @@ class Client(BaseClient):
         error_message = ''
         error_message_with_reason = ''
         try:
-            error_message = resp.json().get('fireeyeapis', {}).get('description', '').strip()
+            error_message = (
+                resp.json()
+                .get('fireeyeapis', {})
+                .get('description', '')
+                .strip()
+            )
             error_message = error_message.replace('\n', '')
             if error_message:
-                error_message_with_reason = f"Reason: {error_message}"
+                error_message_with_reason = f'Reason: {error_message}'
         except ValueError:  # ignoring json parsing errors
             pass
         if resp.headers.get('Content-Type', '') == CONTENT_TYPE_ZIP:
@@ -235,11 +285,13 @@ class Client(BaseClient):
             406: error_message,
             407: MESSAGES['PROXY_ERROR'],
             500: MESSAGES['INTERNAL_SERVER_ERROR'],
-            503: MESSAGES['INTERNAL_SERVER_ERROR']
+            503: MESSAGES['INTERNAL_SERVER_ERROR'],
         }
 
         if resp.status_code in status_code_messages:
-            demisto.debug(f'Response Code: {resp.status_code}, Reason: {status_code_messages[resp.status_code]}')
+            demisto.debug(
+                f'Response Code: {resp.status_code}, Reason: {status_code_messages[resp.status_code]}'
+            )
             raise DemistoException(status_code_messages[resp.status_code])
         else:
             raise DemistoException(resp.raise_for_status())
@@ -261,12 +313,12 @@ class Client(BaseClient):
             demisto.debug('Retrieved api-token from integration cache.')
             return api_token
 
-        headers = {
-            'Accept': CONTENT_TYPE_JSON
-        }
+        headers = {'Accept': CONTENT_TYPE_JSON}
 
         demisto.debug('Calling authentication API for retrieve api-token')
-        resp = self.http_request(method='POST', url_suffix=URL_SUFFIX['GET_TOKEN'], headers=headers)
+        resp = self.http_request(
+            method='POST', url_suffix=URL_SUFFIX['GET_TOKEN'], headers=headers
+        )
         integration_context = self.set_integration_context(resp)
 
         return integration_context.get('api_token')
@@ -284,14 +336,16 @@ class Client(BaseClient):
         api_token = resp.headers.get('X-FeApi-Token')
         if api_token:
             integration_context['api_token'] = api_token
-            integration_context['valid_until'] = time.time() + DEFAULT_SESSION_TIMEOUT
+            integration_context['valid_until'] = (
+                time.time() + DEFAULT_SESSION_TIMEOUT
+            )
         else:
             raise ValueError('No api token found. Please try again')
         demisto.setIntegrationContext(integration_context)
         return integration_context
 
 
-''' HELPER FUNCTION'''
+""" HELPER FUNCTION"""
 
 
 def set_attachment_file(client, incident: dict, uuid: str, headers: dict):
@@ -306,79 +360,131 @@ def set_attachment_file(client, incident: dict, uuid: str, headers: dict):
 
     # Call get artifacts data api
     headers['Accept'] = CONTENT_TYPE_ZIP
-    artifacts_resp = client.http_request('GET', url_suffix=URL_SUFFIX[
-        'GET_ARTIFACTS'].format(uuid), headers=headers)
-
-    # Create file from Content
-    if int(artifacts_resp.headers.get('Content-Length', '0')) > 0:
+    artifacts_resp = client.http_request(
+        'GET',
+        url_suffix=URL_SUFFIX['GET_ARTIFACTS'].format(uuid),
+        headers=headers,
+        ok_codes=(200, 201, 404),
+    )
+    if artifacts_resp and int(artifacts_resp.headers.get('Content-Length', '0')) > 0:
+        # Create file from Content
         file_name = f'{uuid}.zip'
 
-        attachment_file = fileResult(filename=file_name, data=artifacts_resp.content)
+        attachment_file = fileResult(
+            filename=file_name, data=artifacts_resp.content
+        )
 
-        incident['attachment'] = [{
-            'path': attachment_file['FileID'],
-            'name': file_name
-        }]
+        incident['attachment'] = [
+            {'path': attachment_file['FileID'], 'name': file_name}
+        ]
 
 
-def get_incidents_for_alert(**kwargs) -> list:
+def get_incidents_for_alert(**kwargs) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     """
     Return List of incidents for alert.
 
     :param kwargs: Contains all required arguments.
     :return: Incident List for alert.
     """
-    incidents: List[Dict[str, Any]] = []
+    incidents: list[dict[str, Any]] = []
+    last_run = kwargs['last_run']
+    next_run = last_run.get('alerts', {})
 
     headers = {
         'X-FeApi-Token': kwargs['client'].get_api_token(),
-        'Accept': CONTENT_TYPE_JSON
+        'Accept': CONTENT_TYPE_JSON,
     }
 
     params = {
-        'start_time': time.strftime(API_SUPPORT_DATE_FORMAT, time.localtime(kwargs['start_time'])),
-        'duration': '48_hours'
+        'start_time': time.strftime(
+            API_SUPPORT_DATE_FORMAT, time.localtime(kwargs['start_time'])
+        ),
+        'duration': '48_hours',
     }
 
     if kwargs['malware_type']:
         params['malware_type'] = kwargs['malware_type']
 
     # http call
-    resp = kwargs['client'].http_request(method="GET", url_suffix=URL_SUFFIX['GET_ALERTS'], params=params,
-                                         headers=headers)
+    resp = kwargs['client'].http_request(
+        method='GET',
+        url_suffix=URL_SUFFIX['GET_ALERTS'],
+        params=params,
+        headers=headers,
+    )
 
     total_records = resp.get('alertsCount', 0)
     if total_records > 0:
-
         if kwargs['replace_alert_url']:
-            replace_alert_url_key_domain_to_instance_url(resp.get('alert', []), kwargs['instance_url'])
-
+            replace_alert_url_key_domain_to_instance_url(
+                resp.get('alert', []), kwargs['instance_url']
+            )
         count = kwargs['fetch_count']
-        for alert in resp.get('alert', []):
+
+        next_incidents_ids: List[str] = []
+        alerts = resp.get('alert', [])
+        alerts.sort(key=lambda x: x.get("occurred"))
+        last_alert_start_time = last_run.get('alerts', {}).get('start_time')
+        last_alert_ids = last_run.get('alerts', {}).get('alert_ids', [])
+        next_alert_start_time = alerts[:kwargs['fetch_limit']][-1].get('occurred', '')
+
+        for alert in alerts:
+            # skip on duplicate incident
+            if (last_alert_start_time
+                and last_alert_ids
+                and last_alert_start_time == alert.get('occurred', '')
+                    and alert.get('id', '') in last_alert_ids):
+                continue
             # set incident
             context_alert = remove_empty_entities(alert)
             context_alert['incidentType'] = ALERT_INCIDENT_TYPE
             if count >= kwargs['fetch_limit']:
                 break
 
+            occurred_date = dateparser.parse(context_alert.get('occurred', ''))
+            assert occurred_date is not None
+            if ((alert_occurred_time := alert.get('occurred'))
+                    and next_alert_start_time == alert_occurred_time) and (alert_id := alert.get('id')):
+                # Save the alert id for the next fetch dedup
+                next_incidents_ids.append(alert_id)
+
             incident = {
                 'name': context_alert.get('name', ''),
-                'occurred': dateparser.parse(context_alert.get('occurred', '')).strftime(
-                    DATE_FORMAT_WITH_MICROSECOND),
-                'rawJSON': json.dumps(context_alert)
+                'occurred': occurred_date.strftime(
+                    DATE_FORMAT_WITH_MICROSECOND
+                ),
+                'rawJSON': json.dumps(context_alert),
+                'dbotMirrorId': str(alert.get('id')),
             }
 
-            if not kwargs['is_test'] and alert.get('uuid', '') and kwargs['fetch_artifacts']:
-                set_attachment_file(client=kwargs['client'], incident=incident, uuid=alert.get('uuid', ''),
-                                    headers=headers)
+            if (
+                not kwargs['is_test']
+                and alert.get('uuid', '')
+                and kwargs['fetch_artifacts']
+            ):
+                set_attachment_file(
+                    client=kwargs['client'],
+                    incident=incident,
+                    uuid=alert.get('uuid', ''),
+                    headers=headers,
+                )
 
             remove_nulls_from_dictionary(incident)
             incidents.append(incident)
             count += 1
-    return incidents
+
+        parsed_incidents_str = [f"Incident name: {incident.get('name')} Incident date: {incident.get('occurred')}\n" for
+                                incident in incidents]
+        demisto.debug(
+            f"FireeyeNX Alerts: {parsed_incidents_str}")
+        if next_incidents_ids:
+            next_run = {'start_time': next_alert_start_time, 'alert_ids': next_incidents_ids}
+    return incidents, next_run
 
 
-def get_incidents_for_event(client: Client, start_time: int, fetch_limit: int, mvx_correlated: bool):
+def get_incidents_for_event(
+    client: Client, start_time: float, fetch_limit: int, mvx_correlated: bool, last_run: dict
+):
     """
     Return List of incidents for event.
 
@@ -386,48 +492,81 @@ def get_incidents_for_event(client: Client, start_time: int, fetch_limit: int, m
     :param start_time: It contains the timestamp in milliseconds on when to start fetching incidents.
     :param fetch_limit: limit for number of fetch incidents per fetch.
     :param mvx_correlated: The boolean flag that tell us to fetch events which only mvx correlated.
+    :param last_run: The last run object.
     :return: Incident List for event.
     """
-    incidents: List[Dict[str, Any]] = []
+    incidents: list[dict[str, Any]] = []
+    next_run = last_run.get('events', {})
 
     # Preparing header and parameters
     headers = {
         'X-FeApi-Token': client.get_api_token(),
-        'Accept': CONTENT_TYPE_JSON
+        'Accept': CONTENT_TYPE_JSON,
     }
 
     params = {
-        'start_time': time.strftime(API_SUPPORT_DATE_FORMAT, time.localtime(start_time)),
+        'start_time': time.strftime(
+            API_SUPPORT_DATE_FORMAT, time.localtime(start_time)
+        ),
         'duration': '48_hours',
-        'event_type': 'Ips Event'
+        'event_type': 'Ips Event',
     }
 
     if mvx_correlated:
         params['mvx_correlated_only'] = 'true'
 
     # http call
-    resp = client.http_request(method="GET", url_suffix=URL_SUFFIX['GET_EVENTS'], params=params, headers=headers)
+    resp = client.http_request(
+        method='GET',
+        url_suffix=URL_SUFFIX['GET_EVENTS'],
+        params=params,
+        headers=headers,
+    )
 
     total_records = len(resp.get('events', []))
     count = 0
     if total_records > 0:
-        for event in resp.get('events', []):
+        next_incidents_ids = []
+        events = resp.get('events', [])
+        events.sort(key=lambda x: x.get("occurred"))
+        last_event_start_time = last_run.get('events', {}).get('start_time')
+        last_event_ids = last_run.get('events', {}).get('event_ids', [])
+        next_event_start_time = events[:fetch_limit][-1].get('occurred', '')
+
+        for event in events:
+            # skip on duplicate incident
+            if last_event_start_time and last_event_ids and last_event_start_time == event.get('occurred', '') and event.get(
+                    'eventId', '') in last_event_ids:
+                continue
+
             # set incident
             context_event = remove_empty_entities(event)
             context_event['incidentType'] = IPS_EVENT_INCIDENT_TYPE
             if count >= fetch_limit:
                 break
-
+            if ((event_occurred_time := event.get('occurred'))
+                    and next_event_start_time == event_occurred_time) and (event_id := event.get('eventId')):
+                # Save the event id for the next fetch dedup
+                next_incidents_ids.append(event_id)
             incident = {
                 'name': context_event.get('ruleName', ''),
                 'occurred': context_event.get('occurred', ''),
-                'severity': PLATFORM_SEVERITY_TO_SEVERITY_MAP.get(str(context_event.get('severity', 0)), 0),
-                'rawJSON': json.dumps(context_event)
+                'severity': PLATFORM_SEVERITY_TO_SEVERITY_MAP.get(
+                    str(context_event.get('severity', 0)), 0
+                ),
+                'rawJSON': json.dumps(context_event),
+                'dbotMirrorId': str(event.get('eventId')),
             }
             remove_nulls_from_dictionary(incident)
             incidents.append(incident)
             count += 1
-    return incidents, count
+        parsed_incidents_str = [f"Incident name: {incident.get('name')} Incident date: {incident.get('occurred')}\n" for
+                                incident in incidents]
+        demisto.debug(
+            f"FireeyeNX IPS Events: {parsed_incidents_str}")
+        if next_incidents_ids:
+            next_run = {'start_time': next_event_start_time, 'event_ids': next_incidents_ids}
+    return incidents, count, next_run
 
 
 def validate_fetch_type(fetch_type):
@@ -437,11 +576,11 @@ def validate_fetch_type(fetch_type):
     :param fetch_type: A list contain types which user want to fetch.
     :return:
     """
-    if type(fetch_type) == list:
+    if type(fetch_type) is list:
         if len(fetch_type) == 0:
             raise ValueError(MESSAGES['INVALID_FETCH_TYPE'])
 
-        if not ('Alerts' in fetch_type) and not ('IPS Events' in fetch_type):
+        if 'Alerts' not in fetch_type and 'IPS Events' not in fetch_type:
             raise ValueError(MESSAGES['INVALID_FETCH_TYPE'])
 
 
@@ -469,7 +608,7 @@ def pascal_case(st) -> str:
     """
     if st.find('-') != -1 or st.find('_') != -1:
         st = ''.join(a.capitalize() for a in re.split('-|_', st))
-    return st[:1].upper() + st[1:len(st)]
+    return st[:1].upper() + st[1: len(st)]
 
 
 def remove_dash_and_underscore_from_key(d):  # type: ignore
@@ -480,12 +619,17 @@ def remove_dash_and_underscore_from_key(d):  # type: ignore
     :return: Dictionary with pascal case key.
     """
 
-    if not isinstance(d, (dict, list)):
+    if not isinstance(d, dict | list):
         return d
     elif isinstance(d, list):
-        return [value for value in (remove_dash_and_underscore_from_key(value) for value in d)]
+        return (
+            [remove_dash_and_underscore_from_key(value) for value in d]
+        )
     else:
-        return {pascal_case(key): remove_dash_and_underscore_from_key(value) for key, value in d.items()}
+        return {
+            pascal_case(key): remove_dash_and_underscore_from_key(value)
+            for key, value in d.items()
+        }
 
 
 def get_request_timeout(request_timeout: str) -> int:
@@ -499,7 +643,9 @@ def get_request_timeout(request_timeout: str) -> int:
     :return: boolean
     """
     try:
-        request_timeout_str = str(DEFAULT_REQUEST_TIMEOUT) if not request_timeout else request_timeout
+        request_timeout_str = (
+            request_timeout if request_timeout else str(DEFAULT_REQUEST_TIMEOUT)
+        )
         request_timeout_int = int(request_timeout_str)
     except ValueError:
         raise ValueError(MESSAGES['REQUEST_TIMEOUT_VALIDATION'])
@@ -520,7 +666,7 @@ def get_fetch_limit(fetch_limit):
     :param fetch_limit: The maximum number of incident want to fetch.
     :return: fetch limit
     """
-    fetch_limit = DEFAULT_FETCH_LIMIT if not fetch_limit else fetch_limit
+    fetch_limit = fetch_limit if fetch_limit else DEFAULT_FETCH_LIMIT
     try:
         fetch_limit_int = int(fetch_limit)
         if not 1 <= fetch_limit_int <= 200:
@@ -531,19 +677,23 @@ def get_fetch_limit(fetch_limit):
     return fetch_limit_int
 
 
-def generate_report_file_name(args: Dict[str, Any]) -> str:
+def generate_report_file_name(args: dict[str, Any]) -> str:
     """
     Create the filename of the info file of report.
 
     :param args: Input arguments
     :return: The report file name
     """
-    return f"{args.get('report_type', '').lower().replace(' ', '_')}_fireeye_" \
-           f"{datetime.now().strftime('%Y-%m-%d_%H:%M:%S')}." \
-           f"{args.get('type', REPORT_TYPE_ALLOWED_FORMAT[args.get('report_type', '')][0])}"
+    return (
+        f"{args.get('report_type', '').lower().replace(' ', '_')}_fireeye_"
+        f"{datetime.now().strftime('%Y-%m-%d_%H:%M:%S')}."
+        f"{args.get('type', REPORT_TYPE_ALLOWED_FORMAT[args.get('report_type', '')][0])}"
+    )
 
 
-def validate_alert_report_type_arguments(args: Dict[str, Any], params: Dict[str, Any]) -> Dict[str, Any]:
+def validate_alert_report_type_arguments(
+    args: dict[str, Any], params: dict[str, Any]
+) -> dict[str, Any]:
     """
     Validates the arguments required for alert details report type from input arguments of reports command.
     Will raise ValueError if inappropriate input given.
@@ -562,7 +712,9 @@ def validate_alert_report_type_arguments(args: Dict[str, Any], params: Dict[str,
     return params
 
 
-def validate_ips_report_type_arguments(args: Dict[str, Any], params: Dict[str, Any]) -> Dict[str, Any]:
+def validate_ips_report_type_arguments(
+    args: dict[str, Any], params: dict[str, Any]
+) -> dict[str, Any]:
     """
     Validates the arguments required for IPS report types from input arguments of reports command.
     Will raise ValueError if inappropriate input given.
@@ -580,11 +732,17 @@ def validate_ips_report_type_arguments(args: Dict[str, Any], params: Dict[str, A
         except ValueError:
             raise ValueError(MESSAGES['INVALID_INT_VALUE'].format('limit'))
     if 'interface' in arg_keys:
-        params['interface'] = args.get('interface', '') if args.get('interface', '') != 'All' else 'all'
+        params['interface'] = (
+            args.get('interface', '')
+            if args.get('interface', '') != 'All'
+            else 'all'
+        )
     return params
 
 
-def validate_time_parameters(args: Dict[str, Any], params: Dict[str, Any]) -> Dict[str, Any]:
+def validate_time_parameters(
+    args: dict[str, Any], params: dict[str, Any]
+) -> dict[str, Any]:
     """
     Validates the time arguments from input arguments of reports command.
 
@@ -601,7 +759,9 @@ def validate_time_parameters(args: Dict[str, Any], params: Dict[str, Any]) -> Di
         start_time = args.get('start_time', '')
         date_time = dateparser.parse(start_time)
         if date_time:
-            params['start_time'] = str(date_time.strftime(API_SUPPORT_DATE_FORMAT))
+            params['start_time'] = str(
+                date_time.strftime(API_SUPPORT_DATE_FORMAT)
+            )
         else:
             params['start_time'] = start_time
 
@@ -609,14 +769,16 @@ def validate_time_parameters(args: Dict[str, Any], params: Dict[str, Any]) -> Di
         end_time = args.get('end_time', '')
         date_time = dateparser.parse(end_time)
         if date_time:
-            params['end_time'] = str(date_time.strftime(API_SUPPORT_DATE_FORMAT))
+            params['end_time'] = str(
+                date_time.strftime(API_SUPPORT_DATE_FORMAT)
+            )
         else:
             params['end_time'] = end_time
 
     return params
 
 
-def get_reports_params(args: Dict[str, Any]) -> Dict[str, Any]:
+def get_reports_params(args: dict[str, Any]) -> dict[str, Any]:
     """
     Validates the input arguments of command and returns parameter dictionary. This function validates the
     report_type, output format(type), time arguments.
@@ -625,7 +787,7 @@ def get_reports_params(args: Dict[str, Any]) -> Dict[str, Any]:
     :param args: Input arguments of command
     :return: Params dict or error message
     """
-    params: Dict[str, Any] = {}
+    params: dict[str, Any] = {}
     arg_keys = args.keys()
 
     report_type = args.get('report_type', '')
@@ -636,8 +798,11 @@ def get_reports_params(args: Dict[str, Any]) -> Dict[str, Any]:
     if 'type' in arg_keys:
         output_type = args.get('type', '')
         if output_type not in REPORT_TYPE_ALLOWED_FORMAT[report_type]:
-            raise ValueError(MESSAGES['INVALID_REPORT_OUTPUT_TYPE']
-                             .format(', '.join(REPORT_TYPE_ALLOWED_FORMAT[report_type])))
+            raise ValueError(
+                MESSAGES['INVALID_REPORT_OUTPUT_TYPE'].format(
+                    ', '.join(REPORT_TYPE_ALLOWED_FORMAT[report_type])
+                )
+            )
         params['type'] = output_type
 
     params = validate_time_parameters(args, params)
@@ -650,7 +815,7 @@ def get_reports_params(args: Dict[str, Any]) -> Dict[str, Any]:
     return params
 
 
-def add_time_suffix_into_arguments(args: Dict[str, Any]):
+def add_time_suffix_into_arguments(args: dict[str, Any]):
     """
     Add time suffix into arguments.
 
@@ -662,9 +827,13 @@ def add_time_suffix_into_arguments(args: Dict[str, Any]):
         start_time = args.get('start_time', '')
         date_time = dateparser.parse(start_time)
         if date_time:
-            args['start_time'] = str(date_time.strftime(API_SUPPORT_DATE_FORMAT))
+            args['start_time'] = str(
+                date_time.strftime(API_SUPPORT_DATE_FORMAT)
+            )
         else:
-            raise ValueError(MESSAGES['INVALID_TIME_VALIDATION'].format('start_time'))
+            raise ValueError(
+                MESSAGES['INVALID_TIME_VALIDATION'].format('start_time')
+            )
 
     if 'end_time' in arg_keys:
         end_time = args.get('end_time', '')
@@ -672,10 +841,12 @@ def add_time_suffix_into_arguments(args: Dict[str, Any]):
         if date_time:
             args['end_time'] = str(date_time.strftime(API_SUPPORT_DATE_FORMAT))
         else:
-            raise ValueError(MESSAGES['INVALID_TIME_VALIDATION'].format('end_time'))
+            raise ValueError(
+                MESSAGES['INVALID_TIME_VALIDATION'].format('end_time')
+            )
 
 
-def get_events_params(args: Dict[str, Any]) -> Dict[str, Any]:
+def get_events_params(args: dict[str, Any]) -> dict[str, Any]:
     """
     Validates the input arguments of command and returns parameter dictionary
     or raises ValueError in case of validation failed.
@@ -683,9 +854,7 @@ def get_events_params(args: Dict[str, Any]) -> Dict[str, Any]:
     :param args: Input arguments of command
     :return: Params dict or error message
     """
-    params: Dict[str, Any] = {
-        'event_type': 'Ips Event'
-    }
+    params: dict[str, Any] = {'event_type': 'Ips Event'}
     arg_keys = args.keys()
 
     if 'duration' in arg_keys:
@@ -695,17 +864,25 @@ def get_events_params(args: Dict[str, Any]) -> Dict[str, Any]:
         start_time = args.get('start_time', '')
         date_time = dateparser.parse(start_time)
         if date_time:
-            params['start_time'] = str(date_time.strftime(API_SUPPORT_DATE_FORMAT))
+            params['start_time'] = str(
+                date_time.strftime(API_SUPPORT_DATE_FORMAT)
+            )
         else:
-            raise ValueError(MESSAGES['INVALID_TIME_VALIDATION'].format('start_time'))
+            raise ValueError(
+                MESSAGES['INVALID_TIME_VALIDATION'].format('start_time')
+            )
 
     if 'end_time' in arg_keys:
         end_time = args.get('end_time', '')
         date_time = dateparser.parse(end_time)
         if date_time:
-            params['end_time'] = str(date_time.strftime(API_SUPPORT_DATE_FORMAT))
+            params['end_time'] = str(
+                date_time.strftime(API_SUPPORT_DATE_FORMAT)
+            )
         else:
-            raise ValueError(MESSAGES['INVALID_TIME_VALIDATION'].format('end_time'))
+            raise ValueError(
+                MESSAGES['INVALID_TIME_VALIDATION'].format('end_time')
+            )
 
     if 'mvx_correlated_only' in arg_keys:
         mvx_correlated_only = args.get('mvx_correlated_only', '').lower()
@@ -713,12 +890,18 @@ def get_events_params(args: Dict[str, Any]) -> Dict[str, Any]:
             mvx_correlated_only = argToBoolean(mvx_correlated_only)
             params['mvx_correlated_only'] = mvx_correlated_only
         except ValueError:
-            raise ValueError(MESSAGES['INVALID_BOOLEAN_VALUE_ERROR'].format('mvx_correlated_only'))
+            raise ValueError(
+                MESSAGES['INVALID_BOOLEAN_VALUE_ERROR'].format(
+                    'mvx_correlated_only'
+                )
+            )
 
     return params
 
 
-def prepare_hr_for_artifact_metadata(artifacts_info: List[Dict[str, Any]]) -> str:
+def prepare_hr_for_artifact_metadata(
+    artifacts_info: list[dict[str, Any]]
+) -> str:
     """
     Prepare Human readable for get artifact metadata.
 
@@ -735,8 +918,12 @@ def prepare_hr_for_artifact_metadata(artifacts_info: List[Dict[str, Any]]) -> st
         }
         artifacts_info_hr_list.append(artifacts_dict)
 
-    return tableToMarkdown('Artifacts Metadata', artifacts_info_hr_list,
-                           headers=['Artifact Type', 'Artifact Name', 'Artifact Size (Bytes)'], removeNull=True)
+    return tableToMarkdown(
+        'Artifacts Metadata',
+        artifacts_info_hr_list,
+        headers=['Artifact Type', 'Artifact Name', 'Artifact Size (Bytes)'],
+        removeNull=True,
+    )
 
 
 def remove_empty_entities(d):
@@ -752,16 +939,25 @@ def remove_empty_entities(d):
     def empty(x):
         return x is None or x == {} or x == [] or x == ''
 
-    if not isinstance(d, (dict, list)):
+    if not isinstance(d, dict | list):
         return d
     elif isinstance(d, list):
-        return [value for value in (remove_empty_entities(value) for value in d) if not empty(value)]
+        return [
+            value
+            for value in (remove_empty_entities(value) for value in d)
+            if not empty(value)
+        ]
     else:
-        return {key: value for key, value in ((key, remove_empty_entities(value))
-                                              for key, value in d.items()) if not empty(value)}
+        return {
+            key: value
+            for key, value in (
+                (key, remove_empty_entities(value)) for key, value in d.items()
+            )
+            if not empty(value)
+        }
 
 
-def prepare_hr_for_alert_response(resp: Dict) -> str:
+def prepare_hr_for_alert_response(resp: dict) -> str:
     """
     Prepare human readable for alert response.
 
@@ -774,8 +970,10 @@ def prepare_hr_for_alert_response(resp: Dict) -> str:
         artifacts_dict = {
             'ID': alert.get('id', ''),
             'Distinguisher(UUID)': alert.get('uuid', ''),
-            'Malware Name': alert.get('explanation',
-                                      {}).get('malwareDetected', {}).get('malware', [{}])[0].get('name', ''),
+            'Malware Name': alert.get('explanation', {})
+            .get('malwareDetected', {})
+            .get('malware', [{}])[0]
+            .get('name', ''),
             'Alert Type': alert.get('name', ''),
             VICTIM_IP: alert.get('src', {}).get('ip', ''),
             TIME_UTC: alert.get('occurred', ''),
@@ -786,14 +984,28 @@ def prepare_hr_for_alert_response(resp: Dict) -> str:
             'Victim MAC Address': alert.get('src', {}).get('mac', ''),
             'Target IP': alert.get('dst', {}).get('ip', ''),
             'Target Port': alert.get('dst', {}).get('port', ''),
-            'Target MAC Address': alert.get('dst', {}).get('mac', '')
+            'Target MAC Address': alert.get('dst', {}).get('mac', ''),
         }
         alert_hr_list.append(artifacts_dict)
-    headers = ['ID', 'Distinguisher(UUID)', 'Malware Name', 'Alert Type', VICTIM_IP, TIME_UTC, 'Severity',
-               'Malicious',
-               'SC Version', 'Victim Port', 'Victim MAC Address', 'Target IP', 'Target Port', 'Target MAC Address']
-    return tableToMarkdown("Alert(s) Information", alert_hr_list,
-                           headers=headers, removeNull=True)
+    headers = [
+        'ID',
+        'Distinguisher(UUID)',
+        'Malware Name',
+        'Alert Type',
+        VICTIM_IP,
+        TIME_UTC,
+        'Severity',
+        'Malicious',
+        'SC Version',
+        'Victim Port',
+        'Victim MAC Address',
+        'Target IP',
+        'Target Port',
+        'Target MAC Address',
+    ]
+    return tableToMarkdown(
+        'Alert(s) Information', alert_hr_list, headers=headers, removeNull=True
+    )
 
 
 def prepare_hr_for_events(events_info) -> str:
@@ -813,16 +1025,30 @@ def prepare_hr_for_events(events_info) -> str:
             'CVE ID': record.get('cveId', ''),
             'Severity': record.get('severity', None),
             'Rule': record.get('ruleName', ''),
-            'Protocol': record.get('protocol', None)
+            'Protocol': record.get('protocol', None),
         }
         hr_list.append(hr_record)
 
-    return tableToMarkdown('IPS Events', hr_list,
-                           ['Event ID', TIME_UTC, VICTIM_IP, 'Attacker IP', 'CVE ID',
-                            'Severity', 'Rule', 'Protocol'], removeNull=True)
+    return tableToMarkdown(
+        'IPS Events',
+        hr_list,
+        [
+            'Event ID',
+            TIME_UTC,
+            VICTIM_IP,
+            'Attacker IP',
+            'CVE ID',
+            'Severity',
+            'Rule',
+            'Protocol',
+        ],
+        removeNull=True,
+    )
 
 
-def replace_alert_url_key_domain_to_instance_url(alerts_resp: list, instance_url: str):
+def replace_alert_url_key_domain_to_instance_url(
+    alerts_resp: list, instance_url: str
+):
     """
     Change domain of 'alertUrl' to the instance URL.
 
@@ -855,16 +1081,41 @@ def replace_alert_url_key_domain_to_instance_url(alerts_resp: list, instance_url
 
         alert_url_split = alert_url.split('/', 1)
 
-        suffix_url = ''.join(alert_url_split[count] for count in range(len(alert_url_split)) if count != 0)
+        suffix_url = ''.join(
+            alert_url_split[count]
+            for count in range(len(alert_url_split))
+            if count != 0
+        )
 
-        return f"{prefix_url + suffix_url}"
+        return f'{prefix_url + suffix_url}'
 
     for alert_index in range(len(alerts_resp)):
         if alerts_resp[alert_index].get('alertUrl'):
-            alerts_resp[alert_index]['alertUrl'] = replace_url(alerts_resp[alert_index]['alertUrl'], instance_url)
+            alerts_resp[alert_index]['alertUrl'] = replace_url(
+                alerts_resp[alert_index]['alertUrl'], instance_url
+            )
 
 
-''' REQUESTS FUNCTIONS '''
+def update_start_time(start_time: float) -> float:
+    """Check that the start time is bigger (later) than the current time - ~48 hours (due to API limitations we can fetch
+        events only from the last 48 hours) if not it returns the current time - ~48 hours
+
+    Args:
+        start_time: The time we use for start fetching.
+
+    Returns:
+        The return value. The time we use for start fetching. Validated it's not less (earlier) than current time - ~48 hours.
+    """
+    current_timestamp = date_to_timestamp(datetime.utcnow(), DATE_FORMAT) / 1000.0
+    if current_timestamp - FORTY_EIGHT_HOURS_IN_SECOND > start_time:
+        updated_start_time = current_timestamp - FORTY_EIGHT_HOURS_IN_SECOND
+        demisto.debug(f'Start time {start_time=} is earlier than [current time {current_timestamp=} - ~ 48 hours], '
+                      f'Start time updated to: {updated_start_time=}')
+        return updated_start_time
+    return start_time
+
+
+""" REQUESTS FUNCTIONS """
 
 
 def test_function(**kwargs) -> str:
@@ -878,29 +1129,43 @@ def test_function(**kwargs) -> str:
         fetch_limit = get_fetch_limit(kwargs['fetch_limit'])
 
         # getting numeric value from string representation
-        start_time, _ = parse_date_range(kwargs['first_fetch_time'], date_format=DATE_FORMAT, utc=True)
+        start_time, _ = parse_date_range(
+            kwargs['first_fetch_time'], date_format=DATE_FORMAT, utc=True
+        )
 
         # validate start_time should be less then 48 hour as per API limitation
         validate_date_range(kwargs['first_fetch_time'])
         validate_fetch_type(kwargs['fetch_type'])
 
-        first_fetch = date_to_timestamp(start_time, date_format=DATE_FORMAT) / 1000
-        fetch_incidents(client=kwargs['client'], last_run=demisto.getLastRun(), first_fetch=first_fetch,
-                        fetch_limit=fetch_limit, malware_type=kwargs['malware_type'],
-                        is_test=True, fetch_type=kwargs['fetch_type'], mvx_correlated=kwargs['mvx_correlated'],
-                        replace_alert_url=kwargs['replace_alert_url'], instance_url=kwargs['instance_url'],
-                        fetch_artifacts=kwargs['fetch_artifacts'])
+        first_fetch = (
+            date_to_timestamp(start_time, date_format=DATE_FORMAT) / 1000
+        )
+        fetch_incidents(
+            client=kwargs['client'],
+            last_run=demisto.getLastRun(),
+            first_fetch=first_fetch,
+            fetch_limit=fetch_limit,
+            malware_type=kwargs['malware_type'],
+            is_test=True,
+            fetch_type=kwargs['fetch_type'],
+            mvx_correlated=kwargs['mvx_correlated'],
+            replace_alert_url=kwargs['replace_alert_url'],
+            instance_url=kwargs['instance_url'],
+            fetch_artifacts=kwargs['fetch_artifacts'],
+        )
     else:
-        headers = {
-            'Accept': CONTENT_TYPE_JSON
-        }
-        kwargs['client'].http_request(method='POST', url_suffix=URL_SUFFIX['GET_TOKEN'], headers=headers)
+        headers = {'Accept': CONTENT_TYPE_JSON}
+        kwargs['client'].http_request(
+            method='POST', url_suffix=URL_SUFFIX['GET_TOKEN'], headers=headers
+        )
 
     return 'ok'
 
 
 @logger
-def get_artifacts_metadata_by_alert_command(client: Client, args: Dict[str, Any]) -> Union[str, CommandResults]:
+def get_artifacts_metadata_by_alert_command(
+    client: Client, args: dict[str, Any]
+) -> str | CommandResults:
     """
     Gets malware artifacts metadata for the specified UUID.
 
@@ -914,41 +1179,51 @@ def get_artifacts_metadata_by_alert_command(client: Client, args: Dict[str, Any]
     # Preparing header
     headers = {
         'Accept': CONTENT_TYPE_JSON,
-        'X-FeApi-Token': client.get_api_token()
+        'X-FeApi-Token': client.get_api_token(),
     }
 
     # Call get artifacts metadata api
-    resp = client.http_request('GET', url_suffix=URL_SUFFIX['GET_ARTIFACTS_METADATA'].format(uuid), headers=headers)
+    resp = client.http_request(
+        'GET',
+        url_suffix=URL_SUFFIX['GET_ARTIFACTS_METADATA'].format(uuid),
+        headers=headers,
+    )
 
     artifacts_info = resp.get('artifactsInfoList', [])
     if len(artifacts_info) == 0:
         return MESSAGES['NO_RECORDS_FOUND'].format('artifacts metadata')
 
     # Create entry context
-    artifacts_metadata_custom_ec = createContext(artifacts_info, removeNull=True)
+    artifacts_metadata_custom_ec = createContext(
+        artifacts_info, removeNull=True
+    )
 
     # Prepare human readable
     hr = prepare_hr_for_artifact_metadata(artifacts_info)
 
     custom_ec_for_artifact_metadata = {
         'ArtifactsMetadata': artifacts_metadata_custom_ec,
-        'Uuid': uuid
+        'Uuid': uuid,
     }
 
     # Remove dash, underscore from key and make it pascal case.
-    custom_ec = remove_dash_and_underscore_from_key(custom_ec_for_artifact_metadata)
+    custom_ec = remove_dash_and_underscore_from_key(
+        custom_ec_for_artifact_metadata
+    )
 
     return CommandResults(
         outputs_prefix='FireEyeNX.Alert',
         outputs_key_field='Uuid',
         outputs=custom_ec,
         readable_output=hr,
-        raw_response=resp
+        raw_response=resp,
     )
 
 
 @logger
-def get_artifacts_by_alert_command(client: Client, args: Dict[str, Any]) -> Union[str, Dict[str, Any]]:
+def get_artifacts_by_alert_command(
+    client: Client, args: dict[str, Any]
+) -> str | dict[str, Any]:
     """
     Downloads malware artifacts data for the specified UUID as a zip file.
 
@@ -961,25 +1236,32 @@ def get_artifacts_by_alert_command(client: Client, args: Dict[str, Any]) -> Unio
 
     # Preparing header
     headers = {
-        'accept': CONTENT_TYPE_ZIP,
-        'X-FeApi-Token': client.get_api_token()
+        'Content-Type': CONTENT_TYPE_ZIP,
+        'X-FeApi-Token': client.get_api_token(),
     }
 
     # Call get artifacts data api
-    artifacts_resp = client.http_request('GET', url_suffix=URL_SUFFIX[
-        'GET_ARTIFACTS'].format(uuid), headers=headers)
+    artifacts_resp = client.http_request(
+        'GET',
+        url_suffix=URL_SUFFIX['GET_ARTIFACTS'].format(uuid),
+        headers=headers,
+    )
 
     # Create file from Content
     if int(artifacts_resp.headers.get('Content-Length', '0')) > 0:
         file_name = f'{uuid}.zip'
-        file_entry = fileResult(filename=file_name, data=artifacts_resp.content)
+        file_entry = fileResult(
+            filename=file_name, data=artifacts_resp.content
+        )
         return file_entry
     else:
         return MESSAGES['NO_RECORDS_FOUND'].format('artifacts data')
 
 
 @logger
-def get_reports_command(client: Client, args: Dict[str, Any]) -> Union[str, Dict[str, Any]]:
+def get_reports_command(
+    client: Client, args: dict[str, Any]
+) -> str | dict[str, Any]:
     """
     Returns reports on selected alerts by specifying a time_frame value or a start_time and end_time
     of the search range.
@@ -995,25 +1277,36 @@ def get_reports_command(client: Client, args: Dict[str, Any]) -> Union[str, Dict
     # Preparing header
     headers = {
         'X-FeApi-Token': client.get_api_token(),
-        'Accept': CONTENT_TYPE_JSON
+        'Accept': CONTENT_TYPE_JSON,
     }
 
     # API call
-    resp: Response = client.http_request(method='GET', url_suffix=URL_SUFFIX['GET_REPORTS'], params=params,
-                                         headers=headers)
+    resp: Response = client.http_request(
+        method='GET',
+        url_suffix=URL_SUFFIX['GET_REPORTS'],
+        params=params,
+        headers=headers,
+    )
 
     # Create file from Content
     if int(resp.headers.get('Content-Length', '')) > 0:
-        file_entry = fileResult(filename=generate_report_file_name(args), data=resp.content,
-                                file_type=EntryType.ENTRY_INFO_FILE)
+        file_entry = fileResult(
+            filename=generate_report_file_name(args),
+            data=resp.content,
+            file_type=EntryType.ENTRY_INFO_FILE,
+        )
         return file_entry
     else:
         return MESSAGES['NO_RECORDS_FOUND'].format('report contents')
 
 
 @logger
-def get_alerts_command(client: Client, args: Dict[str, Any], replace_alert_url: bool, instance_url: str) -> \
-        Union[str, CommandResults]:
+def get_alerts_command(
+    client: Client,
+    args: dict[str, Any],
+    replace_alert_url: bool,
+    instance_url: str,
+) -> str | CommandResults:
     """
     Retrieve list of alerts based on various argument(s).
 
@@ -1028,11 +1321,16 @@ def get_alerts_command(client: Client, args: Dict[str, Any], replace_alert_url: 
     # Preparing header
     headers = {
         'X-FeApi-Token': client.get_api_token(),
-        'Accept': CONTENT_TYPE_JSON
+        'Accept': CONTENT_TYPE_JSON,
     }
 
     # http call
-    resp = client.http_request(method="GET", url_suffix=URL_SUFFIX['GET_ALERTS'], params=args, headers=headers)
+    resp = client.http_request(
+        method='GET',
+        url_suffix=URL_SUFFIX['GET_ALERTS'],
+        params=args,
+        headers=headers,
+    )
 
     total_records = resp.get('alertsCount', 0)
     if total_records <= 0:
@@ -1058,14 +1356,14 @@ def get_alerts_command(client: Client, args: Dict[str, Any], replace_alert_url: 
         outputs_key_field='Uuid',
         outputs=custom_ec,
         readable_output=hr,
-        raw_response=resp
+        raw_response=resp,
     )
 
 
 @logger
 def fetch_incidents(
-        **kwargs
-) -> Tuple[Union[Dict[str, Any], None], Union[List[Dict[str, Any]], None]]:
+    **kwargs,
+) -> tuple[dict[str, Any] | None, list[dict[str, Any]] | None]:
     """
     This function retrieves new incidents every interval.
 
@@ -1073,25 +1371,53 @@ def fetch_incidents(
     :return: Tuple containing two elements. incidents list and timestamp.
     """
     # Retrieving last run time if not none, otherwise first_fetch will be considered.
-    start_time = kwargs['last_run'].get('start_time')
-    start_time = int(start_time) if start_time else kwargs['first_fetch']
-
-    next_run = {'start_time': datetime.now(timezone.utc).timestamp()}
+    last_run = kwargs['last_run']
+    start_time = kwargs['first_fetch']
+    next_run = last_run
 
     incidents = []
     fetch_count = 0
-    if 'IPS Events' in kwargs['fetch_type']:
-        incidents, fetch_count = get_incidents_for_event(kwargs['client'], start_time,
-                                                         kwargs['fetch_limit'], kwargs['mvx_correlated'])
-
-    if 'Alerts' in kwargs['fetch_type'] and (fetch_count < kwargs['fetch_limit']):
-        incidents.extend(
-            get_incidents_for_alert(client=kwargs['client'], malware_type=kwargs['malware_type'],
-                                    start_time=start_time, fetch_limit=kwargs['fetch_limit'],
-                                    replace_alert_url=kwargs['replace_alert_url'],
-                                    instance_url=kwargs['instance_url'], is_test=kwargs['is_test'],
-                                    fetch_artifacts=kwargs['fetch_artifacts'], fetch_count=fetch_count)
+    if 'IPS Events' in (kwargs['fetch_type'] or []):
+        if (events_start_time := last_run.get('events', {}).get('start_time')) and \
+                (parsed_start_time := dateparser.parse(events_start_time)):
+            start_time = parsed_start_time.timestamp()
+        start_time = update_start_time(start_time)
+        demisto.debug(f"FireeyeNX IPS Events Start Time: {start_time}")
+        incidents, fetch_count, next_run_events = get_incidents_for_event(
+            kwargs['client'],
+            start_time,
+            kwargs['fetch_limit'],
+            kwargs['mvx_correlated'],
+            last_run,
         )
+        next_run['events'] = next_run_events
+
+    # reset start time before next fetch type
+    start_time = kwargs['first_fetch']
+    if 'Alerts' in (kwargs['fetch_type'] or []) and (
+        fetch_count < kwargs['fetch_limit']
+    ):
+        if (alerts_start_time := last_run.get('alerts', {}).get('start_time')) and \
+                (parsed_start_time := dateparser.parse(alerts_start_time)):
+            start_time = parsed_start_time.timestamp()
+        start_time = update_start_time(start_time)
+        demisto.debug(f"FireeyeNX Alerts Start Time: {start_time}")
+        alert_incidents, next_run_alerts = get_incidents_for_alert(
+            client=kwargs['client'],
+            malware_type=kwargs['malware_type'],
+            start_time=start_time,
+            fetch_limit=kwargs['fetch_limit'],
+            replace_alert_url=kwargs['replace_alert_url'],
+            instance_url=kwargs['instance_url'],
+            is_test=kwargs['is_test'],
+            fetch_artifacts=kwargs['fetch_artifacts'],
+            fetch_count=fetch_count,
+            last_run=last_run,
+        )
+        incidents.extend(
+            alert_incidents
+        )
+        next_run['alerts'] = next_run_alerts
 
     if kwargs['is_test']:
         return None, None
@@ -1099,7 +1425,9 @@ def fetch_incidents(
 
 
 @logger
-def get_events_command(client: Client, args: Dict[str, Any]) -> Union[str, CommandResults]:
+def get_events_command(
+    client: Client, args: dict[str, Any]
+) -> str | CommandResults:
     """
     Retrieve list of events based on various argument(s).
     Will raise an exception if validation fails.
@@ -1115,11 +1443,16 @@ def get_events_command(client: Client, args: Dict[str, Any]) -> Union[str, Comma
     # Preparing header
     headers = {
         'X-FeApi-Token': client.get_api_token(),
-        'Accept': CONTENT_TYPE_JSON
+        'Accept': CONTENT_TYPE_JSON,
     }
 
     # http call
-    resp = client.http_request(method="GET", url_suffix=URL_SUFFIX['GET_EVENTS'], params=params, headers=headers)
+    resp = client.http_request(
+        method='GET',
+        url_suffix=URL_SUFFIX['GET_EVENTS'],
+        params=params,
+        headers=headers,
+    )
 
     total_records = resp.get('events', [])
     if not total_records:
@@ -1137,24 +1470,22 @@ def get_events_command(client: Client, args: Dict[str, Any]) -> Union[str, Comma
         outputs_key_field='EventId',
         outputs=custom_ec,
         readable_output=hr,
-        raw_response=resp
+        raw_response=resp,
     )
 
 
 def main() -> None:
     """
-         PARSE AND VALIDATE INTEGRATION PARAMS
+    PARSE AND VALIDATE INTEGRATION PARAMS
     """
     # Commands dict
     commands = {
         'fireeye-nx-get-artifacts-metadata-by-alert': get_artifacts_metadata_by_alert_command,
         'fireeye-nx-get-reports': get_reports_command,
         'fireeye-nx-get-artifacts-by-alert': get_artifacts_by_alert_command,
-        'fireeye-nx-get-events': get_events_command
+        'fireeye-nx-get-events': get_events_command,
     }
-    commands_with_params = {
-        'fireeye-nx-get-alerts': get_alerts_command
-    }
+    commands_with_params = {'fireeye-nx-get-alerts': get_alerts_command}
 
     command = demisto.command()
     demisto.info(f'Command being called is {command}')
@@ -1171,17 +1502,19 @@ def main() -> None:
         request_timeout = demisto.params().get('request_timeout')
         request_timeout = get_request_timeout(request_timeout)
 
-        base_url = f"{url}/wsapis/{API_VERSION}"
+        base_url = f'{url}/wsapis/{API_VERSION}'
 
         # prepare client class object
-        client = Client(base_url=base_url, verify=verify_certificate, proxy=proxy, auth=(username, password),
-                        request_timeout=request_timeout)
+        client = Client(
+            base_url=base_url,
+            verify=verify_certificate,
+            proxy=proxy,
+            auth=(username, password),
+            request_timeout=request_timeout,
+        )
 
         # Trim the arguments
-        args = demisto.args()
-        for argument in args:
-            if isinstance(args[argument], str):
-                args[argument] = args[argument].strip()
+        args = strip_blank(demisto.args())
 
         # This is the call made when pressing the integration Test button.
         if demisto.command() == 'test-module':
@@ -1189,7 +1522,9 @@ def main() -> None:
             first_fetch_time = demisto.params().get('first_fetch')
 
             # Set first fetch time as default if user leave empty
-            first_fetch_time = DEFAULT_FIRST_FETCH if not first_fetch_time else first_fetch_time
+            first_fetch_time = (
+                first_fetch_time if first_fetch_time else DEFAULT_FIRST_FETCH
+            )
 
             malware_type = demisto.params().get('malware_type')
 
@@ -1197,16 +1532,28 @@ def main() -> None:
 
             fetch_type = demisto.params().get('fetch_type')
 
-            mvx_correlated = demisto.params().get('fetch_mvx_correlated_events', False)
+            mvx_correlated = demisto.params().get(
+                'fetch_mvx_correlated_events', False
+            )
 
-            replace_alert_url = demisto.params().get('replace_alert_url', False)
+            replace_alert_url = demisto.params().get(
+                'replace_alert_url', False
+            )
 
             fetch_artifacts = demisto.params().get('fetch_artifacts', False)
 
-            result = test_function(client=client, first_fetch_time=first_fetch_time, fetch_limit=fetch_limit,
-                                   malware_type=malware_type, is_fetch=is_fetch, fetch_type=fetch_type,
-                                   mvx_correlated=mvx_correlated, replace_alert_url=replace_alert_url, instance_url=url,
-                                   fetch_artifacts=fetch_artifacts)
+            result = test_function(
+                client=client,
+                first_fetch_time=first_fetch_time,
+                fetch_limit=fetch_limit,
+                malware_type=malware_type,
+                is_fetch=is_fetch,
+                fetch_type=fetch_type,
+                mvx_correlated=mvx_correlated,
+                replace_alert_url=replace_alert_url,
+                instance_url=url,
+                fetch_artifacts=fetch_artifacts,
+            )
             demisto.results(result)
 
         elif demisto.command() == 'fetch-incidents':
@@ -1215,26 +1562,34 @@ def main() -> None:
             first_fetch_time = demisto.params().get('first_fetch')
 
             # Set first fetch time as default if user leave empty
-            first_fetch_time = DEFAULT_FIRST_FETCH if not first_fetch_time else first_fetch_time
+            first_fetch_time = (
+                first_fetch_time if first_fetch_time else DEFAULT_FIRST_FETCH
+            )
 
             fetch_limit = demisto.params().get('max_fetch')
 
             fetch_limit = get_fetch_limit(fetch_limit)
-            demisto.debug(f"Fetch Limit {fetch_limit}")
+            demisto.debug(f'Fetch Limit {fetch_limit}')
 
             fetch_type = demisto.params().get('fetch_type')
 
-            mvx_correlated = demisto.params().get('fetch_mvx_correlated_events', False)
+            mvx_correlated = demisto.params().get(
+                'fetch_mvx_correlated_events', False
+            )
 
             # Getting numeric value from string representation
-            start_time, _ = parse_date_range(first_fetch_time, date_format=DATE_FORMAT, utc=True)
+            start_time, _ = parse_date_range(
+                first_fetch_time, date_format=DATE_FORMAT, utc=True
+            )
 
             # Validate start_time should be less then 48 hour as per API limitation
             validate_date_range(first_fetch_time)
 
             validate_fetch_type(fetch_type)
             # Flag indicate to replace the 'alertUrl' domain to Integration URL or not.
-            replace_alert_url = demisto.params().get('replace_alert_url', False)
+            replace_alert_url = demisto.params().get(
+                'replace_alert_url', False
+            )
 
             fetch_artifacts = demisto.params().get('fetch_artifacts', False)
 
@@ -1243,15 +1598,19 @@ def main() -> None:
                 malware_type=malware_type,
                 last_run=demisto.getLastRun(),
                 fetch_limit=fetch_limit,
-                first_fetch=date_to_timestamp(start_time, date_format=DATE_FORMAT) / 1000,
+                first_fetch=date_to_timestamp(
+                    start_time, date_format=DATE_FORMAT
+                )
+                / 1000,
                 fetch_type=fetch_type,
                 mvx_correlated=mvx_correlated,
                 replace_alert_url=replace_alert_url,
                 instance_url=url,
                 fetch_artifacts=fetch_artifacts,
-                is_test=False
+                is_test=False,
             )
             # saves next_run for the time fetch-incidents is invoked.
+            demisto.debug(f"FireEyeNX setting next run to: {next_run}")
             demisto.setLastRun(next_run)
             demisto.incidents(incidents)
 
@@ -1260,13 +1619,18 @@ def main() -> None:
 
         elif command in commands_with_params:
             # Flag indicate to replace alertUrl domain to Integration URL or not.
-            replace_alert_url = demisto.params().get('replace_alert_url', False)
+            replace_alert_url = demisto.params().get(
+                'replace_alert_url', False
+            )
 
-            return_results(commands_with_params[command](client, args, replace_alert_url, url))
+            return_results(
+                commands_with_params[command](
+                    client, args, replace_alert_url, url
+                )
+            )
 
     # Log exceptions
     except Exception as e:
-        demisto.error(traceback.format_exc())
         return_error(f'Error: {str(e)}')
 
 

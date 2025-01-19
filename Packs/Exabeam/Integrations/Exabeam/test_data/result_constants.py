@@ -151,8 +151,8 @@ EXPECTED_NOTABLE_SESSION_DETAILS = {
                  'Location': 'us',
                  'Email': 'test@.com'}],
             'executiveUserFlags': [
-              {'username1': False},
-              {'username2': False}]}
+            {'username1': False},
+            {'username2': False}]}
 }
 
 EXPECTED_NOTABLE_SEQUENCE_DETAILS = {
@@ -185,3 +185,20 @@ EXPECTED_NOTABLE_SEQUENCE_EVENTS = {
          {'eventType': 'type8', 'displayName': 'dn8', 'count': 1, 'sequenceId': None},
          {'eventType': 'type9', 'displayName': 'dn9', 'count': 1, 'sequenceId': None}]
 }
+
+EXPECTED_RESULT_AFTER_RECORD_DELETION = {'Exabeam.ContextTableUpdate(val.changeId && val.changeId === obj.changeId)': [
+    {'contextTableName': 'test_table',
+     'sessionId': '56a5b19a-4193-4616-9978-0bbabb1e2d60',
+     'changeType': 'removed',
+     'changeId': '4aad5392-20e7-4423-abcb-a9680c566215',
+     'record': {'key': '', 'id': 'test_key'}
+     }]
+}
+
+EXPECTED_INCIDENT_LIST = {'Exabeam.Incident(val.incidentId && val.incidentId === obj.incidentId)':
+                          [{'incidentId': 'SOC-19', 'name': 'phil: Notable AA Session',
+                            'fields': {'startedDate': '2020-12-15T02:31:10.130000', 'closedDate': None,
+                                       'createdAt': '2020-12-15T08:19:19.194000', 'owner': 'unassigned',
+                                       'status': 'new', 'incidentType': ['generic', 'ueba'],
+                                       'source': 'Exabeam AA', 'priority': 'medium', 'queue': '1',
+                                       'description': None}}]}

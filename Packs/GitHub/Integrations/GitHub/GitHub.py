@@ -1,18 +1,20 @@
-import demistomock as demisto
-from CommonServerPython import *
-from CommonServerUserPython import *
+import demistomock as demisto  # noqa: F401
+from CommonServerPython import *  # noqa: F401
 
 ''' IMPORTS '''
-import json
 import copy
-import requests
-from typing import Union, Any
+import json
 from datetime import datetime
+from typing import Any
+import codecs
+import requests
+import urllib3
 
 # Disable insecure warnings
-requests.packages.urllib3.disable_warnings()
+urllib3.disable_warnings()
 
 ''' GLOBALS/PARAMS '''
+BASE_URL: str
 USER: str
 TOKEN: str
 PRIVATE_KEY: str
@@ -21,23 +23,27 @@ INSTALLATION_ID: str
 REPOSITORY: str
 USE_SSL: bool
 FETCH_TIME: str
+MAX_FETCH_PAGE_RESULTS: int
 USER_SUFFIX: str
 ISSUE_SUFFIX: str
+PROJECT_SUFFIX: str
 RELEASE_SUFFIX: str
 PULLS_SUFFIX: str
 FILE_SUFFIX: str
 HEADERS: dict
 
-BASE_URL = 'https://api.github.com'
-
 RELEASE_HEADERS = ['ID', 'Name', 'Download_count', 'Body', 'Created_at', 'Published_at']
 ISSUE_HEADERS = ['ID', 'Repository', 'Organization', 'Title', 'State', 'Body', 'Created_at', 'Updated_at', 'Closed_at',
                  'Closed_by', 'Assignees', 'Labels']
+PROJECT_HEADERS = ['Name', 'ID', 'Number', 'Columns']
 FILE_HEADERS = ['Name', 'Path', 'Type', 'Size', 'SHA', 'DownloadUrl']
 
 # Headers to be sent in requests
 MEDIA_TYPE_INTEGRATION_PREVIEW = "application/vnd.github.machine-man-preview+json"
+PROJECTS_PREVIEW = 'application/vnd.github.inertia-preview+json'
 
+DEFAULT_PAGE_SIZE = 50
+DEFAULT_PAGE_NUMBER = 1
 ''' HELPER FUNCTIONS '''
 
 
@@ -69,7 +75,7 @@ def get_installation_access_token(installation_id: str, jwt_token: str):
             BASE_URL, installation_id
         ),
         headers={
-            "Authorization": "Bearer {}".format(jwt_token),
+            "Authorization": f"Bearer {jwt_token}",
             "Accept": MEDIA_TYPE_INTEGRATION_PREVIEW,
         },
     )
@@ -77,13 +83,16 @@ def get_installation_access_token(installation_id: str, jwt_token: str):
         return response.json()['token']
     elif response.status_code == 403:
         return_error('403 Forbidden - The credentials are incorrect')
+        return None
     elif response.status_code == 404:
         return_error('404 Not found - Installation wasn\'t found')
+        return None
     else:
         return_error(f'Encountered an error: {response.text}')
+        return None
 
 
-def safe_get(obj_to_fetch_from: dict, what_to_fetch: str, default_val: Union[dict, list, str]) -> Any:
+def safe_get(obj_to_fetch_from: dict, what_to_fetch: str, default_val: dict | list | str) -> Any:
     """Guarantees the default value in place of a Nonetype object when the value for a given key is explicitly None
 
     Args:
@@ -106,45 +115,46 @@ def http_request(method, url_suffix, params=None, data=None, headers=None, is_ra
         BASE_URL + url_suffix,
         verify=USE_SSL,
         params=params,
-        data=json.dumps(data),
+        data=json.dumps(data) if data else None,
         headers=headers or HEADERS
     )
     if res.status_code >= 400:
         try:
             json_res = res.json()
-
+            # add message from GitHub if available
+            err_msg = json_res.get('message', '')
+            if err_msg and 'documentation_url' in json_res:
+                err_msg += f' see: {json_res["documentation_url"]}'
             if json_res.get('errors') is None:
-                return_error('Error in API call to the GitHub Integration [%d] - %s' % (res.status_code, res.reason))
-
+                err_msg = f'Error in API call to the GitHub Integration [{res.status_code}] {res.reason}. {err_msg}'
             else:
                 error_code = json_res.get('errors')[0].get('code')
                 if error_code == 'missing_field':
-                    return_error(
-                        'Error: the field: "{}" requires a value'.format(json_res.get('errors')[0].get('field')))
-
+                    err_msg = f'Error: the field: "{json_res.get("errors")[0].get("field")}" requires a value. ' \
+                              f'{err_msg}'
                 elif error_code == 'invalid':
                     field = json_res.get('errors')[0].get('field')
                     if field == 'q':
-                        return_error('Error: invalid query - {}'.format(json_res.get('errors')[0].get('message')))
-
+                        err_msg = f'Error: invalid query - {json_res.get("errors")[0].get("message")}. {err_msg}'
                     else:
-                        return_error('Error: the field: "{}" has an invalid value'.format(field))
+                        err_msg = f'Error: the field: "{field}" has an invalid value. {err_msg}'
 
                 elif error_code == 'missing':
-                    return_error('Error: {} does not exist'.format(json_res.get('errors')[0].get('resource')))
+                    err_msg = f"Error: {json_res.get('errors')[0].get('resource')} does not exist. {err_msg}"
 
                 elif error_code == 'already_exists':
-                    return_error('Error: the field {} must be unique'.format(json_res.get('errors')[0].get('field')))
+                    err_msg = f"Error: the field {json_res.get('errors')[0].get('field')} must be unique. {err_msg}"
 
                 else:
-                    return_error(
-                        'Error in API call to the GitHub Integration [%d] - %s' % (res.status_code, res.reason))
+                    err_msg = f'Error in API call to the GitHub Integration [{res.status_code}] - {res.reason}. ' \
+                              f'{err_msg}'
+            raise DemistoException(err_msg)
 
         except ValueError:
-            return_error('Error in API call to GitHub Integration [%d] - %s' % (res.status_code, res.reason))
+            raise DemistoException(f'Error in API call to GitHub Integration [{res.status_code}] - {res.reason}')
 
     try:
-        if res.status_code == 204:
+        if res.status_code in (204, 202):
             return res
         elif is_raw_response:
             return res.content.decode('utf-8')
@@ -152,7 +162,7 @@ def http_request(method, url_suffix, params=None, data=None, headers=None, is_ra
             return res.json()
 
     except Exception as excep:
-        return_error('Error in HTTP request - {}'.format(str(excep)))
+        return_error(f'Error in HTTP request - {str(excep)}')
 
 
 def data_formatting(title, body, labels, assignees, state):
@@ -204,7 +214,7 @@ def list_create(issue, list_name, element_name):
         return [element.get(element_name) for element in issue.get(list_name)]
 
     else:
-        None
+        return None
 
 
 def issue_format(issue):
@@ -238,7 +248,8 @@ def issue_format(issue):
         'Created_at': issue.get('created_at'),
         'Updated_at': issue.get('updated_at'),
         'Closed_at': issue.get('closed_at'),
-        'Closed_by': closed_by
+        'Closed_by': closed_by,
+        'Unique_ID': issue.get('id'),
     }
     return form
 
@@ -564,7 +575,7 @@ def format_pr_outputs(pull_request: dict = {}) -> dict:
     return ec_object
 
 
-def format_comment_outputs(comment: dict, issue_number: Union[int, str]) -> dict:
+def format_comment_outputs(comment: dict, issue_number: int | str) -> dict:
     """Take GitHub API Comment data and format to expected context outputs
 
     Args:
@@ -600,7 +611,7 @@ def create_pull_request(create_vals: dict = {}) -> dict:
 
 def create_pull_request_command():
     args = demisto.args()
-    create_vals = {key: val for key, val in args.items()}
+    create_vals = dict(args.items())
     maintainer_can_modify = args.get('maintainer_can_modify')
     if maintainer_can_modify:
         create_vals['maintainer_can_modify'] = maintainer_can_modify == 'true'
@@ -662,7 +673,7 @@ def list_branch_pull_requests_command() -> None:
     ))
 
 
-def is_pr_merged(pull_number: Union[int, str]):
+def is_pr_merged(pull_number: int | str):
     suffix = PULLS_SUFFIX + f'/{pull_number}/merge'
     response = http_request('GET', url_suffix=suffix)
     return response
@@ -677,7 +688,7 @@ def is_pr_merged_command():
     demisto.results(f'Pull Request #{pull_number} was Merged')
 
 
-def update_pull_request(pull_number: Union[int, str], update_vals: dict = {}) -> dict:
+def update_pull_request(pull_number: int | str, update_vals: dict = {}) -> dict:
     suffix = PULLS_SUFFIX + f'/{pull_number}'
     response = http_request('PATCH', url_suffix=suffix, data=update_vals)
     return response
@@ -722,7 +733,7 @@ def list_teams_command():
     return_outputs(readable_output=human_readable, outputs=ec, raw_response=response)
 
 
-def get_pull_request(pull_number: Union[int, str], repository: str = None, organization: str = None):
+def get_pull_request(pull_number: int | str, repository: str = None, organization: str = None):
     if repository and organization and pull_number:
         suffix = f'/repos/{organization}/{repository}/pulls/{pull_number}'
     else:
@@ -746,7 +757,7 @@ def get_pull_request_command():
     return_outputs(readable_output=human_readable, outputs=ec, raw_response=response)
 
 
-def add_label(issue_number: Union[int, str], labels: list):
+def add_label(issue_number: int | str, labels: list):
     suffix = ISSUE_SUFFIX + f'/{issue_number}/labels'
     response = http_request('POST', url_suffix=suffix, data={'labels': labels})
     return response
@@ -782,7 +793,7 @@ def get_commit_command():
     return_outputs(readable_output=human_readable, outputs=ec, raw_response=response)
 
 
-def list_pr_reviews(pull_number: Union[int, str]) -> list:
+def list_pr_reviews(pull_number: int | str) -> list:
     suffix = PULLS_SUFFIX + f'/{pull_number}/reviews'
     response = http_request('GET', url_suffix=suffix)
     return response
@@ -815,7 +826,7 @@ def list_pr_reviews_command():
     return_outputs(readable_output=human_readable, outputs=ec, raw_response=response)
 
 
-def list_pr_files(pull_number: Union[int, str], organization: str = None, repository: str = None) -> list:
+def list_pr_files(pull_number: int | str, organization: str = None, repository: str = None) -> list:
     if pull_number and organization and repository:
         suffix = f'/repos/{organization}/{repository}/pulls/{pull_number}/files'
     else:
@@ -853,7 +864,7 @@ def list_pr_files_command():
     return_outputs(readable_output=human_readable, outputs=ec, raw_response=response)
 
 
-def list_pr_review_comments(pull_number: Union[int, str]) -> list:
+def list_pr_review_comments(pull_number: int | str) -> list:
     suffix = PULLS_SUFFIX + f'/{pull_number}/comments'
     response = http_request('GET', url_suffix=suffix)
     return response
@@ -877,16 +888,20 @@ def list_pr_review_comments_command():
     return_outputs(readable_output=human_readable, outputs=ec, raw_response=response)
 
 
-def list_issue_comments(issue_number: Union[int, str]) -> list:
+def list_issue_comments(issue_number: int | str, since_date: Optional[str]) -> list:
     suffix = ISSUE_SUFFIX + f'/{issue_number}/comments'
-    response = http_request('GET', url_suffix=suffix)
+    params = {}
+    if since_date:
+        params = {'since': since_date}
+    response = http_request('GET', url_suffix=suffix, params=params)
     return response
 
 
 def list_issue_comments_command():
     args = demisto.args()
     issue_number = args.get('issue_number')
-    response = list_issue_comments(issue_number)
+    since_date = args.get('since')
+    response = list_issue_comments(issue_number, since_date)
 
     ec_object = [format_comment_outputs(comment, issue_number) for comment in response]
     ec = {
@@ -896,7 +911,7 @@ def list_issue_comments_command():
     return_outputs(readable_output=human_readable, outputs=ec, raw_response=response)
 
 
-def create_comment(issue_number: Union[int, str], msg: str) -> dict:
+def create_comment(issue_number: int | str, msg: str) -> dict:
     suffix = ISSUE_SUFFIX + f'/{issue_number}/comments'
     response = http_request('POST', url_suffix=suffix, data={'body': msg})
     return response
@@ -916,7 +931,7 @@ def create_comment_command():
     return_outputs(readable_output=human_readable, outputs=ec, raw_response=response)
 
 
-def request_review(pull_number: Union[int, str], reviewers: list) -> dict:
+def request_review(pull_number: int | str, reviewers: list) -> dict:
     """Make an API call to GitHub to request reviews from a list of users for a given PR
 
     Args:
@@ -955,7 +970,7 @@ def request_review_command():
     return_outputs(readable_output=human_readable, outputs=ec, raw_response=response)
 
 
-def get_team_membership(team_id: Union[int, str], user_name: str) -> dict:
+def get_team_membership(team_id: int | str, user_name: str) -> dict:
     suffix = f'/teams/{team_id}/memberships/{user_name}'
     response = http_request('GET', url_suffix=suffix)
     return response
@@ -1014,9 +1029,9 @@ def get_branch_command():
     branch_name = args.get('branch_name')
     response = get_branch(branch_name)
 
-    commit = response.get('commit', {})
-    author = commit.get('author', {})
-    parents = commit.get('parents', [])
+    commit = response.get('commit', {}) or {}
+    author = commit.get('author', {}) or {}
+    parents = commit.get('parents', []) or []
     ec_object = {
         'Name': response.get('name'),
         'CommitSHA': commit.get('sha'),
@@ -1127,7 +1142,7 @@ def create_command():
 
 def close_issue(id):
     response = http_request(method='PATCH',
-                            url_suffix=ISSUE_SUFFIX + '/{}'.format(str(id)),
+                            url_suffix=ISSUE_SUFFIX + f'/{str(id)}',
                             data={'state': 'closed'})
     return response
 
@@ -1147,7 +1162,7 @@ def update_issue(id, title, body, state, labels, assign):
                            state=state)
 
     response = http_request(method='PATCH',
-                            url_suffix=ISSUE_SUFFIX + '/{}'.format(str(id)),
+                            url_suffix=ISSUE_SUFFIX + f'/{str(id)}',
                             data=data)
     return response
 
@@ -1160,12 +1175,132 @@ def update_command():
     context_create_issue(response, issue)
 
 
-def list_all_issue(state):
-    params = {'state': state}
+def list_all_issue(state, page=1):
+    params = {'state': state, 'page': page, 'per_page': MAX_FETCH_PAGE_RESULTS, }
     response = http_request(method='GET',
                             url_suffix=ISSUE_SUFFIX,
                             params=params)
-    return response
+    if len(response) == MAX_FETCH_PAGE_RESULTS:
+        return response + list_all_issue(state=state, page=page + 1)
+    else:
+        return response
+
+
+def get_cards(url, header, page=1):
+    resp = requests.get(url=url,
+                        headers=header,
+                        verify=USE_SSL,
+                        params={'page': page, 'per_page': MAX_FETCH_PAGE_RESULTS}
+                        )
+    cards = resp.json()
+    column_issues = []
+    for card in cards:
+        if "content_url" in card:
+            column_issues.append({"CardID": card["id"], "ContentNumber": int(card["content_url"].rsplit('/', 1)[1])})
+    if len(cards) == MAX_FETCH_PAGE_RESULTS:
+        return column_issues + get_cards(url=url, header=header, page=page + 1)
+    else:
+        return column_issues
+
+
+def get_project_details(project, header):
+    resp_column = requests.get(url=project["columns_url"],
+                               headers=header,
+                               verify=USE_SSL)
+
+    json_column = resp_column.json()
+    columns_data = {}
+    all_project_issues = []
+
+    for column in json_column:
+        cards = get_cards(url=column["cards_url"], header=header)
+        columns_data[column["name"]] = {'Name': column["name"],
+                                        'ColumnID': column["id"],
+                                        'Cards': cards}
+        for card in cards:
+            all_project_issues.append(card["ContentNumber"])
+
+    return {'Name': project["name"],
+            'ID': project["id"],
+            'Number': project["number"],
+            'Columns': columns_data,
+            'Issues': all_project_issues,
+            }
+
+
+def list_all_projects_command():
+    project_f = demisto.args().get('project_filter', [])
+    limit = demisto.args().get('limit', MAX_FETCH_PAGE_RESULTS)
+
+    if int(limit) > MAX_FETCH_PAGE_RESULTS or project_f:
+        limit = MAX_FETCH_PAGE_RESULTS
+
+    if project_f:
+        project_f = project_f.split(",")
+
+    header = HEADERS
+    header.update({'Accept': PROJECTS_PREVIEW})
+    params = {'per_page': limit}
+    resp_projects = requests.get(url=BASE_URL + PROJECT_SUFFIX,
+                                 headers=header,
+                                 verify=USE_SSL,
+                                 params=params
+                                 )
+    projects = resp_projects.json()
+    projects_obj = []
+    for proj in projects:
+        if project_f:
+            if str(proj["number"]) in project_f:
+                projects_obj.append(get_project_details(project=proj, header=header))
+        else:
+            projects_obj.append(get_project_details(project=proj, header=header))
+
+    human_readable_projects = [{'Name': proj['Name'], 'ID': proj['ID'], 'Number': proj['Number'],
+                                'Columns': list(proj['Columns'])} for proj in projects_obj]
+
+    if projects_obj:
+        human_readable = tableToMarkdown('Projects:', t=human_readable_projects, headers=PROJECT_HEADERS,
+                                         removeNull=True)
+    else:
+        human_readable = f'Not found projects with number - {",".join(project_f)}.'
+
+    command_results = CommandResults(
+        outputs_prefix='GitHub.Project',
+        outputs_key_field='Name',
+        outputs=projects_obj,
+        readable_output=human_readable
+    )
+    return_results(command_results)
+
+
+def add_issue_to_project_board_command():
+    content_type = "Issue"
+
+    args = demisto.args()
+    column_id = args.get('column_id')
+    content_id = int(args.get('issue_unique_id'))
+    if "content_type" in demisto.args():
+        content_type = args.get('content_type')
+
+    header = HEADERS
+    header.update({'Accept': PROJECTS_PREVIEW})
+
+    post_url = f"{BASE_URL}/projects/columns/{column_id}/cards"
+    post_data = {"content_id": content_id,
+                 "content_type": content_type,
+                 }
+    response = requests.post(url=post_url,
+                             headers=header,
+                             verify=USE_SSL,
+                             data=json.dumps(post_data)
+                             )
+
+    if response.status_code >= 400:
+        message = response.json().get('message', f'Failed to add the issue with ID {content_id} to column with ID '
+                                                 f'{column_id}')
+        return_error(f"Post result {response}\nMessage: {message}")
+
+    return_results(f"The issue was successfully added to column ID {column_id}.")
 
 
 def list_all_command():
@@ -1278,19 +1413,24 @@ def search_code_command():
     return_results(results)
 
 
-def search_issue(query, limit):
+def search_issue(query, limit, page=1):
+    params = {'q': query, 'page': page, 'per_page': MAX_FETCH_PAGE_RESULTS, }
     response = http_request(method='GET',
                             url_suffix='/search/issues',
-                            params={'q': query, 'per_page': limit})
-    return response
+                            params=params)
+    if len(response["items"]) == MAX_FETCH_PAGE_RESULTS:
+        next_res = search_issue(query=query, limit=limit, page=page + 1)
+        response["items"] = response["items"] + next_res["items"]
+        return response
+    else:
+        return response
 
 
 def search_command():
     q = demisto.args().get('query')
     limit = int(demisto.args().get('limit'))
-    if limit > 100:
-        limit = 100  # per GitHub limitation.
-
+    if limit > 1000:
+        limit = 1000  # per GitHub limitation.
     response = search_issue(q, limit)
     create_issue_table(response['items'], response, limit)
 
@@ -1387,7 +1527,8 @@ def list_team_members_command():
         }
         members.append(context_data)
     if members:
-        human_readable = tableToMarkdown(f'Team Member of team {team_slug} in organization {org}', t=members, removeNull=True)
+        human_readable = tableToMarkdown(f'Team Member of team {team_slug} in organization {org}', t=members,
+                                         removeNull=True)
     else:
         human_readable = f'There is no team members under team {team_slug} in organization {org}'
 
@@ -1444,9 +1585,11 @@ def get_file_content_from_repo():
     file_path = args.get('file_path')
     branch_name = args.get('branch_name')
     media_type = args.get('media_type', 'raw')
+    organization = args.get('organization') or USER
+    repository = args.get('repository') or REPOSITORY
     create_file_from_content = argToBoolean(args.get('create_file_from_content', False))
 
-    url_suffix = f'/repos/{USER}/{REPOSITORY}/contents/{file_path}'
+    url_suffix = f'/repos/{organization}/{repository}/contents/{file_path}'
     if branch_name:
         url_suffix += f'?ref={branch_name}'
 
@@ -1540,7 +1683,7 @@ def commit_file_command():
     }
     if file_sha:
         data['sha'] = file_sha
-    res = http_request(method='PUT', url_suffix='{}/{}'.format(FILE_SUFFIX, path_to_file), data=data)
+    res = http_request(method='PUT', url_suffix=f'{FILE_SUFFIX}/{path_to_file}', data=data)
 
     return_results(CommandResults(
         readable_output=f"The file {path_to_file} committed successfully. Link to the commit:"
@@ -1561,7 +1704,7 @@ def list_check_runs(owner_name, repository_name, run_id, commit_id):
 
     check_runs = http_request(method="GET", url_suffix=url_suffix)
 
-    return [r for r in check_runs.get('check_runs')]
+    return list(check_runs.get('check_runs'))
 
 
 def get_github_get_check_run():
@@ -1576,7 +1719,8 @@ def get_github_get_check_run():
 
     check_run_result = []
 
-    check_runs = list_check_runs(owner_name=owner_name, repository_name=repository_name, run_id=run_id, commit_id=commit_id)
+    check_runs = list_check_runs(owner_name=owner_name, repository_name=repository_name, run_id=run_id,
+                                 commit_id=commit_id)
 
     for check_run in check_runs:
         check_run_id = check_run.get('id', '')
@@ -1611,15 +1755,38 @@ def get_github_get_check_run():
     return_results(command_results)
 
 
-def fetch_incidents_command():
-    last_run = demisto.getLastRun()
-    if last_run and 'start_time' in last_run:
-        start_time = datetime.strptime(last_run.get('start_time'), '%Y-%m-%dT%H:%M:%SZ')
+def create_release_command():
+    args = demisto.args()
+    tag_name = args.get('tag_name')
+    data = {
+        'tag_name': tag_name,
+        'name': args.get('name'),
+        'body': args.get('body'),
+        'draft': argToBoolean(args.get('draft')),
+        'target_commitish': args.get('ref')
+    }
+    response = http_request('POST', url_suffix=RELEASE_SUFFIX, data=data)
+    release_url = response.get('html_url')
 
-    else:
-        start_time = datetime.now() - timedelta(days=int(FETCH_TIME))
+    return_results(CommandResults(
+        outputs_prefix='GitHub.Release',
+        outputs=response,
+        outputs_key_field='id',
+        readable_output=f'Release {tag_name} created successfully for repo {REPOSITORY}: {release_url}',
+        raw_response=response
+    ))
 
-    last_time = start_time
+
+def get_issue_events_command():
+    args = demisto.args()
+    issue_number = args.get('issue_number')
+    res = http_request(method='GET', url_suffix=f'{ISSUE_SUFFIX}/{issue_number}/events')
+    return_results(CommandResults(outputs_prefix='GitHub.IssueEvent', outputs_key_field='id', outputs=res,
+                                  readable_output=tableToMarkdown(f'GitHub Issue Events For Issue {issue_number}',
+                                                                  res)))
+
+
+def fetch_incidents_command_rec(start_time, last_time, page=1):
     incidents = []
 
     if demisto.params().get('fetch_object') == "Pull_requests":
@@ -1628,7 +1795,8 @@ def fetch_incidents_command():
                                params={
                                    'state': 'open',
                                    'sort': 'created',
-                                   'page': 1
+                                   'page': page,
+                                   'per_page': MAX_FETCH_PAGE_RESULTS,
                                })
         for pr in pr_list:
             updated_at_str = pr.get('created_at')
@@ -1642,10 +1810,19 @@ def fetch_incidents_command():
                 incidents.append(inc)
                 if updated_at > last_time:
                     last_time = updated_at
+
+        if len(pr_list) == MAX_FETCH_PAGE_RESULTS:
+            rec_prs, rec_last_time = fetch_incidents_command_rec(start_time=start_time, last_time=last_time,
+                                                                 page=page + 1)
+            incidents = incidents + rec_prs
+            if rec_last_time > last_time:
+                last_time = rec_last_time
     else:
+        params = {'page': page, 'per_page': MAX_FETCH_PAGE_RESULTS, 'state': 'all'}
+        # params.update({'labels': 'DevOps'})
         issue_list = http_request(method='GET',
                                   url_suffix=ISSUE_SUFFIX,
-                                  params={'state': 'all'})
+                                  params=params)
 
         for issue in issue_list:
             updated_at_str = issue.get('created_at')
@@ -1660,8 +1837,306 @@ def fetch_incidents_command():
                 if updated_at > last_time:
                     last_time = updated_at
 
+        if len(issue_list) == MAX_FETCH_PAGE_RESULTS:
+            rec_incidents, rec_last_time = fetch_incidents_command_rec(start_time=start_time, last_time=last_time,
+                                                                       page=page + 1)
+            incidents = incidents + rec_incidents
+            if rec_last_time > last_time:
+                last_time = rec_last_time
+    return incidents, last_time
+
+
+def get_path_data():
+    """
+    Get path data from given relative file path, repository and organization corresponding to branch name if given.
+    Returns:
+        Outputs to XSOAR.
+    """
+    args = demisto.args()
+
+    relative_path: str = args.get('relative_path', '')
+    repo: str = args.get('repository') or REPOSITORY
+    organization: str = args.get('organization') or USER
+    branch_name: Optional[str] = args.get('branch_name')
+
+    url_suffix = f'/repos/{organization}/{repo}/contents/{relative_path}'
+    url_suffix = f'{url_suffix}?ref={branch_name}' if branch_name else url_suffix
+
+    headers = {
+        'Authorization': "Bearer " + TOKEN,
+        'Accept': 'application/vnd.github.VERSION.object',
+    }
+    try:
+        raw_response = http_request(method="GET", url_suffix=url_suffix, headers=headers)
+    except DemistoException as e:
+        if '[404]' in str(e):
+            err_msg = 'Could not find path.'
+            if branch_name:
+                err_msg += f' Make sure branch {branch_name} exists.'
+            err_msg += f' Make sure relative path {relative_path} is correct.'
+            raise DemistoException(err_msg)
+        raise e
+
+    # Content is given as str of base64, need to encode and decode in order to retrieve its human readable content.
+    file_data = copy.deepcopy(raw_response)
+    if 'content' in file_data:
+        file_data['content'] = codecs.decode(file_data.get('content', '').encode(), 'base64').decode('utf-8')
+    # Links are duplications of the Git/HTML/URL. Deleting duplicate data from context.
+    file_data.pop('_links', None)
+    for entry in file_data.get('entries', []):
+        entry.pop('_links', None)
+
+    results = CommandResults(
+        outputs_prefix='GitHub.PathData',
+        outputs_key_field='url',
+        outputs=file_data,
+        readable_output=tableToMarkdown(f'File Data For File {relative_path}', file_data, removeNull=True),
+        raw_response=raw_response,
+    )
+    return_results(results)
+
+
+def github_releases_list_command():
+    """
+    Gets releases data of given repository in given organization.
+    Returns:
+        CommandResults data.
+    """
+    args: Dict[str, Any] = demisto.args()
+
+    repo: str = args.get('repository') or REPOSITORY
+    organization: str = args.get('organization') or USER
+    page_number: Optional[int] = arg_to_number(args.get('page'))
+    page_size: Optional[int] = arg_to_number(args.get('page_size'))
+    limit = arg_to_number(args.get('limit'))
+    if (page_number or page_size) and limit:
+        raise DemistoException('page_number and page_size arguments cannot be given with limit argument.\n'
+                               'If limit is given, please do not use page or page_size arguments.')
+
+    results: List[Dict] = []
+    if limit:
+        page_number = 1
+        page_size = 100
+        while len(results) < limit:
+            url_suffix: str = f'/repos/{organization}/{repo}/releases?per_page={page_size}&page={page_number}'
+            response = http_request(method='GET', url_suffix=url_suffix)
+            # No more releases to bring from GitHub services.
+            if not response:
+                break
+            results.extend(response)
+            page_number += 1
+
+        results = results[:limit]
+    else:
+        page_size = page_size if page_size else DEFAULT_PAGE_SIZE
+        page_number = page_number if page_number else DEFAULT_PAGE_NUMBER
+        url_suffix = f'/repos/{organization}/{repo}/releases?per_page={page_size}&page={page_number}'
+        results = http_request(method='GET', url_suffix=url_suffix)
+
+    result: CommandResults = CommandResults(
+        outputs_prefix='GitHub.Release',
+        outputs_key_field='id',
+        outputs=results,
+        readable_output=tableToMarkdown(f'Releases Data Of {repo}', results, removeNull=True)
+    )
+    return_results(result)
+
+
+def update_comment(comment_id: int | str, msg: str) -> dict:
+    suffix = f'{ISSUE_SUFFIX}/comments/{comment_id}'
+    response = http_request('PATCH', url_suffix=suffix, data={'body': msg})
+    return response
+
+
+def github_update_comment_command():
+    args = demisto.args()
+    comment_id = args.get('comment_id')
+    issue_number = args.get('issue_number')
+    body = args.get('body')
+    response = update_comment(comment_id, body)
+
+    ec_object = format_comment_outputs(response, issue_number)
+    ec = {
+        'GitHub.Comment(val.IssueNumber === obj.IssueNumber && val.ID === obj.ID)': ec_object,
+    }
+    human_readable = tableToMarkdown('Updated Comment', ec_object, removeNull=True)
+    return_outputs(readable_output=human_readable, outputs=ec, raw_response=response)
+
+
+def github_delete_comment_command():
+    args = demisto.args()
+    comment_id = args.get('comment_id')
+    suffix = f'{ISSUE_SUFFIX}/comments/{comment_id}'
+    http_request('DELETE', url_suffix=suffix)
+    return_results(f'comment with ID {comment_id} was deleted successfully')
+
+
+def fetch_incidents_command():
+    last_run = demisto.getLastRun()
+    if last_run and 'start_time' in last_run:
+        start_time = datetime.strptime(last_run.get('start_time'), '%Y-%m-%dT%H:%M:%SZ')
+
+    else:
+        start_time = datetime.now() - timedelta(days=int(FETCH_TIME))
+
+    incidents, last_time = fetch_incidents_command_rec(start_time=start_time, last_time=start_time)
+
     demisto.setLastRun({'start_time': datetime.strftime(last_time, '%Y-%m-%dT%H:%M:%SZ')})
     demisto.incidents(incidents)
+
+
+def github_add_assignee_command():
+    """
+    Assigns Github user to a PR
+
+        Args:
+            assignee (str): Github username.
+            pull_request_number (str): the pull request/issue number.
+
+        Returns:
+            CommandResults object with informative printout if adding user was successfull or not
+    """
+    assigned_users = []
+    not_assigned_users = []
+    args = demisto.args()
+    assignee = args.get('assignee')
+    pr_number = args.get('pull_request_number')
+    assignee_list = argToList(assignee)
+    suffix = f'{USER_SUFFIX}/issues/{pr_number}/assignees'
+    post_data = {"assignees": assignee_list}
+    response = http_request('POST', url_suffix=suffix, data=post_data)
+    assignees_response = response.get("assignees")
+    assigned_users_from_pr = [user.get("login") for user in assignees_response]
+    for user in assignee_list:
+        if user in assigned_users_from_pr:
+            assigned_users.append(user)
+        else:
+            not_assigned_users.append(user)
+    message = ''
+    if assigned_users:
+        message = f'The following users were assigned successfully to PR #{pr_number}: \n{assigned_users}'
+    if not_assigned_users:
+        message += f'\nThe following users were not assigned to #{pr_number}: \n{not_assigned_users} \n' \
+                   f'Verify that the users exist and that you have the right permissions.'
+    return_results(CommandResults(outputs_prefix='GitHub.Assignees', outputs_key_field='login', outputs=assignees_response,
+                                  raw_response=response, readable_output=message))
+
+
+def github_trigger_workflow_command():
+    """
+    Triggers a GitHub workflow on a given repository and workflow
+
+        Args:
+            owner (str): The GitHub owner (organization or username) of the repository.
+            repository (str): The GitHub repository name.
+            branch (str): The branch to trigger the workflow on.
+            workflow (str): The name of your workflow file.
+            inputs (str): The inputs of the workflow.
+
+        Returns:
+            CommandResults object with informative printout if trigger the workflow succeeded or not.
+    """
+    args = demisto.args()
+    owner = args.get('owner') or USER
+    repository = args.get('repository') or REPOSITORY
+    branch = args.get('branch', 'master')
+    workflow = args.get('workflow')
+    inputs = json.loads(args.get('inputs', '{}'), strict=False)
+
+    suffix = f"/repos/{owner}/{repository}/actions/workflows/{workflow}/dispatches"
+    headers = {
+        "Authorization": f"Bearer {TOKEN}",
+        "Accept": "application/vnd.github.v3+json"
+    }
+    data = assign_params(
+        ref=branch,
+        inputs=inputs
+    )
+    response = http_request('POST', url_suffix=suffix, headers=headers, data=data)
+
+    if response.status_code == 204:
+        return_results(CommandResults(readable_output="Workflow triggered successfully."))
+    else:
+        return_results(CommandResults(
+            raw_response=response,
+            readable_output=f"Failed to trigger workflow. {response.json().get('message')}"
+        ))
+
+
+def github_cancel_workflow_command():
+    """
+    Cancels a GitHub workflow.
+
+        Args:
+            owner (str): The GitHub owner (organization or username) of the repository.
+            repository (str): The GitHub repository name.
+            workflow_id (str): The workflow id to cancel.
+
+        Returns:
+            CommandResults object with informative prints out if triggering the workflow succeeded or not.
+    """
+    args = demisto.args()
+    owner = args.get('owner') or USER
+    repository = args.get('repository') or REPOSITORY
+    workflow_id = args.get('workflow_id')
+
+    suffix = f"/repos/{owner}/{repository}/actions/runs/{workflow_id}/cancel"
+    headers = {
+        "Authorization": f"Bearer {TOKEN}",
+        "Accept": "application/vnd.github.v3+json"
+    }
+
+    response = http_request('POST', url_suffix=suffix, headers=headers)
+
+    if response.status_code == 202:
+        return_results(CommandResults(readable_output="Workflow canceled successfully."))
+    else:
+        return_results(CommandResults(
+            raw_response=response,
+            readable_output=f"Failed to cancel workflow. {response.json().get('message')}"
+        ))
+
+
+def github_list_workflows_command():
+    """Returns a list of GitHub workflows on a given repository.
+
+        Args:
+            owner (str): The GitHub owner (organization or username) of the repository.
+            repository (str): The GitHub repository name.
+            workflow (str): The name of your workflow file.
+            limit (int): Number of workflows to return. Default is 100.
+
+        Returns:
+            CommandResults object with an informative printout of the returns workflows.
+    """
+    args = demisto.args()
+    owner = args.get('owner') or USER
+    repository = args.get('repository') or REPOSITORY
+    workflow = args.get('workflow')
+    limit = int(args.get('limit', 100))
+
+    suffix = f"/repos/{owner}/{repository}/actions/workflows/{workflow}/runs?per_page={limit}"
+    headers = {
+        "Authorization": f"Bearer {TOKEN}",
+        "Accept": "application/vnd.github.v3+json"
+    }
+
+    response = http_request('GET', url_suffix=suffix, headers=headers)
+
+    output_headers = ['id', 'name', 'head_branch', 'head_sha', 'path', 'display_title', 'run_number', 'event', 'status',
+                      'conclusion', 'workflow_id', 'url', 'html_url', 'created_at', 'updated_at']
+
+    outputs: list[dict] = []
+    for workflow in response.get('workflow_runs', []):
+        outputs.append({k: v for k, v in workflow.items() if k in output_headers})
+
+    return_results(CommandResults(
+        raw_response=response,
+        outputs=outputs,
+        outputs_key_field='id',
+        outputs_prefix='GitHub.Workflow',
+        readable_output=tableToMarkdown('GitHub workflows', outputs, removeNull=True),
+    ))
 
 
 ''' COMMANDS MANAGER / SWITCH PANEL '''
@@ -1673,6 +2148,7 @@ COMMANDS = {
     'GitHub-close-issue': close_command,
     'GitHub-update-issue': update_command,
     'GitHub-list-all-issues': list_all_command,
+    'GitHub-list-all-projects': list_all_projects_command,
     'GitHub-search-issues': search_command,
     'GitHub-get-download-count': get_download_count,
     'GitHub-get-stale-prs': get_stale_prs_command,
@@ -1701,10 +2177,22 @@ COMMANDS = {
     'GitHub-list-branch-pull-requests': list_branch_pull_requests_command,
     'Github-get-check-run': get_github_get_check_run,
     'Github-commit-file': commit_file_command,
+    'GitHub-create-release': create_release_command,
+    'Github-list-issue-events': get_issue_events_command,
+    'GitHub-add-issue-to-project-board': add_issue_to_project_board_command,
+    'GitHub-get-path-data': get_path_data,
+    'GitHub-releases-list': github_releases_list_command,
+    'GitHub-update-comment': github_update_comment_command,
+    'GitHub-delete-comment': github_delete_comment_command,
+    'GitHub-add-assignee': github_add_assignee_command,
+    'GitHub-trigger-workflow': github_trigger_workflow_command,
+    'GitHub-cancel-workflow': github_cancel_workflow_command,
+    'GitHub-list-workflows': github_list_workflows_command,
 }
 
 
 def main():
+    global BASE_URL
     global USER
     global TOKEN
     global PRIVATE_KEY
@@ -1713,25 +2201,30 @@ def main():
     global REPOSITORY
     global USE_SSL
     global FETCH_TIME
+    global MAX_FETCH_PAGE_RESULTS
     global USER_SUFFIX
     global ISSUE_SUFFIX
+    global PROJECT_SUFFIX
     global RELEASE_SUFFIX
     global PULLS_SUFFIX
     global FILE_SUFFIX
     global HEADERS
 
     params = demisto.params()
+    BASE_URL = params.get('url', 'https://api.github.com')
     USER = params.get('user')
-    TOKEN = params.get('token', '')
-    creds: dict = params.get('credentials', {})
+    TOKEN = params.get('token') or (params.get('api_token') or {}).get('password', '')
+    creds: dict = params.get('credentials', {}).get('credentials', {})
     PRIVATE_KEY = creds.get('sshkey', '') if creds else ''
     INTEGRATION_ID = params.get('integration_id')
     INSTALLATION_ID = params.get('installation_id')
     REPOSITORY = params.get('repository')
     USE_SSL = not params.get('insecure', False)
     FETCH_TIME = params.get('fetch_time', '3')
+    MAX_FETCH_PAGE_RESULTS = 100
 
-    USER_SUFFIX = '/repos/{}/{}'.format(USER, REPOSITORY)
+    USER_SUFFIX = f'/repos/{USER}/{REPOSITORY}'
+    PROJECT_SUFFIX = USER_SUFFIX + '/projects'
     ISSUE_SUFFIX = USER_SUFFIX + '/issues'
     RELEASE_SUFFIX = USER_SUFFIX + '/releases'
     PULLS_SUFFIX = USER_SUFFIX + '/pulls'
@@ -1757,7 +2250,7 @@ def main():
     cmd = demisto.command()
     LOG(f'command is {cmd}')
     try:
-        if cmd in COMMANDS.keys():
+        if cmd in COMMANDS:
             COMMANDS[cmd]()
     except Exception as e:
         return_error(str(e))

@@ -1,10 +1,7 @@
 This integration allows you to check if your personal information such as your email, username, or password is being compromised.
 
-## Configure DeHashed on Cortex XSOAR
+## Configure DeHashed in Cortex
 
-1. Navigate to **Settings** > **Integrations** > **Servers & Services**.
-2. Search for DeHashed.
-3. Click **Add instance** to create and configure a new integration instance.
 
 | **Parameter** | **Description** | **Required** |
 | --- | --- | --- |
@@ -12,10 +9,11 @@ This integration allows you to check if your personal information such as your e
 | insecure | Trust any certificate \(not secure\) | False |
 | proxy | Use system proxy settings | False |
 | email_dbot_score | Email Severity: The DBot reputation for compromised emails \(SUSPICIOUS or MALICIOUS\) | False |
+| Source Reliability | Reliability of the source providing the intelligence data. | False |
 
-4. Click **Test** to validate the URLs, token, and connection.
+
 ## Commands
-You can execute these commands from the Cortex XSOAR CLI, as part of an automation, or in a playbook.
+You can execute these commands from the CLI, as part of an automation, or in a playbook.
 After you successfully execute a command, a DBot message appears in the War Room with the command details.
 ### dehashed-search
 ***
@@ -102,12 +100,13 @@ Checks if an email address was compromised.
 | DBotScore.Type | String | The indicator type. | 
 | DBotScore.Vendor | String | The vendor used to calculate the score. | 
 | DBotScore.Score | Number | The actual score. | 
+| DBotScore.Reliability | String | Reliability of the source providing the intelligence data. | 
+
 
 
 #### Command Example
 !email email=or-gal@gmail.com
 
 #### Human Readable Output
-
 
 

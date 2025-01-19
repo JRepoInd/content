@@ -4,6 +4,7 @@ import json
 import requests
 import time
 import re
+import urllib3
 
 
 class ParameterError(Exception):
@@ -36,6 +37,7 @@ class RCS:
     """
     destructor
     """
+
     def __del__(self):
         return 0
 
@@ -43,6 +45,7 @@ class RCS:
     Parse a drop command and return its representation
     for being put into a NRDO action / rule.
     """
+
     def _parse_RET_drop(self, rcs):
         if rcs is None:
             return None, None
@@ -64,6 +67,7 @@ class RCS:
     """
     Parse a SIA simple name
     """
+
     def _parse_RDL_RD_name(self, rcs):
         if rcs is None:
             return None, None, "failed: RD name rcs none"
@@ -87,13 +91,14 @@ class RCS:
     """
     Parse a FQN
     """
+
     def _parse_RDL_RD_FQN(self, rcs):
         if rcs is None:
             return None, None, "failed: RD fqn rcs none"
         elif rcs == "":
             return None, None, "failed: RD fqn rcs empty"
 
-        rcsp = re.match("^([<][\w_-<>.]+[>])(.*)$", rcs)
+        rcsp = re.match(r"^([<][\w_-<>.]+[>])(.*)$", rcs)
         if rcsp is None:
             return None, None, "failed: RD fqn match none"
         elif rcsp.group(1) is None:
@@ -110,13 +115,14 @@ class RCS:
     """
     Parse a security domain name SDN
     """
+
     def _parse_RDL_RD_SDN(self, rcs):
         if rcs is None:
             return None, None, "failed: RD sd rcs none"
         elif rcs == "":
             return None, None, "failed: RD sd rcs empty"
 
-        rcsp = re.match("^\^(\w[\w-]*)(.*)$", rcs)
+        rcsp = re.match(r"^\^(\w[\w-]*)(.*)$", rcs)
         if rcsp is None:
             return None, None, "failed: RD sd match none"
         elif rcsp.group(1) is None:
@@ -133,6 +139,7 @@ class RCS:
     """
     Parse an RGN label as a name
     """
+
     def _parse_RDL_RD_RGN_name(self, rcs):
         if rcs is None:
             return None, None, "failed: RD rgn name rcs none"
@@ -152,6 +159,7 @@ class RCS:
     """
     Parse an RGN label as a list of names
     """
+
     def _parse_RDL_RD_RGN_list(self, rcs):
         if rcs is None:
             return None, None, "failed: RD rgn list rcs none"
@@ -214,13 +222,14 @@ class RCS:
     """
     Parse an RGN label as asterik
     """
+
     def _parse_RDL_RD_RGN_asterik(self, rcs):
         if rcs is None:
             return None, None, "failed: RD rgn asterik rcs none"
         elif rcs == "":
             return None, None, "failed: RD rgn asterik rcs empty"
 
-        rcsp = re.match("^\*(.*)$", rcs)
+        rcsp = re.match(r"^\*(.*)$", rcs)
         if rcsp is None:
             return None, None, "failed: RD rgn asterik rcsp none"
 
@@ -229,6 +238,7 @@ class RCS:
     """
     Parse an RGN
     """
+
     def _parse_RDL_RD_RGN_label(self, rcs):
         if rcs is None:
             return None, None, "failed: RD label rgn rcs none"
@@ -260,7 +270,7 @@ class RCS:
                     return None, None, "failed: RD rgn label inclusive empty {0}".format(msg)
                 break
 
-            rcsp = re.match("^\*.*$", rcs)
+            rcsp = re.match(r"^\*.*$", rcs)
             if rcsp is not None:
                 label, rcs, msg = self._parse_RDL_RD_RGN_asterik(rcs)
                 if label is None:
@@ -285,6 +295,7 @@ class RCS:
     """
     Parse an RGN
     """
+
     def _parse_RDL_RD_RGN(self, rcs):
         if rcs is None:
             return None, None, "failed: RD rgn rcs none"
@@ -301,7 +312,7 @@ class RCS:
         elif rcs == "":
             return None, None, "failed: RD rgn region rcs empty {0}".format(msg)
 
-        rcsp = re.match("^\.(.+)$", rcs)
+        rcsp = re.match(r"^\.(.+)$", rcs)
         if rcsp is None:
             return None, None, "failed: RD rgn region rcsp none ."
         elif rcsp.group(1) is None:
@@ -320,7 +331,7 @@ class RCS:
         elif rcs == "":
             return None, None, "failed: RD rgn group rcs empty {0}".format(msg)
 
-        rcsp = re.match("^\.(.+)$", rcs)
+        rcsp = re.match(r"^\.(.+)$", rcs)
         if rcsp is None:
             return None, None, "failed: RD rgn group rcsp none ."
         elif rcsp.group(1) is None:
@@ -345,6 +356,7 @@ class RCS:
        RD       :: name | SDN | RGN | FQN
        RD_LIST  :: , <RD>
     """
+
     def _parse_RDL(self, rcs):
         if rcs is None:
             return None, None, "failed: rcs is none"
@@ -372,7 +384,7 @@ class RCS:
                 break
 
             while True:
-                rcsp = re.match("^all\..+$", rcs)
+                rcsp = re.match(r"^all\..+$", rcs)
                 if rcsp is not None:
                     if rcsp.group(0) == "":
                         return None, None, "failure: RGN (all-none)"
@@ -392,7 +404,7 @@ class RCS:
                     rcs = rcsp.group(1)
                     break
 
-                rcsp = re.match("^\^.*$", rcs)
+                rcsp = re.match(r"^\^.*$", rcs)
                 if rcsp is not None:
                     if rcsp.group(0) == "":
                         return None, None, "failure: SD (none)"
@@ -440,7 +452,7 @@ class RCS:
                     RDL.append(RD)
                     break
 
-                rcsp = re.match("^\*\..*$", rcs)
+                rcsp = re.match(r"^\*\..*$", rcs)
                 if rcsp is not None:
                     if rcsp.group(0) == "":
                         return None, None, "failure: RGN (asterik-none)"
@@ -452,7 +464,7 @@ class RCS:
                     RDL.append(RD)
                     break
 
-                rcsp = re.match("^\*(.*)$", rcs)
+                rcsp = re.match(r"^\*(.*)$", rcs)
                 if rcsp is not None:
                     if rcsp.group(0) == "":
                         return None, None, "failure: asterik (empty)"
@@ -464,7 +476,7 @@ class RCS:
                 if rcsp is None:
                     return None, None, "failure: name should be there"
 
-                rcsp = re.match("^\w[\w-]*\..*$", rcs)
+                rcsp = re.match(r"^\w[\w-]*\..*$", rcs)
                 if rcsp is not None:
                     if rcsp.group(0) == "":
                         return None, None, "failure: name RGN (none)"
@@ -513,6 +525,7 @@ class RCS:
        ret      :: drop() | alert(...) | redirect(...) | serviceChain(...)
        SDN_LIST :: , <ret>
     """
+
     def _parse_RET(self, rcs):
         if rcs is None:
             return None, None, "failure: RET RCS none"
@@ -534,12 +547,12 @@ class RCS:
         rcs = rcsp.group(1)
         RET = []
 
-        rcsp = re.match("^\$(.+)$", rcs)
+        rcsp = re.match(r"^\$(.+)$", rcs)
         if rcsp is not None:
             rcs = "drop(){0}".format(rcs)
 
         while True:
-            rcsp = re.match("(\w[\w]*)([(].+\$.+)$", rcs)
+            rcsp = re.match(r"(\w[\w]*)([(].+\$.+)$", rcs)
             if rcsp is None:
                 return None, None, "failure: RET obj type none"
             elif rcsp.group(1) is None:
@@ -573,11 +586,11 @@ class RCS:
 
             RET.append(obj)
 
-            rcsp = re.match("^\$(.+)$", rcs)
+            rcsp = re.match(r"^\$(.+)$", rcs)
             if rcsp is not None:
                 break
 
-            rcsp = re.match("^,(\w[\w]*[(].+\$.+)$", rcs)
+            rcsp = re.match(r"^,(\w[\w]*[(].+\$.+)$", rcs)
             if rcsp is None:
                 return None, None, "failure: RET next obj none"
             elif rcsp.group(1) is None:
@@ -592,7 +605,7 @@ class RCS:
         elif rcs == "":
             return None, None, "failure: RET end RCS empty"
 
-        rcsp = re.match("^\$(.+)$", rcs)
+        rcsp = re.match(r"^\$(.+)$", rcs)
         if rcsp is None:
             return None, None, "failure: RET # remove none"
         elif rcsp.group(1) is None:
@@ -613,6 +626,7 @@ class RCS:
        SDN      :: <a-zA-Z0-9_><a-zA-Z0-9_>*
        SDN_LIST :: , <SDN>
     """
+
     def _parse_SDL(self, rcs):
         if rcs is None:
             return None, None, "failure: RCS is none"
@@ -633,7 +647,7 @@ class RCS:
         SDL = []
 
         while True:
-            rcsp = re.match("(\w[\w-]*)(.*\$.+)$", rcs)
+            rcsp = re.match(r"(\w[\w-]*)(.*\$.+)$", rcs)
             if rcsp is None:
                 return None, None, "failure: bad SDN"
             elif rcsp.group(1) is None:
@@ -649,11 +663,11 @@ class RCS:
             elif rcs == "":
                 return None, None, "failure: SDN no more RCS empty"
 
-            rcsp = re.match("^\$(.+)$", rcs)
+            rcsp = re.match(r"^\$(.+)$", rcs)
             if rcsp is not None:
                 break
 
-            rcsp = re.match("^,(\w[\w-]*.*\$.+)$", rcs)
+            rcsp = re.match(r"^,(\w[\w-]*.*\$.+)$", rcs)
             if rcsp is None:
                 return None, None, "failure: SDN obj advance none"
             elif rcsp.group(1) is None:
@@ -668,7 +682,7 @@ class RCS:
         elif rcs == "":
             return None, None, "failure: SDL RCS empty"
 
-        rcsp = re.match("^\$(.+)$", rcs)
+        rcsp = re.match(r"^\$(.+)$", rcs)
         if rcsp is None:
             return None, None, "failure: SDL # remove none"
         elif rcsp.group(1) is None:
@@ -693,6 +707,7 @@ class RCS:
 
     Returns info in fifth result
     """
+
     def _parse(self, rcs):
         if rcs is None:
             return None, None, None, None, "failed: RCS is none"
@@ -737,6 +752,7 @@ class RCS:
      Returns true if the RCS provided at object instantiation
      time is a valid RCS value, otherwise it returns false.
     """
+
     def _valid(self, rcs):
         if rcs is None:
             return False
@@ -757,6 +773,7 @@ class RCS:
     Returns true if the RCS provided at object instantiation
     time is a valid RCS value, otherwise it returns false.
     """
+
     def valid(self):
         if not self._valid(self.rcs):
             return False
@@ -768,6 +785,7 @@ class RCS:
     set it if the string is already empty.  Otherwise it
     should use modify.
     """
+
     def set(self, rcs):
         if self.rcs is None:
             if not self._valid(rcs):
@@ -782,6 +800,7 @@ class RCS:
     Allows changing the RCS string after its been previsouly
     set or not.
     """
+
     def modify(self, rcs):
         if not self._valid(rcs):
             return False
@@ -800,6 +819,7 @@ class RCS:
     null is returned.  If it was not provided then "all"
     list is returned.
     """
+
     def security_domain(self):
         SDL, RET, RDL, rcs, rmsg = self._parse(self.rcs)
         if RDL is None:
@@ -1266,6 +1286,7 @@ class ARIA(object):
         return context
 
     """SOAR API"""
+
     def block_conversation(self, src_ip: str, target_ip: str, rule_name: str, src_port: str = None,
                            target_port: str = None, protocol: str = None, rcs: str = None) -> dict:
         """ Creates a rule that drops all packets matching the specified 5-tuple values.
@@ -2224,7 +2245,7 @@ def mute_alert_src_subnet_command(instance, args):
 
 def main():
     # disable insecure warnings
-    requests.packages.urllib3.disable_warnings()
+    urllib3.disable_warnings()
 
     # IP address or FQDN of your SDSo node
     SDSO = demisto.params().get('sdso')

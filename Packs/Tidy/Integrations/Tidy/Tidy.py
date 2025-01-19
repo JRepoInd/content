@@ -1,5 +1,6 @@
 import demistomock as demisto  # noqa: F401
 from CommonServerPython import *  # noqa: F401
+
 """ Developer notes
 
 This integration based on:
@@ -7,8 +8,6 @@ This integration based on:
 """
 
 
-import traceback
-from socket import error
 from typing import Any, Callable, Dict, List
 
 from ansible_runner import Runner, run
@@ -25,7 +24,7 @@ DemistoResult = Dict[str, Any]
 IMAGE_PLAYBOOKS_PATH = '/home/demisto/ansible'
 
 
-class AnyEnvs:
+class Envs:
     pyenv = "pyenv"
     goenv = "goenv"
     nodenv = "nodenv"
@@ -55,7 +54,7 @@ class TidyClient:
             ssh.close()
         except AuthenticationException as e:
             raise DemistoException(f"Authentication details isn't valid.\nFull error: {e}")
-        except error as e:
+        except OSError as e:
             raise DemistoException(f"SSH socket isn't enabled in endpoint.\nFull error: {e}")
         except SSHException as e:
             raise DemistoException(f"Hostname \"{self.hostname}\" isn't valid!.\nFull error: {e}")
@@ -65,7 +64,7 @@ class TidyClient:
 
         Notes:
             Current availble playbooks:
-                1. anyenv.
+                1. install_environments.
                 2. blockinfile.
                 3. exec.
                 4. git-clone.
@@ -86,11 +85,6 @@ class TidyClient:
         inventory = f"{self.username}@{self.hostname} ansible_host=\"{self.hostname}\" " \
                     f"ansible_user=\"{self.username}\" ansible_password=\"{self.password}\" " \
                     f"ansible_become_password=\"{self.password}\" ansible_connection=ssh"
-        if self.ssh_key:
-            with open('key.pem', 'w') as ssh_key_file:
-                ssh_key_file.write(self.ssh_key)
-            os.chmod('key.pem', 0o400)
-            inventory += f' ansible_ssh_private_key_file=\"{os.path.abspath(ssh_key_file.name)}\"'
 
         runner = run(
             private_data_dir=IMAGE_PLAYBOOKS_PATH,
@@ -104,15 +98,15 @@ class TidyClient:
         return runner
 
     def osx_command_line_tools(self) -> Runner:
-        """ Execute osx-command-line-tools playbook, Available envs defined by AnyEnvs object.
+        """ Execute osx-command-line-tools playbook, Available envs defined by Envs object.
 
         Returns:
             Runner: ansible-runner Runner object.
         """
         return self._execute(playbook_name="osx-command-line-tools")
 
-    def anyenv(self, env: str, versions: List[str], global_versions: List[str]) -> Runner:
-        """ Execute anyenv playbook, Available envs defined by AnyEnvs object.
+    def install_environments(self, env: str, versions: List[str], global_versions: List[str]) -> Runner:
+        """ Execute install-environments playbook, Available envs defined by Envs object.
 
         Args:
             env: pyenv,goenv,nodenv
@@ -122,7 +116,7 @@ class TidyClient:
         Returns:
             Runner: ansible-runner Runner object.
         """
-        return self._execute(playbook_name="anyenv",
+        return self._execute(playbook_name="install-environments",
                              extra_vars={
                                  "env": env,
                                  "versions": versions,
@@ -373,9 +367,9 @@ def tidy_pyenv_command(client: TidyClient, **kwargs) -> DemistoResult:
     """
     versions = kwargs.get('versions')
     global_versions = kwargs.get('globals')
-    runner: Runner = client.anyenv(env=AnyEnvs.pyenv,
-                                   versions=argToList(versions),
-                                   global_versions=argToList(global_versions))
+    runner: Runner = client.install_environments(env=Envs.pyenv,
+                                                 versions=argToList(versions),
+                                                 global_versions=argToList(global_versions))
 
     return parse_response(response=runner,
                           human_readable_name="PyEnv installation",
@@ -395,9 +389,9 @@ def tidy_goenv_command(client: TidyClient, **kwargs) -> DemistoResult:
     """
     versions = kwargs.get('versions')
     global_versions = kwargs.get('globals')
-    runner: Runner = client.anyenv(env=AnyEnvs.goenv,
-                                   versions=argToList(versions),
-                                   global_versions=argToList(global_versions))
+    runner: Runner = client.install_environments(env=Envs.goenv,
+                                                 versions=argToList(versions),
+                                                 global_versions=argToList(global_versions))
 
     return parse_response(response=runner,
                           human_readable_name="GoEnv Installation",
@@ -417,9 +411,9 @@ def tidy_nodenv_command(client: TidyClient, **kwargs) -> DemistoResult:
     """
     versions = kwargs.get('versions')
     global_versions = kwargs.get('globals')
-    runner: Runner = client.anyenv(env=AnyEnvs.nodenv,
-                                   versions=argToList(versions),
-                                   global_versions=argToList(global_versions))
+    runner: Runner = client.install_environments(env=Envs.nodenv,
+                                                 versions=argToList(versions),
+                                                 global_versions=argToList(global_versions))
 
     return parse_response(response=runner,
                           human_readable_name="NodeEnv Installation",
@@ -662,8 +656,9 @@ def main() -> None:
 
     # Tidy client configuration
     hostname = demisto.getArg("hostname") or demisto.getParam("hostname")
-    user = demisto.getArg("user") or demisto.getParam("user")
-    password = demisto.getArg("password") or demisto.getParam("password")
+    user = demisto.getArg("user") or demisto.params().get('user_creds', {}).get('identifier') or demisto.params().get("user")
+    password = demisto.getArg("password") or demisto.params().get(
+        'user_creds', {}).get('password') or demisto.params().get("password")
     ssh_key = demisto.getParam("ssh_key")
     client = TidyClient(
         hostname=hostname,
@@ -678,7 +673,6 @@ def main() -> None:
         demisto.results(commands[command](client, **demisto.args()))
     # Log exceptions and return errors
     except DemistoException as e:
-        demisto.error(traceback.format_exc())
         return_error(f'Failed to execute {demisto.command()} command.\nError:\n{str(e)}')
 
 

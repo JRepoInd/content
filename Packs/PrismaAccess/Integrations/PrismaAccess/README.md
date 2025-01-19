@@ -30,11 +30,8 @@ The API connection requires the **API Port** and **API Key** parameters as well 
 
 This integration was integrated and tested with version 9.0.7 of Prisma Access
 
-## Configure Prisma Access on Cortex XSOAR
+## Configure Prisma Access in Cortex
 
-1. Navigate to **Settings** > **Integrations** > **Servers & Services**.
-2. Search for Prisma Access.
-3. Click **Add instance** to create and configure a new integration instance.
 
 | **Parameter** | **Description** | **Required** |
 | --- | --- | --- |
@@ -48,9 +45,8 @@ This integration was integrated and tested with version 9.0.7 of Prisma Access
 | sshport | SSH Port | False |
 | Username | SSH Credentials for CLI | False |
 
-4. Click **Test** to validate the URLs, token, and connection.
 ## Commands
-You can execute these commands from the Cortex XSOAR CLI, as part of an automation, or in a playbook.
+You can execute these commands from the CLI, as part of an automation, or in a playbook.
 After you successfully execute a command, a DBot message appears in the War Room with the command details.
 ### prisma-access-logout-user
 ***
@@ -67,6 +63,7 @@ Force logout a specific user from Prisma Access
 | user | Username to logout. (Without domain name - e.g. jsmith) | Required | 
 | domain | Domain name of the user to logout. | Required | 
 | computer | Computer name to logout. | Required | 
+| tenant_name | The tenant name. | Optional | 
 
 
 ##### Context Output
@@ -106,7 +103,7 @@ Run a query via the Prisma Access CLI
 ```!prisma-access-query query="querystring limit=2 action getGPaaSActiveUsers"```
 
 
-### prisma-access-cli-command
+### prisma-access-cli-command (deprecated)
 ***
 Run a custom CLI command on Prisma Access
 
@@ -129,7 +126,7 @@ There is no context output for this command.
 ```!prisma-access-cli-command cmd="show system info | match hostname"```
 
 
-### prisma-access-active-users
+### prisma-access-active-users (deprecated)
 ***
 Query currently active users.
 
@@ -153,4 +150,3 @@ Query currently active users.
 
 ##### Command Example
 ```!prisma-access-active-users limit=10```
-

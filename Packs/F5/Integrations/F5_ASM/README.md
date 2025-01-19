@@ -1,10 +1,7 @@
 Use the F5 ASM integration to read information and to manage F5 firewall.
 This integration was integrated and tested with version 15.1.0 of F5 ASM
-## Configure F5 ASM on Cortex XSOAR
+## Configure F5 ASM in Cortex
 
-1. Navigate to **Settings** > **Integrations** > **Servers & Services**.
-2. Search for F5 ASM.
-3. Click **Add instance** to create and configure a new integration instance.
 
 | **Parameter** | **Description** | **Required** |
 | --- | --- | --- |
@@ -13,9 +10,8 @@ This integration was integrated and tested with version 15.1.0 of F5 ASM
 | insecure | Trust any certificate \(not secure\) | False |
 | proxy | Use system proxy settings | False |
 
-4. Click **Test** to validate the URLs, token, and connection.
 ## Commands
-You can execute these commands from the Cortex XSOAR CLI, as part of an automation, or in a playbook.
+You can execute these commands from the CLI, as part of an automation, or in a playbook.
 After you successfully execute a command, a DBot message appears in the War Room with the command details.
 ### f5-asm-policy-list
 ***
@@ -3602,7 +3598,7 @@ Deletes a cookie.
 
 ### f5-asm-policy-whitelist-ips-list
 ***
-Lists all whitelisted IP addresses for a policy.
+Lists all IP address on allow list for a policy.
 
 
 #### Base Command
@@ -3619,16 +3615,16 @@ Lists all whitelisted IP addresses for a policy.
 
 | **Path** | **Type** | **Description** |
 | --- | --- | --- |
-| f5.WhitelistIP.id | String | The ID of the whitelisted IP address. | 
-| f5.WhitelistIP.ipAddress | String | The whitelisted IP address. | 
-| f5.WhitelistIP.ipMask | String | The subnet mask of the whitelisted IP address. | 
-| f5.WhitelistIP.description | String | The description for the whitelisted IP address. | 
+| f5.WhitelistIP.id | String | The ID of the IP address on allow list. | 
+| f5.WhitelistIP.ipAddress | String | The IP address on allow list. | 
+| f5.WhitelistIP.ipMask | String | The subnet mask of the IP address on allow list. | 
+| f5.WhitelistIP.description | String | The description for the IP address on allow list. | 
 | f5.WhitelistIP.blockRequests | String | How or if the IP blocks requests. | 
 | f5.WhitelistIP.ignoreAnomalies | Boolean | Whether to ignore anomalies. | 
 | f5.WhitelistIP.neverLogRequests | Boolean | Whether to never log requests. | 
 | f5.WhitelistIP.neverLearnRequests | Boolean | Whether to never learn requests. | 
 | f5.WhitelistIP.trustedByPolicyBuilder | Boolean | Whether the IP is trusted by the builder. | 
-| f5.WhitelistIP.selfLink | String | The self link to the specific whitelisted IP. | 
+| f5.WhitelistIP.selfLink | String | The self link to the specific IP address on allow list. | 
 | f5.WhitelistIP.lastUpdateMicros | String | The datetime of the last update represented in micro seconds since 1970-01-01 00:00:00 GMT \(Unix epoch\). For example, 1519382317000000 is Friday, 23 February 2018 10:38:37. | 
 
 
@@ -3900,7 +3896,7 @@ Lists all whitelisted IP addresses for a policy.
 
 ### f5-asm-policy-whitelist-ips-add
 ***
-Adds a new whitelisted IP address to a policy.
+Adds a new IP address on allow list to a policy.
 
 
 #### Base Command
@@ -3926,16 +3922,16 @@ Adds a new whitelisted IP address to a policy.
 
 | **Path** | **Type** | **Description** |
 | --- | --- | --- |
-| f5.WhitelistIP.id | String | ID of the whitelisted IP address. | 
-| f5.WhitelistIP.ipAddress | String | The whitelisted IP address. | 
-| f5.WhitelistIP.ipMask | String | The subnet mask of the whitelisted IP address. | 
-| f5.WhitelistIP.description | String | A description for the whitelisted IP address. | 
+| f5.WhitelistIP.id | String | ID of the IP address on allow list. | 
+| f5.WhitelistIP.ipAddress | String | The IP address on allow list. | 
+| f5.WhitelistIP.ipMask | String | The subnet mask of the IP address on allow list. | 
+| f5.WhitelistIP.description | String | A description for the IP address on allow list. | 
 | f5.WhitelistIP.blockRequests | String | How or if the IP blocks requests. | 
 | f5.WhitelistIP.ignoreAnomalies | Boolean | Whether to ignore anomalies. | 
 | f5.WhitelistIP.neverLogRequests | Boolean | Whether to never log requests. | 
 | f5.WhitelistIP.neverLearnRequests | Boolean | Whether to never learn requests. | 
 | f5.WhitelistIP.trustedByPolicyBuilder | Boolean | Whether the IP address is trusted by the builder. | 
-| f5.WhitelistIP.selfLink | String | The self link to the specific whitelisted IP. | 
+| f5.WhitelistIP.selfLink | String | The self link to the specific IP address on allow list. | 
 | f5.WhitelistIP.lastUpdateMicros | String | The datetime of the last update represented in micro seconds since 1970-01-01 00:00:00 GMT \(Unix epoch\). For example, 1519382317000000 is Friday, 23 February 2018 10:38:37. | 
 
 
@@ -4003,7 +3999,7 @@ Adds a new whitelisted IP address to a policy.
 
 ### f5-asm-policy-whitelist-ips-update
 ***
-Updates an existing whitelisted IP address.
+Updates an existing IP address on allow list.
 
 
 #### Base Command
@@ -4029,16 +4025,16 @@ Updates an existing whitelisted IP address.
 
 | **Path** | **Type** | **Description** |
 | --- | --- | --- |
-| f5.WhitelistIP.id | String | The ID of the whitelisted IP address. | 
-| f5.WhitelistIP.ipAddress | String | The whitelisted IP address. | 
-| f5.WhitelistIP.ipMask | String | The subnet mask of the whitelisted IP address. | 
-| f5.WhitelistIP.description | String | A description for the whitelisted IP address. | 
+| f5.WhitelistIP.id | String | The ID of the IP address on allow list. | 
+| f5.WhitelistIP.ipAddress | String | The IP address on allow list. | 
+| f5.WhitelistIP.ipMask | String | The subnet mask of the IP address on allow list. | 
+| f5.WhitelistIP.description | String | A description for the IP address on allow list. | 
 | f5.WhitelistIP.blockRequests | String | How or if the IP address blocks requests. | 
 | f5.WhitelistIP.ignoreAnomalies | Boolean | Whether to ignore anomalies. | 
 | f5.WhitelistIP.neverLogRequests | Boolean | Whether to never log requests. | 
 | f5.WhitelistIP.neverLearnRequests | Boolean | Whether to never learn requests. | 
 | f5.WhitelistIP.trustedByPolicyBuilder | Boolean | Whether the IP address is trusted by the builder. | 
-| f5.WhitelistIP.selfLink | String | The self link to the specific whitelisted IP. | 
+| f5.WhitelistIP.selfLink | String | The self link to the specific IP address on allow list. | 
 | f5.WhitelistIP.lastUpdateMicros | String | The datetime of the last update represented in micro seconds since 1970-01-01 00:00:00 GMT \(Unix epoch\). For example, 1519382317000000 is Friday, 23 February 2018 10:38:37. | 
 
 
@@ -4106,7 +4102,7 @@ Updates an existing whitelisted IP address.
 
 ### f5-asm-policy-whitelist-ips-delete
 ***
-Deletes an existing whitelisted IP address from a policy.
+Deletes an existing IP address on allow list from a policy.
 
 
 #### Base Command
@@ -4125,16 +4121,16 @@ Deletes an existing whitelisted IP address from a policy.
 
 | **Path** | **Type** | **Description** |
 | --- | --- | --- |
-| f5.WhitelistIP.id | String | The ID of the whitelisted IP address. | 
-| f5.WhitelistIP.ipAddress | String | The whitelisted IP address. | 
-| f5.WhitelistIP.ipMask | String | The subnet mask of the whitelisted IP address. | 
-| f5.WhitelistIP.description | String | A description for the whitelisted IP address. | 
+| f5.WhitelistIP.id | String | The ID of the IP address on allow list. | 
+| f5.WhitelistIP.ipAddress | String | The IP address on allow list. | 
+| f5.WhitelistIP.ipMask | String | The subnet mask of the IP address on allow list. | 
+| f5.WhitelistIP.description | String | A description for the IP address on allow list. | 
 | f5.WhitelistIP.blockRequests | String | How or if the IP address blocks requests. | 
 | f5.WhitelistIP.ignoreAnomalies | Boolean | Whether to ignore anomalies. | 
 | f5.WhitelistIP.neverLogRequests | Boolean | Whether to never log requests. | 
 | f5.WhitelistIP.neverLearnRequests | Boolean | Whether to never learn requests. | 
 | f5.WhitelistIP.trustedByPolicyBuilder | Boolean | Whether the IP address is trusted by the builder. | 
-| f5.WhitelistIP.selfLink | String | The self link to the specific whitelisted IP. | 
+| f5.WhitelistIP.selfLink | String | The self link to the specific IP address on allow list. | 
 | f5.WhitelistIP.lastUpdateMicros | String | The datetime of the last update represented in micro seconds since 1970-01-01 00:00:00 GMT \(Unix epoch\). For example, 1519382317000000 is Friday, 23 February 2018 10:38:37. | 
 
 
@@ -6324,4 +6320,3 @@ Gets the MD5 hash of a policy that can be accessed in the API.
 >|md5|
 >|---|
 >| kpD2qFaUlGAbw8RhN5IFQA |
-

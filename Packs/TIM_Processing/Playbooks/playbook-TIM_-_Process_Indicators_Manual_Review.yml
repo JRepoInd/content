@@ -1,6 +1,8 @@
 id: TIM - Process Indicators - Manual Review
 version: -1
 fromversion: 5.5.0
+marketplaces:
+- xsoar
 name: TIM - Process Indicators - Manual Review
 description: |-
   This playbook tags indicators ingested by feeds that require manual approval. The playbook is triggered due to a job. The indicators are tagged as requiring a manual review. The playbook optionally concludes with creating a new incident that includes all of the indicators that the analyst must review.
@@ -443,7 +445,7 @@ tasks:
       version: -1
       name: TIM - Indicator Auto Processing
       description: This playbook uses several sub playbooks to process and tag indicators, which is used to identify indicators that shouldn't be
-        blacklisted. For example IP indicators that belong to business partners or important hashes we wish to not process. Additional sub playbooks can be added for improving the
+        added to block list. For example IP indicators that belong to business partners or important hashes we wish to not process. Additional sub playbooks can be added for improving the
         business logic and tagging according to the user's needs.
       playbookName: TIM - Indicator Auto Processing
       type: playbook
@@ -452,7 +454,7 @@ tasks:
     nexttasks:
       '#none#':
       - "7"
-    separatecontext: true
+    separatecontext: false
     view: |-
       {
         "position": {

@@ -278,7 +278,10 @@ tasks:
     note: false
     timertriggers: []
     ignoreworker: false
-view: "{\n  \"linkLabelsPosition\": {\n    \"16_19_#default#\": 0.1,\n    \"2_19_#default#\": 0.14,\n    \"2_6_yes\": 0.54,\n    \"3_19_#default#\": 0.1,\n    \"3_20_yes\": 0.7\n  },\n  \"paper\": {\n    \"dimensions\": {\n      \"height\": 995,\n      \"width\": 1280,\n      \"x\": -500,\n      \"y\": -30\n    }\n  }\n}"
+view: "{\n  \"linkLabelsPosition\": {\n    \"16_19_#default#\": 0.1,\n    \"2_19_#default#\"\
+  : 0.14,\n    \"2_6_yes\": 0.54,\n    \"3_19_#default#\": 0.1,\n    \"3_20_yes\"\
+  : 0.7\n  },\n  \"paper\": {\n    \"dimensions\": {\n      \"height\": 995,\n   \
+  \   \"width\": 1280,\n      \"x\": -500,\n      \"y\": -30\n    }\n  }\n}"
 inputs:
 - key: MD5Hash
   value:
@@ -295,11 +298,8 @@ inputs:
   required: false
   description: SHA1 Hash
 outputs:
-- contextPath: Endpoint.Hostname
+- contextPath: Cybereason.File.Hostname
   description: Device hostname
   type: string
-- contextPath: Endpoint
-  description: The endpoint
-  type: unknown
 tests:
 - No test

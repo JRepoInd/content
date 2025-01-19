@@ -6,3 +6,29 @@ ignore=RM106
 
 [file:playbook-Splunk_Indicator_Hunting_README.md]
 ignore=RM106
+
+[file:classifier-mapper-incoming-SplunkPy.json]
+ignore=BA101
+
+[file:SplunkPy_image.png]
+ignore=IM111
+
+[known_words]
+splunk
+splunkpy
+hec
+splunk-search
+drilldown
+
+[file:classifier-SplunkPy.json]
+ignore=BA101
+
+[file:SplunkShowIdentity.yml]
+ignore=BA124
+
+[file:SplunkShowAsset.yml]
+ignore=BA124
+
+# GR103 is temporary, see CIAC-11705
+[file:incidentfield-Notable_-_ID.json]
+ignore=GR103

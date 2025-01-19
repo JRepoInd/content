@@ -7,9 +7,10 @@ import struct
 import time
 from operator import itemgetter
 import requests
+import urllib3
 
 # disable insecure warnings
-requests.packages.urllib3.disable_warnings()
+urllib3.disable_warnings()
 
 ''' GLOBAL VARS '''
 CUSTOMER_NAME = ''
@@ -52,22 +53,22 @@ def http_request(url_suffix, commands=None):
                                            })
             demisto.info('{} from server during login. Clearing session token cache.'.format(res.status_code))
 
-        return_error('HTTP {} Error in API call to ThreatX service - {}'.format(res.status_code, res.text))
+        raise DemistoException('HTTP {} Error in API call to ThreatX service - {}'.format(res.status_code, res.text))
 
     resp_json = {}  # type:dict
     try:
         resp_json = res.json()
     except ValueError:
-        return_error('Could not parse the response from ThreatX: {}'.format(res.text))
+        raise DemistoException('Could not parse the response from ThreatX: {}'.format(res.text))
 
     if 'Ok' not in resp_json:
         if url_suffix == '/login':
             demisto.setIntegrationContext({'session_token': None,
                                            'token_expires': None
                                            })
-            return_error('Login response error - {}.'.format(res.text))
+            raise DemistoException('Login response error - {}.'.format(res.text))
 
-        return_error(res.text)
+        raise DemistoException(res.text)
 
     if url_suffix == '/login':
         if 'status' in resp_json['Ok']:
@@ -75,7 +76,7 @@ def http_request(url_suffix, commands=None):
                 demisto.setIntegrationContext({'session_token': None,
                                                'token_expires': None
                                                })
-                return_error('Invalid credentials.')
+                raise DemistoException('Invalid credentials.')
 
     return resp_json['Ok']
 
@@ -155,22 +156,30 @@ def block_ip(ip, description):
 
 @logger
 def block_ip_command(args):
-    ip = args.get('ip', None)
+    ips = args.get('ip', [])
     description = args.get('description', 'Added by ThreatX Demisto Integration')
-    results = block_ip(ip, description)
+    results = []
+    errors = []
+    for ip in argToList(ips):
+        try:
+            ip_result = block_ip(ip, description)
+        except Exception as error:
+            demisto.error('failed block ip: {}\n{}'.format(ip, traceback.format_exc()))
+            errors.append('Failed to block ip: {} error: {}'.format(ip, error))
+        else:
+            results.append(ip_result)
+    if results:
+        readable_outputs = tableToMarkdown('Block IP',
+                                           results,
+                                           ['Result'],
+                                           removeNull=True)
 
-    md = tableToMarkdown('Block IP',
-                         results,
-                         ['Result'],
-                         removeNull=True)
-
-    ec = {
-        'IP(val.Address === obj.Address)': {
-            'Address': ip
-        }
-    }
-
-    return_outputs(md, ec, results)
+        return_results(CommandResults(
+            outputs=results, readable_output=readable_outputs,
+            outputs_prefix='IP(val.Address === obj.Address).Address'
+        ))
+    if errors:
+        return_error('\n'.join(errors))
 
 
 @logger
@@ -218,22 +227,31 @@ def blacklist_ip(ip, description):
 
 @logger
 def blacklist_ip_command(args):
-    ip = args.get('ip', None)
+    ips = args.get('ip', None)
     description = args.get('description', 'Added by ThreatX Demisto Integration')
-    results = blacklist_ip(ip, description)
+    results = []
+    errors = []
+    for ip in argToList(ips):
+        try:
+            ip_result = blacklist_ip(ip, description)
+        except Exception as error:
+            demisto.error('failed adding ip: {} to balcklist\n{}'.format(ip, traceback.format_exc()))
+            errors.append('Failed to add ip: {} to blacklist error: {}'.format(ip, error))
+        else:
+            results.append(ip_result)
 
-    md = tableToMarkdown('Blacklist IP',
-                         results,
-                         ['Result'],
-                         removeNull=True)
+    if results:
+        readable_outputs = tableToMarkdown('Blacklist IP',
+                                           results,
+                                           ['Result'],
+                                           removeNull=True)
 
-    ec = {
-        'IP(val.Address === obj.Address)': {
-            'Address': ip
-        }
-    }
-
-    return_outputs(md, ec, results)
+        return_results(CommandResults(
+            outputs=results, readable_output=readable_outputs,
+            outputs_prefix='IP(val.Address === obj.Address).Address'
+        ))
+    if errors:
+        return_error('\n'.join(errors))
 
 
 @logger
@@ -533,17 +551,8 @@ def add_entity_note_command(args):
 
 
 @logger
-def test_module():
-    commands = {
-        'command': 'list'
-    }
-
-    return http_request('/users', commands)
-
-
-@logger
-def test_module_command():
-    results = test_module()
+def command_test_module():
+    results = http_request('/users', {'command': 'list'})
 
     if not isinstance(results, list):
         raise DemistoException('Unrecognized response from ThreatX.')
@@ -567,8 +576,8 @@ def main():
     url = params.get('url', '').strip('/')
     BASE_URL = url + '/tx_api/v1'
 
-    CUSTOMER_NAME = params.get('customer_name', None)
-    API_KEY = params.get('api_key', None)
+    CUSTOMER_NAME = params.get('credentials', {}).get('identifier') or params.get('customer_name')
+    API_KEY = params.get('credentials', {}).get('password') or params.get('api_key')
     DBOT_THRESHOLD = int(params.get('dbot_threshold', 70))
     USE_SSL = not params.get('insecure')
 
@@ -579,7 +588,7 @@ def main():
         handle_proxy()
         initialize()
         if command == 'test-module':
-            test_module_command()
+            command_test_module()
         elif command == 'threatx-block-ip':
             block_ip_command(args)
         elif command == 'threatx-unblock-ip':

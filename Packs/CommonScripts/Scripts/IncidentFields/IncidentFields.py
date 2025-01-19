@@ -11,7 +11,7 @@ def build_field_context_data(field):
     }
 
     if not field_context_data['associatedToAll']:
-        if len(field['associatedTypes']) != 0:
+        if len(field.get('associatedTypes') or []) != 0:
             field_context_data['associatedTypes'] = field['associatedTypes']
         else:
             field_context_data['associatedTypes'] = None
@@ -23,7 +23,7 @@ def build_field_context_data(field):
 
 def main():
     # get incident fields
-    res = demisto.executeCommand('demisto-api-get', {'uri': '/incidentfields'})
+    res = demisto.executeCommand('core-api-get', {'uri': '/incidentfields'})
     if is_error(res):
         return_error(res[0]['Contents'])
 

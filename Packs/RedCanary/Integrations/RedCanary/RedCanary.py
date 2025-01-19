@@ -1,14 +1,15 @@
-from typing import Generator
+import demistomock as demisto  # noqa: F401
+from CommonServerPython import *  # noqa: F401
+from collections.abc import Generator
 
-import demistomock as demisto
-from CommonServerPython import *
 from CommonServerUserPython import *
 
 ''' IMPORTS '''
 import requests
+import urllib3
 
 # disable insecure warnings
-requests.packages.urllib3.disable_warnings()
+urllib3.disable_warnings()
 
 ''' GLOBAL VARS '''
 BASE_URL = ''
@@ -43,6 +44,7 @@ def get_time_obj(t, time_format=None):
         else:
             # in case of "2018-09-14T13:27:18.123456Z"
             return datetime.strptime(t, TIME_FORMAT)
+    return None
 
 
 def get_time_str(time_obj, time_format=None):
@@ -78,11 +80,13 @@ def http_request(requests_func, url_suffix, **kwargs):
 
     if res.status_code == 403:
         raise Exception('API Key is incorrect')
+    if res.status_code == 404:
+        return {}
 
     if res.status_code not in [200, 201, ]:
-        LOG('result is: %s' % (res.json(),))
+        LOG(f'result is: {res.json()}')
         error = res.json()
-        raise Exception('Your request failed with the following error: {}.\n'.format(error, ))
+        raise Exception(f'Your request failed with the following error: {error}.\n')
 
     return res.json()
 
@@ -103,17 +107,17 @@ def http_post(url_suffix, params=None, data=None):
 
 
 def playbook_name_to_id(name):
-    playbooks = http_get('/exec/playbooks')['data']
+    playbooks = http_get('/automate/playbooks')['data']
     ids = [p['id'] for p in playbooks if p['name'] == name]
     if len(ids) != 1:
-        raise ValueError('Could not find specific id for name "{}"'.format(name))
+        raise ValueError(f'Could not find specific id for name "{name}"')
 
     return ids[0]
 
 
 def get_endpoint_context(res=None, endpoint_id=None):
     if res is None:
-        res = http_get('/endpoints/{}'.format(endpoint_id)).get('data', [])
+        res = http_get(f'/endpoints/{endpoint_id}').get('data', [])
 
     endpoint_context = []
     for endpoint in res:
@@ -151,7 +155,7 @@ def get_endpoint_context(res=None, endpoint_id=None):
 
 def get_endpoint_user_context(res=None, endpoint_user_id=None):
     if res is None:
-        res = http_get('/endpoint_users/{}'.format(endpoint_user_id))['data']
+        res = http_get(f'/endpoint_users/{endpoint_user_id}')['data']
 
     endpoint_users = []
     for endpoint_user in res:
@@ -179,7 +183,7 @@ def get_full_timeline(detection_id, per_page=100):
     last_data = {}  # type:ignore
 
     while not done:
-        res = http_get('/detections/{}/timeline'.format(detection_id), params={
+        res = http_get(f'/detections/{detection_id}/timeline', params={
             'page': page,
             'per_page': per_page,
         })
@@ -200,7 +204,6 @@ def get_full_timeline(detection_id, per_page=100):
 
 def process_timeline(detection_id):
     res = get_full_timeline(detection_id)
-
     activities = []
     domains = []
     files = []
@@ -215,31 +218,38 @@ def process_timeline(detection_id):
         additional_data = {}  # type:ignore
 
         if activity['attributes']['type'] == 'process_activity_occurred':
-            process = activity['attributes']['process_execution']['attributes']['operating_system_process'][
-                'attributes']
-            image = process['image']['attributes']
-            additional_data = {
-                'MD5': image['md5'],
-                'SHA256': image['sha256'],
-                'Path': image['path'],
-                'Type': image['file_type'],
-                'CommandLine': process['command_line']['attributes']['command_line'],
-            }
-            files.append({
-                'Name': os.path.basename(image['path']),
-                'MD5': image['md5'],
-                'SHA256': image['sha256'],
-                'Path': image['path'],
-                'Extension': os.path.splitext(image['path'])[-1],
-            })
-            processes.append({
-                'Name': os.path.basename(image['path']),
-                'Path': image['path'],
-                'MD5': image['md5'],
-                'SHA256': image['sha256'],
-                'StartTime': get_time_str(get_time_obj(process['started_at'])),
-                'CommandLine': process['command_line']['attributes']['command_line'],
-            })
+            process = activity['attributes']['process_execution']['attributes'].get(
+                'operating_system_process', {})
+            if not process:
+                demisto.debug('##### process attributes corrupted, skipping additional data. process response:'
+                              f'{activity.get("attributes", {}).get("process_execution")} #######')
+            else:
+                process = process.get('attributes', {}) or {}
+                image = process.get('image', {}).get('attributes')
+                additional_data = {
+                    'MD5': image.get('md5'),
+                    'SHA256': image.get('sha256'),
+                    'Path': image.get('path'),
+                    'Type': image.get('file_type'),
+                    'CommandLine': process.get('command_line', {}).get(
+                        'attributes', {}).get('command_line'),
+                }
+                files.append({
+                    'Name': os.path.basename(image.get('path', '')),
+                    'MD5': image.get('md5'),
+                    'SHA256': image.get('sha256'),
+                    'Path': image.get('path'),
+                    'Extension': os.path.splitext(image.get('path', ''))[-1],
+                })
+                processes.append({
+                    'Name': os.path.basename(image.get('path', '')),
+                    'Path': image.get('path'),
+                    'MD5': image.get('md5'),
+                    'SHA256': image.get('sha256'),
+                    'StartTime': get_time_str(get_time_obj(process.get('started_at'))),
+                    'CommandLine': process.get('command_line', {}).get(
+                        'attributes', {}).get('command_line'),
+                })
 
         elif activity['attributes']['type'] == 'network_connection_activity_occurred':
             network = activity['attributes']['network_connection']['attributes']
@@ -290,12 +300,16 @@ def detection_to_context(raw_detection):
 
 def detections_to_entry(detections, show_timeline=False):
     fixed_detections = [detection_to_context(d) for d in detections]
-    endpoints = [get_endpoint_context(endpoint_id=d['relationships']['affected_endpoint']['data']['id'])
-                 for d in detections]
+    endpoints = []
+    for d in detections:
+        if endpoint_id := demisto.get(d, 'relationships.affected_endpoint.data.id'):
+            endpoints.append(get_endpoint_context(endpoint_id=endpoint_id))
+
     endpoints = sum(endpoints, [])  # type: list
-    endpoint_users = [
-        get_endpoint_user_context(endpoint_user_id=d['relationships']['related_endpoint_user']['data']['id'])
-        for d in detections]
+    endpoint_users = []
+    for d in detections:
+        if endpoint_user_id := demisto.get(d, 'relationships.related_endpoint_user.data.id'):
+            endpoint_users.append(get_endpoint_user_context(endpoint_user_id=endpoint_user_id))
     endpoint_users = sum(endpoint_users, [])  # type: list
 
     domains, files, ips, processes = [], [], [], []  # type:ignore
@@ -383,13 +397,13 @@ def list_detections(page, per_page, since=None):
     if isinstance(since, datetime):
         since = datetime.strftime(since, TIME_FORMAT)
     res = http_get('/detections',
-                   data=assign_params(
+                   params=assign_params(
                        page=page,
                        per_page=per_page,
                        since=since
                    ),
                    )
-    return res['data']
+    return res.get('data', [])
 
 
 def get_detection_command():
@@ -402,7 +416,7 @@ def get_detection_command():
 
 @logger
 def get_detection(_id):
-    res = http_get('/detections/{}'.format(_id))
+    res = http_get(f'/detections/{_id}')
     return res['data']
 
 
@@ -416,7 +430,7 @@ def acknowledge_detection_command():
 
 @logger
 def acknowledge_detection(_id):
-    res = http_patch('/detections/{}/mark_acknowledged'.format(_id))
+    res = http_patch(f'/detections/{_id}/mark_acknowledged')
     return res['data']
 
 
@@ -432,7 +446,7 @@ def remediate_detection_command():
 
 @logger
 def remediate_detection(_id, remediation_state, comment):
-    res = http_patch('/detections/{}/update_remediation_state'.format(_id), data={
+    res = http_patch(f'/detections/{_id}/update_remediation_state', data={
         'remediation_state': remediation_state,
         'comment': comment,
     })
@@ -462,7 +476,7 @@ def list_endpoints_command():
 @logger
 def list_endpoints(page, per_page):
     res = http_get('/endpoints',
-                   data={
+                   params={
                        'page': page,
                        'per_page': per_page
                    },
@@ -493,7 +507,7 @@ def get_endpoint_command():
 
 @logger
 def get_endpoint(_id):
-    res = http_get('/endpoints/{}'.format(_id))
+    res = http_get(f'/endpoints/{_id}')
 
     return res['data']
 
@@ -530,11 +544,11 @@ def execute_playbook_command():
 
     execute_playbook(playbook_id, detection_id)
 
-    return 'playbook #{} execution started successfully.'.format(playbook_id)
+    return f'playbook #{playbook_id} execution started successfully.'
 
 
 def execute_playbook(playbook_id, detection_id):
-    res = http_post('/exec/playbooks/{}/execute'.format(playbook_id), params={
+    res = http_post(f'/automate/playbooks/{playbook_id}/execute', params={
         'resource_type': 'Detection',
         'resource_id': detection_id,
     })
@@ -542,7 +556,7 @@ def execute_playbook(playbook_id, detection_id):
     return res
 
 
-def fetch_incidents(last_run):
+def fetch_incidents(last_run, per_page):
     last_incidents_ids = []
 
     if last_run:
@@ -553,10 +567,10 @@ def fetch_incidents(last_run):
         # first time fetching
         last_fetch = parse_date_range(demisto.params().get('fetch_time', '3 days'), TIME_FORMAT)[0]
 
-    demisto.debug('iterating on detections, looking for more recent than {}'.format(last_fetch))
+    demisto.debug(f'iterating on detections, looking for more recent than {last_fetch}')
     incidents = []
     new_incidents_ids = []
-    for raw_detection in get_unacknowledged_detections(last_fetch, per_page=2):
+    for raw_detection in get_unacknowledged_detections(last_fetch, per_page=per_page):
         demisto.debug('found a new detection in RedCanary #{}'.format(raw_detection['id']))
         incident = detection_to_incident(raw_detection)
         # the rawJson is a string of dictionary e.g. - ('{"ID":2,"Type":5}')
@@ -564,7 +578,7 @@ def fetch_incidents(last_run):
         if incident_id not in last_incidents_ids:
             # makes sure that the incident wasn't fetched before
             incidents.append(incident)
-            new_incidents_ids.append(incident_id)
+        new_incidents_ids.append(incident_id)
 
     if incidents:
         last_fetch = max([get_time_obj(incident['occurred']) for incident in incidents])  # noqa:F812
@@ -581,9 +595,12 @@ def test_integration():
 
 def main():
     global BASE_URL, API_KEY, USE_SSL
-    BASE_URL = urljoin(demisto.params().get('domain', ''), '/openapi/v3')
-    API_KEY = demisto.params().get('api_key')
-    USE_SSL = not demisto.params().get('insecure', False)
+    params = demisto.params()
+    BASE_URL = urljoin(params.get('domain', ''), '/openapi/v3')
+    API_KEY = params.get('api_key_creds', {}).get('password') or params.get('api_key')
+    USE_SSL = not params.get('insecure', False)
+    per_page = params.get('fetch_limit', 2)
+
     ''' EXECUTION CODE '''
     COMMANDS = {
         'test-module': test_integration,
@@ -600,12 +617,12 @@ def main():
 
     try:
         handle_proxy()
-        LOG('command is %s' % (demisto.command(),))
+        LOG(f'command is {demisto.command()}')
         command_func = COMMANDS.get(demisto.command())
         if command_func is not None:
             if demisto.command() == 'fetch-incidents':
                 initial_last_run = demisto.getLastRun()
-                last_run, incidents = fetch_incidents(initial_last_run)
+                last_run, incidents = fetch_incidents(initial_last_run, per_page)
                 demisto.incidents(incidents)
                 demisto.setLastRun(last_run)
             else:
@@ -615,8 +632,8 @@ def main():
         LOG(str(e))
         if demisto.command() != 'test-module':
             LOG.print_log()
-        return_error('error has occurred: {}'.format(str(e)))
+        return_error(f'error has occurred: {str(e)}')
 
 
-if __name__ in ('__builtin__', 'builtins'):
+if __name__ in ('__main__', '__builtin__', 'builtins'):
     main()

@@ -105,10 +105,10 @@ args:
   description: The incident type to create incidents for. Default is "Vulnerability".
 scripttarget: 0
 runas: DBotWeakRole
-runonce: false
 dependson:
   must:
   - nexpose-get-asset
 tests:
 - No test
 fromversion: 5.0.0
+dockerimage: demisto/python:2.7.18.20958

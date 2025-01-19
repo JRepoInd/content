@@ -1,15 +1,23 @@
 {
-    "name": "Prisma Cloud",
+    "name": "Prisma Cloud by Palo Alto Networks",
     "description": "Automate and unify security incident response across your cloud environments, while still giving a degree of control to dedicated cloud teams.",
     "support": "xsoar",
-    "currentVersion": "1.7.0",
+    "currentVersion": "4.3.17",
     "author": "Cortex XSOAR",
     "url": "https://www.paloaltonetworks.com/cortex",
     "email": "",
-    "categories": [
-        "Network Security"
+    "videos": [
+        "https://www.youtube.com/watch?v=MtLHCiV_1Wo"
     ],
-    "tags": [],
+    "categories": [
+        "Cloud Security"
+    ],
+    "tags": [
+        "Palo Alto Networks Products"
+    ],
+    "itemPrefix": [
+        "Prisma Cloud"
+    ],
     "created": "2020-05-11T18:00:53Z",
     "useCases": [],
     "keywords": [],
@@ -50,17 +58,31 @@
             "mandatory": false,
             "display_name": "AWS - IAM"
         },
-        "Azure-AKS": {
+        "GoogleKubernetesEngine": {
             "mandatory": false,
-            "display_name": "Azure - AKS"
+            "display_name": "Google Kubernetes Engine"
         },
-        "Azure-SQL": {
+        "AzureKubernetesServices": {
             "mandatory": false,
-            "display_name": "Azure - SQL"
+            "display_name": "Azure Kubernetes Services"
         },
-        "Azure-Network": {
+        "AzureSQLManagement": {
             "mandatory": false,
-            "display_name": "Azure - Network"
+            "display_name": "Azure SQL Management (Beta)"
+        },
+        "AzureNetworkSecurityGroups": {
+            "mandatory": false,
+            "display_name": "Azure Network Security Group"
+        },
+        "AzureStorage": {
+            "mandatory": false,
+            "display_name": "Azure Storage Management"
         }
-    }
+    },
+    "marketplaces": [
+        "xsoar",
+        "marketplacev2",
+        "xpanse"
+    ],
+    "hybrid": true
 }

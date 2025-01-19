@@ -52,7 +52,7 @@ def test_fetch_when_last_run_is_time(mocker):
         RedCanary, "get_unacknowledged_detections", return_value=data["data"]
     )
     mocker.patch.object(RedCanary, "get_full_timeline", return_value=None)
-    last_run, incidents = RedCanary.fetch_incidents(last_run_dict)
+    last_run, incidents = RedCanary.fetch_incidents(last_run_dict, 2)
 
     assert len(incidents) == number_of_incidents
     assert last_run["time"] == latest_time_of_occurrence_of_incidents1
@@ -134,6 +134,109 @@ def test_get_endpoint_context():
         'OSVersion': 'Mac OSX 10.14.6'}]
 
 
+def test_detections_to_entry_without_endpoint(mocker):
+    """
+    Given:
+     - detection data with missing 'affected_endpoint' details
+
+    Then:
+     - Ensure detections_to_entry runs successfully
+     - Verify expected result is returned
+    """
+    detection_data = [
+        {
+            'type': 'Detection',
+            'id': 1,
+            'attributes': {
+                'headline': 'Suspicious Activity',
+                'confirmed_at': '2023-09-18T21:32:52.039Z',
+                'summary': 'A user made a series of API calls to expose instance passwords.',
+                'severity': 'high',
+                'last_activity_seen_at': '2023-09-18T20:47:23.609Z',
+                'classification': {
+                    'superclassification': 'Suspicious Activity',
+                    'subclassification': ['Reconnaissance']
+                },
+                'time_of_occurrence': '2023-09-18T20:47:23.609Z',
+                'last_acknowledged_at': None,
+                'last_acknowledged_by': None,
+                'associated_releasable_intelligence_profiles': []
+            },
+            'hostname': None,
+            'username': 'username',
+            'relationships': {
+                'related_endpoint_user': {
+                    'links': {
+                        'related': 'https://example.com/openapi/v3/endpoint_users/11111111'
+                    },
+                    'data': {'type': 'endpoint_user', 'id': 11111111}
+                }
+            },
+            'links': {
+                'self': {'href': 'https://example.com/openapi/v3/detections/1'},
+                'activity_timeline': {'href': 'https://example.com/openapi/v3/detections/1/timeline'},
+                'detectors': {'href': 'https://example.com/openapi/v3/detections/1/detectors'}
+            }
+        }
+    ]
+
+    expected_result = {'Type': 'RedCanaryDetection', 'ID': 1, 'Headline': 'Suspicious Activity', 'Severity': 'high',
+                       'Summary': 'A user made a series of API calls to expose instance passwords.',
+                       'Classification': 'Suspicious Activity', 'Subclassification': ['Reconnaissance'],
+                       'Time': '2023-09-18T20:47:23Z', 'Acknowledged': True, 'RemediationStatus': '', 'Reason': '',
+                       'EndpointID': '', 'EndpointUserID': 11111111}
+    # Call the function with the sample data
+    endpoint_users = [{'Username': 'username'}]
+    mocker.patch.object(RedCanary, "get_endpoint_user_context", return_value=endpoint_users)
+    result = RedCanary.detections_to_entry(detection_data)
+    # Assert that the result is as expected
+    assert result['Contents'][0] == expected_result
+
+
+def test_detections_to_entry_without_relationships(mocker):
+    """
+    Given:
+     - detection data with missing 'relationship' details
+
+    Then:
+     - Ensure detections_to_entry runs successfully
+    """
+    detection_data = [
+        {
+            'type': 'Detection',
+            'id': 1,
+            'attributes': {
+                'headline': 'Suspicious Activity',
+                'confirmed_at': '2023-09-18T21:32:52.039Z',
+                'summary': 'A user made a series of API calls to expose instance passwords.',
+                'severity': 'high',
+                'last_activity_seen_at': '2023-09-18T20:47:23.609Z',
+                'classification': {
+                    'superclassification': 'Suspicious Activity',
+                    'subclassification': ['Reconnaissance']
+                },
+                'time_of_occurrence': '2023-09-18T20:47:23.609Z',
+                'last_acknowledged_at': None,
+                'last_acknowledged_by': None,
+                'associated_releasable_intelligence_profiles': []
+            }
+
+        }
+    ]
+
+    expected_result = {'Type': 'RedCanaryDetection', 'ID': 1, 'Headline': 'Suspicious Activity', 'Severity': 'high',
+                       'Summary': 'A user made a series of API calls to expose instance passwords.',
+                       'Classification': 'Suspicious Activity', 'Subclassification': ['Reconnaissance'],
+                       'Time': '2023-09-18T20:47:23Z', 'Acknowledged': True, 'RemediationStatus': '', 'Reason': '',
+                       'EndpointID': '', 'EndpointUserID': ''}
+    # Call the function with the sample data
+    endpoint_users = [{'Username': 'username'}]
+    mocker.patch.object(RedCanary, "get_endpoint_user_context", return_value=endpoint_users)
+    result = RedCanary.detections_to_entry(detection_data)
+    # Assert that the result is as expected
+    assert result['Contents'][0] == expected_result
+
+
 def test_fetch_multiple_times_when_already_fetched_incident_keep(mocker):
     """Unit test
     Given
@@ -153,17 +256,17 @@ def test_fetch_multiple_times_when_already_fetched_incident_keep(mocker):
     mocker.patch.object(RedCanary, "get_full_timeline", return_value=None)
 
     # fetching for the first time
-    last_run, incidents = RedCanary.fetch_incidents(last_run_dict)
+    last_run, incidents = RedCanary.fetch_incidents(last_run_dict, 2)
     assert len(incidents) == 3
     assert last_run["time"] == "2019-12-30T22:00:50Z"
 
     # fetching for the second time
-    last_run, incidents = RedCanary.fetch_incidents(last_run)
+    last_run, incidents = RedCanary.fetch_incidents(last_run, 2)
     assert len(incidents) == 0
     assert last_run["time"] == "2019-12-30T22:00:50Z"
 
     # fetching for the third time
-    last_run, incidents = RedCanary.fetch_incidents(last_run)
+    last_run, incidents = RedCanary.fetch_incidents(last_run, 2)
     assert len(incidents) == 0
     assert last_run["time"] == "2019-12-30T22:00:50Z"
 
@@ -189,13 +292,13 @@ def test_fetch_multiple_times_with_new_incidents(mocker):
     mocker.patch.object(RedCanary, "get_full_timeline", return_value=None)
 
     # fetching for the first time
-    last_run, incidents = RedCanary.fetch_incidents(last_run_dict)
+    last_run, incidents = RedCanary.fetch_incidents(last_run_dict, 2)
     assert len(incidents) == 3
     assert last_run["time"] == "2019-12-30T22:00:50Z"
 
     # fetching for the second time
     mocker.patch.object(RedCanary, "get_unacknowledged_detections", return_value=data2["data"])
-    last_run, incidents = RedCanary.fetch_incidents(last_run)
+    last_run, incidents = RedCanary.fetch_incidents(last_run, 2)
     # only one incidents is being created out of the 2 that were fetched
     assert len(incidents) == 1
     assert last_run["time"] == latest_time_of_occurrence_of_incidents2
@@ -217,7 +320,7 @@ def test_def_get_full_timeline(mocker):
     result1 = response.execute()
     result2 = response.execute()
     # make sure the results are not the same, they are from different pages, but the data is
-    assert not result1 == result2
+    assert result1 != result2
     assert result1['data'] == result2['data']
     # make sure the loop ends
     assert activities

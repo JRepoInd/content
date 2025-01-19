@@ -2,6 +2,9 @@
 Symantec Data Loss Prevention let's you discover, monitor and protect your sensitive corporate information.
 </p>
 <p>
+This integration is now deprecated. Please use the <b>Symantec DLP v2</b> integration instead.
+</p>
+<p>
 This integration was integrated and tested with Symantec DLP version 15.5. The integration uses the SOAP-based Incident Reporting and Update API. 
 </p>
 <p>
@@ -205,12 +208,6 @@ secondary summary selected are chosen.</li>
 <p>
 <h3>Additional Information</h3>
 <p></p>
-
-<!-- remove the following comments to manually add an image: -->
-<!--
-<a href="insert URL to your image" target="_blank" rel="noopener noreferrer"><img src="insert URL to your image"
- alt="image" width="749" height="412"></a>
- -->
 </p>
 
 <h3>2. symantec-dlp-get-incident-details</h3>
@@ -512,14 +509,6 @@ The value "none" is default.</td>
     </tr>
   </tbody>
 </table>
-<p>
-
-<!-- remove the following comments to manually add an image: -->
-<!--
-<a href="insert URL to your image" target="_blank" rel="noopener noreferrer"><img src="insert URL to your image"
- alt="image" width="749" height="412"></a>
- -->
-</p>
 
 <h3>3. symantec-dlp-update-incident</h3>
 <hr>
@@ -637,14 +626,6 @@ There are no context output for this command.
     </tr>
   </tbody>
 </table>
-<p>
-
-<!-- remove the following comments to manually add an image: -->
-<!--
-<a href="insert URL to your image" target="_blank" rel="noopener noreferrer"><img src="insert URL to your image"
- alt="image" width="749" height="412"></a>
- -->
-</p>
 
 <h3>4. symantec-dlp-incident-binaries</h3>
 <hr>
@@ -793,14 +774,6 @@ incident, might include binary files.</p>
     </tr>
   </tbody>
 </table>
-<p>
-
-<!-- remove the following comments to manually add an image: -->
-<!--
-<a href="insert URL to your image" target="_blank" rel="noopener noreferrer"><img src="insert URL to your image"
- alt="image" width="749" height="412"></a>
- -->
-</p>
 
 <h3>5. symantec-dlp-list-custom-attributes</h3>
 <hr>
@@ -840,14 +813,6 @@ There are no context output for this command.
     </tr>
   </tbody>
 </table>
-<p>
-
-<!-- remove the following comments to manually add an image: -->
-<!--
-<a href="insert URL to your image" target="_blank" rel="noopener noreferrer"><img src="insert URL to your image"
- alt="image" width="749" height="412"></a>
- -->
-</p>
 
 <h3>6. symantec-dlp-list-incident-status</h3>
 <hr>
@@ -887,14 +852,6 @@ There are no context output for this command.
     </tr>
   </tbody>
 </table>
-<p>
-
-<!-- remove the following comments to manually add an image: -->
-<!--
-<a href="insert URL to your image" target="_blank" rel="noopener noreferrer"><img src="insert URL to your image"
- alt="image" width="749" height="412"></a>
- -->
-</p>
 
 <h3>7. symantec-dlp-incident-violations</h3>
 <hr>
@@ -1076,14 +1033,6 @@ There are no context output for this command.
     </tr>
   </tbody>
 </table>
-<p>
-
-<!-- remove the following comments to manually add an image: -->
-<!--
-<a href="insert URL to your image" target="_blank" rel="noopener noreferrer"><img src="insert URL to your image"
- alt="image" width="749" height="412"></a>
- -->
-</p>
 <hr>
 <h2>Troubleshooting</h2>
 <p>If you are encountering issues authenticating the configured API user, you can perform a test that the user you've configured has the proper role by running the following curl command:</p>
@@ -1112,3 +1061,4 @@ Date: Wed, 17 Jun 2020 13:12:43 GMT
 &lt;/ns4:AuthenticationFault&gt;&lt;/detail&gt;&lt;/S:Fault&gt;&lt;/S:Body&gt;&lt;/S:Envelope&gt;
 </pre>
 <p>If you encounter an authentication failure, make sure to follow the instructions at the <strong>Permissions</strong> section of this document.</p>
+<p>Having both "Kerberos" and "form" type authentication methods enabled on your Symantec DLP may cause connection issues. Disabling the form-type may assist solving such issues.&nbsp;</p>

@@ -1,10 +1,7 @@
 Threat intelligence service by CrowdStrike focused on delivering a technical feed to help organizations better defend themselves against adversary activity.
 
-## Configure CrowdStrike Falcon Intel v2 on Cortex XSOAR
+## Configure CrowdStrike Falcon Intel v2 in Cortex
 
-1. Navigate to **Settings** > **Integrations** > **Servers & Services**.
-2. Search for CrowdStrike Falcon Intel v2.
-3. Click **Add instance** to create and configure a new integration instance.
 
 | **Parameter** | **Description** | **Required** |
 | --- | --- | --- |
@@ -14,9 +11,8 @@ Threat intelligence service by CrowdStrike focused on delivering a technical fee
 | proxy | Use system proxy settings | False |
 | insecure | Trust any certificate \(not secure\) | False |
 
-4. Click **Test** to validate the URLs, token, and connection.
 ## Commands
-You can execute these commands from the Cortex XSOAR CLI, as part of an automation, or in a playbook.
+You can execute these commands from the CLI, as part of an automation, or in a playbook.
 After you successfully execute a command, a DBot message appears in the War Room with the command details.
 ### file
 ***
@@ -164,6 +160,8 @@ Check file reputation.
 ***
 Check the given URL reputation.
 
+Notice: Submitting indicators using this command might make the indicator data publicly available. See the vendor’s documentation for more details.
+
 
 #### Base Command
 
@@ -299,6 +297,8 @@ Check the given URL reputation.
 ### domain
 ***
 Check the given URL reputation.
+
+Notice: Submitting indicators using this command might make the indicator data publicly available. See the vendor’s documentation for more details.
 
 
 #### Base Command
@@ -549,7 +549,7 @@ Search known actors based on the given parameters.
 
 | **Argument Name** | **Description** | **Required** |
 | --- | --- | --- |
-| query | Search based on a query written in FQL (Falcon Query Language, [See https://falcon.crowdstrike.com/support/documentation/45/falcon-query-language-fql](See https://falcon.crowdstrike.com/support/documentation/45/falcon-query-language-fql) for more information). | Optional | 
+| query | Search based on a query written in FQL (Falcon Query Language, See https://falcon.crowdstrike.com/support/documentation/45/falcon-query-language-fql for more information). | Optional | 
 | free_search | Search across all fields in an Actor object. | Optional | 
 | name | Search based on actor name. | Optional | 
 | description | Search based on description. | Optional | 
@@ -565,6 +565,7 @@ Search known actors based on the given parameters.
 | limit | The maximum number of actors to retrieve. The default is 10. | Optional | 
 | sort | Sort by field and direction. | Optional | 
 | slug | Search by 'slug' or short descriptive name. Ex: "anchor-panda" | Optional | 
+| display_full_fields | Whether to display the full fields result from CS API. Default is False | Optional | 
 
 
 #### Context Output
@@ -577,6 +578,7 @@ Search known actors based on the given parameters.
 | FalconIntel.Actor.URL | String | The url of the actor | 
 | FalconIntel.Actor.Slug | String | Slug name ofactor | 
 | FalconIntel.Actor.ShortDescription | String | The actor short description. | 
+| FalconIntel.Actor.Description | String | The actor full description. | 
 | FalconIntel.Actor.FirstActivityDate | Date | The actor first activity date. | 
 | FalconIntel.Actor.LastActivityDate | Date | The actor last activity date. | 
 | FalconIntel.Actor.Active | Boolean | The actor active status. | 
@@ -613,7 +615,8 @@ Search known actors based on the given parameters.
                 "Eastern Europe",
                 "Russian Federation"
             ],
-            "ShortDescription": "TWISTED SPIDER is the criminal group behind the development and operation of Maze ransomware. While the ransomware was first observed in May 2019, the group gained notoriety in November 2019 with their brazen attitude toward victims and their willingness to speak with security researchers as they began using Big Game Hunting (BGH) tactics to target organizations and businesses. While other actors ...",
+            "ShortDescription": "TWISTED SPIDER is the criminal group behind the development and operation of Maze ransomware. While the ransomware was first observed in May 2019, the group gained notoriety in November 2019 with their brazen attitude toward victims and their willingness to speak with security researchers as they began using Big Game Hunting (BGH) tactics to target ...",
+            "Description": "TWISTED SPIDER is the criminal group behind the development and operation of Maze ransomware. While the ransomware was first observed in May 2019, the group gained notoriety in November 2019 with their brazen attitude toward victims and their willingness to speak with security researchers as they began using Big Game Hunting (BGH) tactics to target organizations and businesses.",
             "Slug": "twisted-spider",
             "TargetCountries": [
                 "Algeria",
@@ -717,7 +720,7 @@ Search known indicators based on the given parameters.
 
 | **Argument Name** | **Description** | **Required** |
 | --- | --- | --- |
-| query | Search based on a query written in FQL (Falcon Query Language, See [https://falcon.crowdstrike.com/support/documentation/45/falcon-query-language-fql](See https://falcon.crowdstrike.com/support/documentation/45/falcon-query-language-fql) for more information). | Optional | 
+| query | Search based on a query written in FQL (Falcon Query Language, See https://falcon.crowdstrike.com/support/documentation/45/falcon-query-language-fql for more information). | Optional | 
 | type | The indicator type. | Optional | 
 | malicious_confidence | Indicates a confidence level by which an indicator is considered to be malicious. | Optional | 
 | offset | Used to paginate the response. You can then use limit to set the number of results for the next page. | Optional | 
@@ -879,7 +882,7 @@ The Falcon Intel Reports API allows to query CrowdStrike intelligence publicatio
 
 | **Argument Name** | **Description** | **Required** |
 | --- | --- | --- |
-| query | Search based on a query written in FQL (Falcon Query Language, See [https://falcon.crowdstrike.com/support/documentation/45/falcon-query-language-fql](See https://falcon.crowdstrike.com/support/documentation/45/falcon-query-language-fql) for more information). | Optional | 
+| query | Search based on a query written in FQL (Falcon Query Language, See https://falcon.crowdstrike.com/support/documentation/45/falcon-query-language-fql for more information). | Optional | 
 | free_search | Search across all fields in an Report object. | Optional | 
 | name | Search for keywords across report names (i.e. the report’s title). | Optional | 
 | actors | Search for a report related to a particular actors. Actors should be comma separated. - For example - actor1,actor2,... | Optional | 
@@ -896,6 +899,7 @@ The Falcon Intel Reports API allows to query CrowdStrike intelligence publicatio
 | offset | Used to paginate the response. You can then use limit to set the number of results for the next page. | Optional | 
 | limit | The maximum number of reports to retrieve. The default is 10. | Optional | 
 | sort | Sort by field and direction. | Optional | 
+| display_full_fields | Whether to display the full fields result from CS API. Default is False | Optional | 
 
 
 #### Context Output
@@ -911,6 +915,7 @@ The Falcon Intel Reports API allows to query CrowdStrike intelligence publicatio
 | FalconIntel.Report.CreatedDate | Date | The date the report was created. | 
 | FalconIntel.Report.LastModifiedSate | Date | The date the report was last modified. | 
 | FalconIntel.Report.ShortDescription | String | The report short description. | 
+| FalconIntel.Report.Description | String | The report full description. | 
 | FalconIntel.Report.TargetIndustries | String | Targeted industries included in the report. Ex: aerospace | 
 | FalconIntel.Report.TargetCountries | String | Targeted countries included in the report. Ex: afghanistan | 
 | FalconIntel.Report.Motivations | String | Motivations included in the report. Ex: criminal | 
@@ -929,7 +934,8 @@ The Falcon Intel Reports API allows to query CrowdStrike intelligence publicatio
             "ID": 7448,
             "LastModifiedSate": "2020-07-24T10:15:02.000Z",
             "Name": "Snort Changelog",
-            "ShortDescription": "Added one additional rule to detect Hancitor malware traffic decsribed in CSIT-16107. ",
+            "ShortDescription": "Added one additional rule to detect Hancitor ...",
+            "Description": "Added one additional rule to detect Hancitor malware traffic decsribed in CSIT-16107. ",
             "Slug": "slug_value",
             "SubType": "Snort/Suricata",
             "Type": "Feeds",
@@ -945,4 +951,3 @@ The Falcon Intel Reports API allows to query CrowdStrike intelligence publicatio
 >|Created Date|ID|Last Modified Sate|Name|Short Description|Slug|Sub Type|Type|URL|
 >|---|---|---|---|---|---|---|---|---|
 >| 2016-09-30T19:15:53.000Z | 7448 | 2020-07-24T10:15:02.000Z | Snort Changelog | Added one additional rule to detect Hancitor malware traffic decsribed in CSIT-16107.  | snort-changelog-9-5-2016-6 | Snort/Suricata | Feeds | https://falcon.crowdstrike.com/intelligence/reports/snort-changelog-9-5-2016-6/ |
-

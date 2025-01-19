@@ -1,3 +1,5 @@
+Deprecated. Use the "QRadar - Get Offense Logs" playbook instead.
+
 This playbook retrieves the correlation logs of multiple QIDs.
 
 ## Dependencies
@@ -35,4 +37,4 @@ Values can be "OnlyCRE", "OnlyNotCRE", "All". | OnlyCRE | Optional |
 | --- | --- | --- |
 | QRadar.Log | Logs of QRadar correlations | unknown |
 
-![](https://user-images.githubusercontent.com/50324325/81265692-33d91380-904c-11ea-9937-4839f6df52b1.png)
+![](../doc_files/81265692-33d91380-904c-11ea-9937-4839f6df52b1.png)

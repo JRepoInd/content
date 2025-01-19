@@ -2,13 +2,22 @@
     "name": "Ja3er",
     "description": "Query for hashes of JA3 fingerprints",
     "support": "community",
-    "currentVersion": "1.0.0",
+    "currentVersion": "1.0.5",
     "author": "Matt Houston",
     "url": "",
     "email": "",
     "created": "2020-11-30T21:23:11Z",
-    "categories": [],
-    "tags": [],
+    "categories": [
+        "Data Enrichment & Threat Intelligence"
+    ],
+    "tags": [
+        "Plug & Enrich",
+        "Free Enricher"
+    ],
     "useCases": [],
-    "keywords": []
+    "keywords": [],
+    "marketplaces": [
+        "xsoar",
+        "marketplacev2"
+    ]
 }

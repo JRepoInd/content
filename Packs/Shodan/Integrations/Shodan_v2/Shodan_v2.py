@@ -6,19 +6,27 @@ from CommonServerUserPython import *
 
 import json
 import requests
+import urllib3
 
 # Disable insecure warnings
-requests.packages.urllib3.disable_warnings()
+urllib3.disable_warnings()
 
 ''' GLOBALS/PARAMS '''
+API_KEY = demisto.params().get('credentials', {}).get('password') or demisto.params().get('api_key')
 
-API_KEY = demisto.params()['api_key']
+if API_KEY is None:
+    raise ValueError('Missing API key.')
 
 # Remove trailing slash to prevent wrong URL path to service
 API_URL = demisto.params()['api_url'].rstrip('/')
 
 # Should we use SSL
 USE_SSL = not demisto.params().get('insecure', False)
+
+VENDOR = 'shodan'
+PRODUCT = 'banner'
+DEFAULT_MAX_EVENTS = 50_000
+DATE_FORMAT = '%Y-%m-%dT%H:%M:%S.%f'
 
 handle_proxy()
 
@@ -42,6 +50,8 @@ def http_request(method, uri, params=None, data=None, headers=None):
                            verify=USE_SSL)
     if res.status_code == 404:
         return {}
+    if res.status_code == 401:
+        return_error('Error: the Shodan API key is invalid. Please check your API key.')
     if res.status_code != 200:
         error_msg = f'Error in API call {url} [{res.status_code}] - {res.reason}'
         if 'application/json' in res.headers['content-type'] and 'error' in res.json():
@@ -64,7 +74,7 @@ def alert_to_demisto_result(alert):
 
     human_readable = tableToMarkdown(f'Alert ID {ec["Shodan"]["Alert"]["ID"]}', {
         'Name': alert.get('name', ''),
-        'IP': alert.get('filters', {'ip', ''})['ip'],
+        'IP': alert.get('filters', {'ip': ''})['ip'],
         'Expires': ec['Shodan']['Alert']['Expires']
     })
 
@@ -76,6 +86,61 @@ def alert_to_demisto_result(alert):
         'HumanReadableFormat': formats['markdown'],
         'EntryContext': ec
     })
+
+
+def format_record_keys(dict_list: List[Dict]) -> List[Dict]:
+    """
+    Formats dictionary keys by replacing underscores with spaces and capitalizing each word.
+    """
+    new_list = []
+    for input_dict in dict_list:
+        new_dict = {}
+        for key, value in input_dict.items():
+            new_key = key.replace('_', ' ').title()
+            new_dict[new_key] = value
+        new_list.append(new_dict)
+    return new_list
+
+
+def add_time_to_events(events: list[dict]):
+    """
+    Adds the _time key to the events.
+    Args:
+        events: list[dict] - list of events to add the _time key to.
+    Returns:
+        list: The events with the _time key.
+    """
+    if events:
+        for event in events:
+            create_time = arg_to_datetime(event["created"])
+            event["_time"] = create_time.strftime(DATE_FORMAT)  # type: ignore[union-attr]
+
+
+def filter_events(events: list[dict], limit: int, last_run: dict = {}) -> list[dict]:
+    """
+    Filters and sorts events based on the last fetch time, list of excluded IDs, and a limit.
+
+    Args:
+        events (list[dict]): List of events where each event is represented as a dictionary.
+        limit (int): The maximum number of events to return.
+        last_run (dict, optional): Dictionary containing the last fetch time and a list of event IDs to exclude.
+                                   Default is an empty dictionary.
+    """
+
+    if last_fetch_time := arg_to_datetime(last_run.get('last_fetch_time')):
+        events = [event for event in events if parse_event_date(event) >= last_fetch_time]
+
+        if last_ids := last_run.get('last_event_ids'):
+            events = [event for event in events if event['id'] not in last_ids]
+
+    return events[:limit]
+
+
+def parse_event_date(event: Dict) -> datetime:
+    """
+    Parses the 'created' field from an event dictionary into a datetime object.
+    """
+    return datetime.strptime(event['created'], DATE_FORMAT)
 
 
 ''' COMMANDS + REQUESTS FUNCTIONS '''
@@ -110,9 +175,18 @@ def get_scan_status(scan_id):
 
 def test_module():
     """
-    Performs basic get request to get item samples
+    Sends a basic GET request to verify API connectivity and performs a sample event fetch if event fetching is enabled.
     """
-    http_request('GET', '/shodan/ports', {'query': 'test'})
+    params = demisto.params()
+    is_fetch_events = argToBoolean(params.get('isFetchEvents', False))
+
+    if is_fetch_events and not API_KEY:
+        return_error("Missing API key - You must provide API KEY parameter.")
+
+    if API_KEY:
+        http_request('GET', '/shodan/alert/info')  # Checking with API key
+    else:
+        http_request('GET', '/shodan/ports', {'query': 'test'})  # Checking without API key
 
 
 def search_command():
@@ -141,7 +215,7 @@ def search_command():
                     'IP': match.get('ip_str', ''),
                     'Port': match.get('port', 0),
                     'Ssl': {
-                        'versions': match.get('ssl', {'versions': []})['versions']
+                        'versions': match.get('ssl', {'versions': []}).get('versions', [])
                     },
                     'Hostnames': match.get('hostnames', []),
                     'Location': {
@@ -175,67 +249,92 @@ def search_command():
 
 
 def ip_command():
-    ip = demisto.args()['ip']
+    ips = argToList(demisto.args()['ip'])
+    results = []
+    for ip in ips:
+        res = http_request('GET', f'/shodan/host/{ip}')
 
-    res = http_request('GET', f'/shodan/host/{ip}')
+        if not res:
+            results.append(CommandResults(readable_output=f'No information available for the following IP: {ip}'))
+        else:
+            hostnames = res.get('hostnames')
+            # It's a list, only if it exists and not empty we take the first value.
+            hostname = hostnames[0] if hostnames else ''
 
-    if not res:
-        demisto.results('No information available for the given IP.')
-    else:
-        hostnames = res.get('hostnames')
-        # It's a list, only if it exists and not empty we take the first value.
-        hostname = hostnames[0] if hostnames else ''
+            location = f'{round(res.get("latitude", 0.0), 3)},{round(res.get("longitude", 0.0), 3)}'
 
-        location = f'{round(res.get("latitude", 0.0), 3)},{round(res.get("longitude", 0.0), 3)}'
+            relationships_list: list[EntityRelationship] = []
 
-        ip_details = {
-            'ASN': res.get('asn', ''),
-            'Address': ip,
-            'Hostname': hostname,
-            'Geo': {
+            vulns_list = res.get('vulns', [])
+            for v in vulns_list:
+                relationships_list.append(EntityRelationship(
+                    entity_a=ip,
+                    entity_a_type=FeedIndicatorType.IP,
+                    name='related-to',
+                    entity_b=v,
+                    entity_b_type=FeedIndicatorType.CVE,
+                    brand='ShodanV2'))
+
+            dbot_score = Common.DBotScore(
+                indicator=ip,
+                indicator_type=DBotScoreType.IP,
+                reliability=demisto.params().get('integrationReliability'),
+                score=0,
+                integration_name='Shodan_v2'
+            )
+
+            ip_details = Common.IP(
+                ip=ip,
+                dbot_score=dbot_score,
+                asn=res.get('asn', ''),
+                hostname=hostname,
+                geo_country=res.get('country_name', ''),
+                geo_latitude=round(res.get("latitude", 0.0), 3),
+                geo_longitude=round(res.get("longitude", 0.0), 3),
+                relationships=relationships_list
+            )
+
+            shodan_ip_details = {
+                'Tag': res.get('tags', []),
+                'Latitude': res.get('latitude', 0.0),
+                'Longitude': res.get('longitude', 0.0),
+                'Org': res.get('org', ''),
+                'ASN': res.get('asn', ''),
+                'ISP': res.get('isp', ''),
+                'LastUpdate': res.get('last_update', ''),
+                'CountryName': res.get('country_name', ''),
+                'Address': ip,
+                'OS': res.get('os', ''),
+                'Port': res.get('ports', []),
+                'Vulnerabilities': vulns_list
+            }
+
+            title = f'Shodan details for IP {ip}'
+
+            human_readable = {
                 'Country': res.get('country_name', ''),
-                'Location': location
+                'Location': location,
+                'ASN': res.get('asn', ''),
+                'ISP': res.get('isp', ''),
+                'Ports': ', '.join([str(x) for x in res.get('ports', [])]),
+                'Hostname': hostname
             }
-        }
 
-        shodan_ip_details = {
-            'Tag': res.get('tags', []),
-            'Latitude': res.get('latitude', 0.0),
-            'Longitude': res.get('longitude', 0.0),
-            'Org': res.get('org', ''),
-            'ASN': res.get('asn', ''),
-            'ISP': res.get('isp', ''),
-            'LastUpdate': res.get('last_update', ''),
-            'CountryName': res.get('country_name', ''),
-            'Address': ip,
-            'OS': res.get('os', ''),
-            'Port': res.get('ports', [])
-        }
+            readable_output = tableToMarkdown(
+                name=title,
+                t=human_readable,
+                removeNull=True
+            )
 
-        ec = {
-            outputPaths['ip']: ip_details,
-            'Shodan': {
-                'IP': shodan_ip_details
-            }
-        }
-
-        human_readable = tableToMarkdown(f'Shodan details for IP {ip}', {
-            'Country': ec[outputPaths['ip']]['Geo']['Country'],
-            'Location': ec[outputPaths['ip']]['Geo']['Location'],
-            'ASN': ec[outputPaths['ip']]['ASN'],
-            'ISP': ec['Shodan']['IP']['ISP'],
-            'Ports': ', '.join([str(x) for x in ec['Shodan']['IP']['Port']]),
-            'Hostname': ec[outputPaths['ip']]['Hostname']
-        })
-
-        demisto.results({
-            'Type': entryTypes['note'],
-            'Contents': res,
-            'ContentsFormat': formats['json'],
-            'HumanReadable': human_readable,
-            'HumanReadableFormat': formats['markdown'],
-            'EntryContext': ec
-        })
+            results.append(CommandResults(
+                readable_output=readable_output,
+                raw_response=res,
+                outputs=shodan_ip_details,
+                relationships=relationships_list,
+                outputs_prefix='Shodan.IP',
+                indicator=ip_details
+            ))
+    return results
 
 
 def shodan_search_count_command():
@@ -324,8 +423,9 @@ def shodan_scan_status_command():
 def shodan_create_network_alert_command():
     alert_name = demisto.args()['alertName']
     ip = demisto.args()['ip']
+    expires = demisto.args().get('expires', 0)
     try:
-        expires = int(demisto.args().get('expires', 0))
+        expires = int(expires)
     except ValueError:
         return_error(f'Expires must be a number, not {expires}')
 
@@ -417,6 +517,61 @@ def shodan_network_alert_remove_service_from_whitelist_command():
     demisto.results(f'Removed service "{service}" for trigger {trigger} in alert {alert_id} from the whitelist')
 
 
+def get_events_command(args: dict) -> tuple[str, list[dict]]:
+    '''
+    Get events command, used mainly for debugging
+    '''
+    events = http_request('GET', '/shodan/alert/info')
+    if not isinstance(events, list):
+        events = [events]
+
+    limit = arg_to_number(args.get("max_fetch")) or DEFAULT_MAX_EVENTS
+    events = filter_events(events, limit)
+
+    hr = tableToMarkdown(f"{VENDOR.title()} - {PRODUCT.title()} Events:", format_record_keys(events))
+    return hr, events
+
+
+def fetch_events(last_run: dict, params: dict[str, str]) -> tuple[Dict, List[Dict]]:
+    """
+    Fetches events from an API, filters them, and updates the last_run data with the latest event's date.
+
+    Args:
+        last_run (dict): A dictionary containing data from the last run. It should include 'last_fetch_time'
+                         and 'last_event_ids', which represent the last fetch time and IDs of the last events processed.
+        params (dict[str, str]): Dictionary of parameters. It should include 'max_fetch' to define the maximum number
+                                 of events to fetch.
+
+    Returns:
+        tuple[Dict, List[Dict]]: A tuple where the first item is the updated last_run data, including the latest fetch
+                                 time and event IDs, and the second item is a list of filtered events.
+    """
+    if not last_run.get("last_fetch_time"):  # If this is a first run
+        last_run = {'last_fetch_time': datetime.now().strftime(DATE_FORMAT)}
+        demisto.debug('First run detected. Setting last_fetch_time to now.')
+        return last_run, []
+
+    events = http_request('GET', '/shodan/alert/info')
+    if not isinstance(events, list):
+        events = [events]
+    demisto.debug(f'Fetched {len(events)} events before filtering')
+
+    limit = arg_to_number(params.get("max_fetch")) or DEFAULT_MAX_EVENTS
+    events_filtered = filter_events(events, limit, last_run)
+    demisto.debug(f'After filtering, {len(events_filtered)} events remain')
+
+    if events_filtered:
+        latest_fetch_time = max(parse_event_date(event) for event in events_filtered)
+        latest_event_ids = [event.get("id") for event in events_filtered if parse_event_date(event) == latest_fetch_time]
+
+        last_run["last_fetch_time"] = latest_fetch_time.strftime(DATE_FORMAT)
+        last_run['last_event_ids'] = latest_event_ids
+    else:
+        demisto.debug('No new events found after filtering')
+
+    return last_run, events_filtered
+
+
 ''' COMMANDS MANAGER / SWITCH PANEL '''
 
 if demisto.command() == 'test-module':
@@ -426,7 +581,7 @@ if demisto.command() == 'test-module':
 elif demisto.command() == 'search':
     search_command()
 elif demisto.command() == 'ip':
-    ip_command()
+    return_results(ip_command())
 elif demisto.command() == 'shodan-search-count':
     shodan_search_count_command()
 elif demisto.command() == 'shodan-scan-ip':
@@ -451,3 +606,29 @@ elif demisto.command() == 'shodan-network-alert-whitelist-service':
     shodan_network_alert_whitelist_service_command()
 elif demisto.command() == 'shodan-network-alert-remove-service-from-whitelist':
     shodan_network_alert_remove_service_from_whitelist_command()
+elif demisto.command() == 'shodan-get-events':
+    args = demisto.args()
+    hr, events = get_events_command(args)
+    return_results(CommandResults(readable_output=hr))
+    should_push_events = argToBoolean(args.get('should_push_events'))
+    if should_push_events:
+        add_time_to_events(events)
+        send_events_to_xsiam(
+            events,
+            vendor=VENDOR,
+            product=PRODUCT
+        )
+elif demisto.command() == 'fetch-events':
+    params = demisto.params()
+    last_run = demisto.getLastRun()
+    demisto.debug(f'Last_run before the fetch: {last_run}')
+    next_run, events = fetch_events(last_run, params)
+
+    add_time_to_events(events)
+    send_events_to_xsiam(
+        events=events,
+        vendor=VENDOR,
+        product=PRODUCT
+    )
+    demisto.debug(f'last_run after the fetch {last_run}')
+    demisto.setLastRun(next_run)

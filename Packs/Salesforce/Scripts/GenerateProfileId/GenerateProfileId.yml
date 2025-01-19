@@ -10,8 +10,7 @@ comment: Generate profileId by user data.
 enabled: true
 scripttarget: 0
 subtype: python3
-runonce: false
-dockerimage: demisto/python3:3.9.1.14969
+dockerimage: demisto/python3:3.11.10.115186
 runas: DBotWeakRole
 fromversion: 6.0.0
 tests:

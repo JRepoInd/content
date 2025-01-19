@@ -3,7 +3,9 @@ from CommonServerPython import *
 import traceback
 
 # Disable insecure warnings
-requests.packages.urllib3.disable_warnings()
+import urllib3
+urllib3.disable_warnings()
+
 
 '''CLIENT CLASS'''
 
@@ -12,6 +14,7 @@ class Client(BaseClient):
     """
     Atlassian IAM Client class that implements logic to authenticate with Atlassian.
     """
+
     def __init__(self, base_url, directory_id, headers, ok_codes=None, verify=True, proxy=False):
         super().__init__(base_url, verify=verify, proxy=proxy, ok_codes=ok_codes, headers=headers)
         self.directory_id = directory_id
@@ -21,22 +24,29 @@ class Client(BaseClient):
         res = self._http_request(method='GET', url_suffix=uri)
         return res
 
-    def get_user(self, username):
+    def get_user(self, filter_name, filter_value):
         uri = f'/scim/directory/{self.directory_id}/Users'
         query_params = {
-            'filter': f'userName eq "{username}"'
+            'filter': f'{filter_name} eq "{filter_value}"'
         }
+
+        if filter_name == 'id':
+            uri += f'/{filter_value}'
+            query_params = {}
+
         res = self._http_request(
             method='GET',
             url_suffix=uri,
             params=query_params
         )
-        if res and res.get('totalResults') == 1:
-            user_app_data = res.get('Resources')[0]
+        if res:
+            user_app_data = res.get('Resources')[0] if res.get('totalResults') == 1 else res
             user_id = user_app_data.get('id')
             is_active = user_app_data.get('active')
             username = user_app_data.get('userName')
-            return IAMUserAppData(user_id, username, is_active, user_app_data)
+            email = get_first_primary_email_by_scim_schema(user_app_data)
+
+            return IAMUserAppData(user_id, username, is_active, user_app_data, email)
         return None
 
     def create_user(self, user_data):
@@ -52,8 +62,9 @@ class Client(BaseClient):
         user_id = user_app_data.get('id')
         is_active = user_app_data.get('active')
         username = user_app_data.get('userName')
+        email = get_first_primary_email_by_scim_schema(user_app_data)
 
-        return IAMUserAppData(user_id, username, is_active, user_app_data)
+        return IAMUserAppData(user_id, username, is_active, user_app_data, email)
 
     def update_user(self, user_id, user_data):
         if isinstance(user_data.get('emails'), dict):
@@ -129,7 +140,7 @@ class Client(BaseClient):
         user_profile.set_result(action=action,
                                 success=False,
                                 error_code=error_code,
-                                error_message=error_message)
+                                error_message=f'{error_message}\n{traceback.format_exc()}')
 
         demisto.error(traceback.format_exc())
 
@@ -149,7 +160,7 @@ def get_mapping_fields(client: Client) -> GetMappingFieldsResponse:
     :return: (GetMappingFieldsResponse) An object that represents the user schema
     """
     app_fields = client.get_app_fields()
-    incident_type_scheme = SchemeTypeMapping(type_name=IAMUserProfile.INDICATOR_TYPE)
+    incident_type_scheme = SchemeTypeMapping(type_name=IAMUserProfile.DEFAULT_INCIDENT_TYPE)
 
     for field, description in app_fields.items():
         incident_type_scheme.add_field(field, description)
@@ -168,18 +179,20 @@ def main():
     base_url = params.get('url')
     if base_url[-1] != '/':
         base_url += '/'
-    access_token = params.get('access_token')
+    access_token = params.get('access_token_creds', {}).get('password') or params.get('access_token')
     directory_id = params.get('directory_id')
 
     mapper_in = params.get('mapper_in')
     mapper_out = params.get('mapper_out')
     is_create_enabled = params.get("create_user_enabled")
     is_disable_enabled = params.get("disable_user_enabled")
+    is_enable_enabled = params.get("enable_user_enabled")
     is_update_enabled = demisto.params().get("update_user_enabled")
     create_if_not_exists = demisto.params().get("create_if_not_exists")
 
-    iam_command = IAMCommand(is_create_enabled, is_disable_enabled, is_update_enabled,
-                             create_if_not_exists, mapper_in, mapper_out, attr='username')
+    iam_command = IAMCommand(is_create_enabled, is_enable_enabled, is_disable_enabled, is_update_enabled,
+                             create_if_not_exists, mapper_in, mapper_out,
+                             get_user_iam_attrs=['id', 'userName', 'emails'])
 
     headers = {
         'Content-Type': 'application/json',
@@ -223,7 +236,7 @@ def main():
 
     except Exception:
         # For any other integration command exception, return an error
-        return_error(f'Failed to execute {command} command. Traceback: {traceback.format_exc()}')
+        return_error(f'Failed to execute {command} command.')
 
 
 from IAMApiModule import *  # noqa: E402

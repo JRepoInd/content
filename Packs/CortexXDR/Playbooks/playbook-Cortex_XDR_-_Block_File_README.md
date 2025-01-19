@@ -20,7 +20,7 @@ This playbook does not use any scripts.
 
 | **Name** | **Description** | **Default Value** | **Required** |
 | --- | --- | --- | --- |
-| HashList | List of hashed files you want to blacklist. Must be a valid SHA256 hash. |  | Optional |
+| HashList | List of hashed files you want to add to block list. Must be a valid SHA256 hash. |  | Optional |
 
 ## Playbook Outputs
 ---
@@ -28,4 +28,4 @@ There are no outputs for this playbook.
 
 ## Playbook Image
 ---
-![Cortex XDR - Block File](https://raw.githubusercontent.com/demisto/content/d7b8843c1f247d799cde3e54a294e7b8e2f31af7/Packs/CortexXDR/doc_files/Cortex_XDR_-_Block_File.png)
+![Cortex XDR - Block File](../doc_files/Cortex_XDR_-_Block_File.png)

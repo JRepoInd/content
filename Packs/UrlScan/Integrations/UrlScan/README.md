@@ -10,12 +10,14 @@
 <strong>Name</strong>: a textual name for the integration instance.</li>
 <li><strong>Server URL (e.g. https://urlscan.io/api/v1/ )</strong></li>
 <li><strong>API Key (needed only for submitting URLs for scanning)</strong></li>
+<li><strong>Scan Visibility</strong>: Determines the visibility level of the scan. This will override the 'public submissions' setting.</li>
 <li><strong>Source Reliability.</strong> Reliability of the source providing the intelligence data. (The default value is C - Fairly reliable)</li>
+<li><strong>Scan Country.</strong> Specify which country the scan should be performed from. If you omit this value, urlscan will try to do automatic country detection based on the TLD of the URL, GeoIP information of the server and of the user.</li>
 <li><strong>Trust any certificate (not secure)</strong></li>
 <li><strong>Use system proxy settings</strong></li>
 <li>
 <strong>URL Threshold. </strong>Minimum number of positive results from urlscan.io to consider the URL malicious.</li>
-<li>
+<li><strong>User Agent</strong>: User Agent used during scans with this integration.</li>
 </ul>
 </li>
 <li>Click <strong>Test</strong> to validate the URLs, token, and connection.</li>
@@ -30,6 +32,7 @@
 <h3 id="h_66414687541541575058084">1. Search for indicators</h3>
 <hr>
 <p>Search for an indicator that is related to previous urlscan.io scans.</p>
+<p>Notice: Submitting indicators using this command might make the indicator data publicly available. See the vendor’s documentation for more details.</p>
 <h5>Base Command</h5>
 <p><code>urlscan-search</code></p>
 <h5>Input</h5>
@@ -46,6 +49,11 @@
 <td style="width: 145px;">searchParameter</td>
 <td style="width: 492px;">Enter a parameter to search as a string (IP, File name, sha256, url, domain)</td>
 <td style="width: 71px;">Required</td>
+</tr>
+<tr>
+<td style="width: 145px;">searchType</td>
+<td style="width: 492px;">Allows querying multiple search parameters</td>
+<td style="width: 71px;">Optional</td>
 </tr>
 </tbody>
 </table>
@@ -104,6 +112,7 @@
 <h5> </h5>
 <h5>Command Example</h5>
 <p><code>!urlscan-search searchParameter=8.8.8.8</code></p>
+<p><code>!urlscan-search searchType=advanced searchParameter="filename:logo.png AND date:>now-24h"</code></p>
 <h3 id="h_872696191351541575062805">2. (Deprecated) Submit a URL directly to urlscan.io</h3>
 <hr>
 <p>Submits a URL to urlscan.io.</p>
@@ -133,6 +142,16 @@
 <tr>
 <td style="width: 165px;">public</td>
 <td style="width: 446px;">Will the submission be public or private</td>
+<td style="width: 97px;">Optional</td>
+</tr>
+<tr>
+<td style="width: 165px;">useragent</td>
+<td style="width: 446px;">User Agent used to perform scans</td>
+<td style="width: 97px;">Optional</td>
+</tr>
+<tr>
+<td style="width: 165px;">scan_visibility</td>
+<td style="width: 446px;">The submission visibility. If specified, overrides the 'public' parameter</td>
 <td style="width: 97px;">Optional</td>
 </tr>
 </tbody>
@@ -251,6 +270,21 @@
 <td style="width: 166px;">wait</td>
 <td style="width: 446px;">Time interval (in seconds) between retries, if the API rate limit is reached. This argument is optional, but if you specify the retries argument, you need to specify this argument.</td>
 <td style="width: 96px;">Optional</td>
+</tr>
+<tr>
+<td style="width: 166px;">useragent</td>
+<td style="width: 446px;">User Agent used to perform scans</td>
+<td style="width: 96px;">Optional</td>
+</tr>
+<tr>
+<td style="width: 165px;">scan_visibility</td>
+<td style="width: 446px;">The submission visibility. If specified, overrides the 'public' parameter</td>
+<td style="width: 97px;">Optional</td>
+</tr>
+<tr>
+<td style="width: 165px;">use_url_as_name</td>
+<td style="width: 446px;">Whether to use the URL as the screenshot name. Default is false which sets screenshot name to screenshot.png</td>
+<td style="width: 97px;">Optional</td>
 </tr>
 </tbody>
 </table>

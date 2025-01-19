@@ -1,6 +1,6 @@
+import demistomock as demisto  # noqa: F401
+from CommonServerPython import *  # noqa: F401
 ''' IMPORTS '''
-import demistomock as demisto
-from CommonServerPython import *
 
 from polyswarm_api.api import PolyswarmAPI
 
@@ -115,7 +115,8 @@ class PolyswarmConnector():
         dbot_score = Common.DBotScore(indicator=md5,
                                       indicator_type=DBotScoreType.FILE,
                                       integration_name='PolySwarm',
-                                      score=self.get_score(polyscore))
+                                      score=self.get_score(polyscore),
+                                      reliability=demisto.params().get('integrationReliability'))
 
         indicator = Common.File(md5=md5,
                                 sha1=sha1,
@@ -229,8 +230,8 @@ class PolyswarmConnector():
         artifacts = argToList(param[artifact_type])
 
         for artifact in artifacts:
-            title = 'PolySwarm %s Reputation for: %s' % (artifact_type.upper(),
-                                                         artifact)
+            title = 'PolySwarm {} Reputation for: {}'.format(artifact_type.upper(),
+                                                             artifact)
 
             demisto.debug(f'[url_reputation] {title}')
 
@@ -243,7 +244,7 @@ class PolyswarmConnector():
             if artifact_type == 'ip':
                 try:
                     socket.inet_aton(artifact)
-                except socket.error:
+                except OSError:
                     return_error('Invalid IP Address: {ip}'.
                                  format(ip=artifact))
 
@@ -278,11 +279,16 @@ class PolyswarmConnector():
             elif artifact_type == 'domain':
                 object_name = 'Domain'
                 dbot_score_type = DBotScoreType.DOMAIN
+            else:
+                dbot_score_type = ''
+                object_name = ''
+                demisto.debug(f" {artifact_type=} -> {dbot_score_type=} {object_name=}")
 
             dbot_score = Common.DBotScore(indicator=artifact,
                                           indicator_type=dbot_score_type,
                                           integration_name='PolySwarm',
-                                          score=self.get_score(polyscore))
+                                          score=self.get_score(polyscore),
+                                          reliability=demisto.params().get('integrationReliability'))
 
             indicator = None
             if artifact_type == 'ip':
@@ -316,7 +322,7 @@ class PolyswarmConnector():
 
 def main():
     ''' EXECUTION '''
-    LOG('command is %s' % (demisto.command(),))
+    LOG(f'command is {demisto.command()}')
     try:
         polyswarm = PolyswarmConnector()
 

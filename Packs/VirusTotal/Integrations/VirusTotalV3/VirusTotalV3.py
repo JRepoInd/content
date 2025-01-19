@@ -1,14 +1,16 @@
+import demistomock as demisto  # noqa: F401
+from CommonServerPython import *  # noqa: F401
 """
 An integration module for the Virus Total v3 API.
 API Documentation:
-    https://developers.virustotal.com/v3.0/reference
+    https://docs.virustotal.com/reference/overview
 """
 from collections import defaultdict
-from typing import Callable
+from typing import cast
+from collections.abc import Callable
 
 from dateparser import parse
-
-from CommonServerPython import *
+import ipaddress
 
 INTEGRATION_NAME = "VirusTotal"
 COMMAND_PREFIX = "vt"
@@ -22,8 +24,18 @@ INDICATOR_TYPE = {
     'url': FeedIndicatorType.URL
 }
 
+severity_levels = {'SEVERITY_UNKNOWN': 'UNKNOWN',
+                   'SEVERITY_LOW': 'LOW',
+                   'SEVERITY_MEDIUM': 'MEDIUM',
+                   'SEVERITY_HIGH': 'HIGH'}
 
-""" RELATIONSHIP TYPE"""
+verdicts = {'VERDICT_UNKNOWN': 'UNKNOWN',
+            'VERDICT_UNDETECTED': 'UNDETECTED',
+            'VERDICT_SUSPICIOUS': 'SUSPICIOUS',
+            'VERDICT_MALICIOUS': 'MALICIOUS'}
+
+
+"""RELATIONSHIP TYPE"""
 RELATIONSHIP_TYPE = {
     'file': {
         'carbonblack_children': EntityRelationship.Relationships.CREATES,
@@ -84,6 +96,176 @@ RELATIONSHIP_TYPE = {
 }
 
 
+class VTFile(Common.File):
+    """VT File Indicator."""
+
+    def __init__(
+            self,
+            dbot_score,
+            count_vt_vendors_which_flagged_malicious=None,
+            vt_vendors_which_flagged_malicious=None,
+            vt_detection_names=None,
+            **kwargs
+    ):
+        super().__init__(
+            dbot_score,
+            **kwargs
+        )
+
+        self.count_vt_vendors_which_flagged_malicious = count_vt_vendors_which_flagged_malicious
+        self.vt_vendors_which_flagged_malicious = vt_vendors_which_flagged_malicious
+        self.vt_detection_names = vt_detection_names
+
+    def to_context(self):
+        context = super().to_context()
+        file_context = context[super().CONTEXT_PATH]
+
+        file_context['VTVendors'] = {}
+
+        if self.count_vt_vendors_which_flagged_malicious is not None:
+            file_context['VTVendors']['EngineDetections'] = self.count_vt_vendors_which_flagged_malicious
+
+        if self.vt_vendors_which_flagged_malicious is not None:
+            file_context['VTVendors']['EngineVendors'] = self.vt_vendors_which_flagged_malicious
+
+        if self.vt_detection_names is not None:
+            file_context['VTVendors']['EngineDetectionNames'] = self.vt_detection_names
+
+        if not file_context['VTVendors']:
+            file_context.pop('VTVendors', None)
+
+        return context
+
+
+class VTIP(Common.IP):
+    """VT IP Indicator."""
+
+    def __init__(
+            self,
+            ip,
+            dbot_score,
+            count_vt_vendors_which_flagged_malicious=None,
+            vt_vendors_which_flagged_malicious=None,
+            vt_detection_names=None,
+            **kwargs
+    ):
+        super().__init__(
+            ip,
+            dbot_score,
+            **kwargs
+        )
+
+        self.count_vt_vendors_which_flagged_malicious = count_vt_vendors_which_flagged_malicious
+        self.vt_vendors_which_flagged_malicious = vt_vendors_which_flagged_malicious
+        self.vt_detection_names = vt_detection_names
+
+    def to_context(self):
+        context = super().to_context()
+        file_context = context[super().CONTEXT_PATH]
+
+        file_context['VTVendors'] = {}
+
+        if self.count_vt_vendors_which_flagged_malicious is not None:
+            file_context['VTVendors']['EngineDetections'] = self.count_vt_vendors_which_flagged_malicious
+
+        if self.vt_vendors_which_flagged_malicious is not None:
+            file_context['VTVendors']['EngineVendors'] = self.vt_vendors_which_flagged_malicious
+
+        if self.vt_detection_names is not None:
+            file_context['VTVendors']['EngineDetectionNames'] = self.vt_detection_names
+
+        if not file_context['VTVendors']:
+            file_context.pop('VTVendors', None)
+
+        return context
+
+
+class VTURL(Common.URL):
+    """VT URL Indicator."""
+
+    def __init__(
+            self,
+            url,
+            dbot_score,
+            count_vt_vendors_which_flagged_malicious=None,
+            vt_vendors_which_flagged_malicious=None,
+            vt_detection_names=None,
+            **kwargs
+    ):
+        super().__init__(
+            url,
+            dbot_score,
+            **kwargs
+        )
+
+        self.count_vt_vendors_which_flagged_malicious = count_vt_vendors_which_flagged_malicious
+        self.vt_vendors_which_flagged_malicious = vt_vendors_which_flagged_malicious
+        self.vt_detection_names = vt_detection_names
+
+    def to_context(self):
+        context = super().to_context()
+        file_context = context[super().CONTEXT_PATH]
+
+        file_context['VTVendors'] = {}
+
+        if self.count_vt_vendors_which_flagged_malicious is not None:
+            file_context['VTVendors']['EngineDetections'] = self.count_vt_vendors_which_flagged_malicious
+
+        if self.vt_vendors_which_flagged_malicious is not None:
+            file_context['VTVendors']['EngineVendors'] = self.vt_vendors_which_flagged_malicious
+
+        if self.vt_detection_names is not None:
+            file_context['VTVendors']['EngineDetectionNames'] = self.vt_detection_names
+
+        if not file_context['VTVendors']:
+            file_context.pop('VTVendors', None)
+
+        return context
+
+
+class VTDomain(Common.Domain):
+    """VT Domain Indicator."""
+
+    def __init__(
+            self,
+            domain,
+            dbot_score,
+            count_vt_vendors_which_flagged_malicious=None,
+            vt_vendors_which_flagged_malicious=None,
+            vt_detection_names=None,
+            **kwargs
+    ):
+        super().__init__(
+            domain,
+            dbot_score,
+            **kwargs
+        )
+
+        self.count_vt_vendors_which_flagged_malicious = count_vt_vendors_which_flagged_malicious
+        self.vt_vendors_which_flagged_malicious = vt_vendors_which_flagged_malicious
+        self.vt_detection_names = vt_detection_names
+
+    def to_context(self):
+        context = super().to_context()
+        file_context = context[super().CONTEXT_PATH]
+
+        file_context['VTVendors'] = {}
+
+        if self.count_vt_vendors_which_flagged_malicious is not None:
+            file_context['VTVendors']['EngineDetections'] = self.count_vt_vendors_which_flagged_malicious
+
+        if self.vt_vendors_which_flagged_malicious is not None:
+            file_context['VTVendors']['EngineVendors'] = self.vt_vendors_which_flagged_malicious
+
+        if self.vt_detection_names is not None:
+            file_context['VTVendors']['EngineDetectionNames'] = self.vt_detection_names
+
+        if not file_context['VTVendors']:
+            file_context.pop('VTVendors', None)
+
+        return context
+
+
 class Client(BaseClient):
     """
     Attributes:
@@ -95,11 +277,15 @@ class Client(BaseClient):
     def __init__(self, params: dict):
         self.is_premium = argToBoolean(params['is_premium_api'])
         self.reliability = DBotScoreReliability.get_dbot_score_reliability_from_str(params['feedReliability'])
+
         super().__init__(
             'https://www.virustotal.com/api/v3/',
             verify=not argToBoolean(params.get('insecure')),
             proxy=argToBoolean(params.get('proxy')),
-            headers={'x-apikey': params['credentials']['password']}
+            headers={
+                'x-apikey': params['credentials']['password'],
+                'x-tool': 'CortexVirusTotalV3'
+            }
         )
 
     # region Reputation calls
@@ -107,41 +293,52 @@ class Client(BaseClient):
     def ip(self, ip: str, relationships: str = '') -> dict:
         """
         See Also:
-            https://developers.virustotal.com/v3.0/reference#ip-info
+            https://docs.virustotal.com/reference/ip-info
         """
         return self._http_request(
             'GET',
-            f'ip_addresses/{ip}?relationships={relationships}'
+            f'ip_addresses/{ip}?relationships={relationships}', ok_codes=(404, 429, 200)
         )
 
     def file(self, file: str, relationships: str = '') -> dict:
         """
         See Also:
-            https://developers.virustotal.com/v3.0/reference#file
+            https://docs.virustotal.com/reference/file
         """
         return self._http_request(
             'GET',
-            f'files/{file}?relationships={relationships}'
+            f'files/{file}?relationships={relationships}', ok_codes=(404, 429, 200)
+        )
+
+    # It is not a Reputation call
+    def private_file(self, file: str) -> dict:
+        """
+        See Also:
+            https://docs.virustotal.com/reference/private-files-info
+        """
+        return self._http_request(
+            'GET',
+            f'private/files/{file}', ok_codes=(404, 429, 200)
         )
 
     def url(self, url: str, relationships: str = ''):
         """
         See Also:
-            https://developers.virustotal.com/v3.0/reference#url
+            https://docs.virustotal.com/reference/url
         """
         return self._http_request(
             'GET',
-            f'urls/{encode_url_to_base64(url)}?relationships={relationships}'
+            f'urls/{encode_url_to_base64(url)}?relationships={relationships}', ok_codes=(404, 429, 200)
         )
 
     def domain(self, domain: str, relationships: str = '') -> dict:
         """
         See Also:
-            https://developers.virustotal.com/v3.0/reference#domain-info
+            https://docs.virustotal.com/reference/domain-info
         """
         return self._http_request(
             'GET',
-            f'domains/{domain}?relationships={relationships}'
+            f'domains/{domain}?relationships={relationships}', ok_codes=(404, 429, 200)
         )
 
     # endregion
@@ -150,7 +347,7 @@ class Client(BaseClient):
     def delete_comment(self, id_: str):
         """
         See Also:
-            https://developers.virustotal.com/v3.0/reference#comment-id-delete
+            https://docs.virustotal.com/reference/comment-id-delete
         """
         self._http_request(
             'DELETE',
@@ -161,7 +358,7 @@ class Client(BaseClient):
     def get_ip_comments(self, ip: str, limit: int) -> dict:
         """
         See Also:
-            https://developers.virustotal.com/v3.0/reference#ip-comments-get
+            https://docs.virustotal.com/reference/ip-comments-get
         """
 
         return self._http_request(
@@ -173,7 +370,7 @@ class Client(BaseClient):
     def get_url_comments(self, url: str, limit: int) -> dict:
         """
         See Also:
-            https://developers.virustotal.com/v3.0/reference#urls-comments-get
+            https://docs.virustotal.com/reference/urls-comments-get
 
         """
         return self._http_request(
@@ -185,7 +382,7 @@ class Client(BaseClient):
     def get_hash_comments(self, file_hash: str, limit: int) -> dict:
         """
         See Also:
-            https://developers.virustotal.com/v3.0/reference#files-comments-get
+            https://docs.virustotal.com/reference/files-comments-get
         """
         return self._http_request(
             'GET',
@@ -196,7 +393,7 @@ class Client(BaseClient):
     def get_domain_comments(self, domain: str, limit: int) -> dict:
         """
         See Also:
-            https://developers.virustotal.com/v3.0/reference#domains-comments-get
+            https://docs.virustotal.com/reference/domains-comments-get
         """
         return self._http_request(
             'GET',
@@ -207,7 +404,7 @@ class Client(BaseClient):
     def get_comment_by_id(self, comment_id: str) -> dict:
         """
         See Also:
-            https://developers.virustotal.com/v3.0/reference#get-comment
+            https://docs.virustotal.com/reference/get-comment
         """
         return self._http_request(
             'GET',
@@ -233,28 +430,28 @@ class Client(BaseClient):
     def add_comment_to_ip(self, ip: str, comment: str) -> dict:
         """
         See Also:
-            https://developers.virustotal.com/v3.0/reference#ip-comments-post
+            https://docs.virustotal.com/reference/ip-comments-post
         """
         return self.add_comment(f'ip_addresses/{ip}/comments', comment)
 
     def add_comment_to_url(self, url: str, comment: str) -> dict:
         """
         See Also:
-            https://developers.virustotal.com/v3.0/reference#urls-comments-post
+            https://docs.virustotal.com/reference/urls-comments-post
         """
         return self.add_comment(f'urls/{encode_url_to_base64(url)}/comments', comment)
 
     def add_comment_to_domain(self, domain: str, comment: str) -> dict:
         """
         See Also:
-            https://developers.virustotal.com/v3.0/reference#domains-comments-post
+            https://docs.virustotal.com/reference/domains-comments-post
         """
         return self.add_comment(f'domains/{domain}/comments', comment)
 
     def add_comment_to_file(self, resource: str, comment: str) -> dict:
         """
         See Also:
-            https://developers.virustotal.com/v3.0/reference#files-comments-post
+            https://docs.virustotal.com/reference/files-comments-post
         """
         return self.add_comment(f'files/{resource}/comments', comment)
 
@@ -264,7 +461,7 @@ class Client(BaseClient):
     def file_rescan(self, file_hash: str) -> dict:
         """
         See Also:
-            https://developers.virustotal.com/v3.0/reference#files-analyse
+            https://docs.virustotal.com/reference/files-analyse
         """
         return self._http_request(
             'POST',
@@ -274,11 +471,14 @@ class Client(BaseClient):
     def file_scan(self, file_path: str, /, upload_url: Optional[str]) -> dict:
         """
         See Also:
-            https://developers.virustotal.com/v3.0/reference#files-scan
+            https://docs.virustotal.com/reference/files-scan
         """
         response: requests.Response
         with open(file_path, 'rb') as file:
-            if upload_url:
+            if upload_url or os.stat(file_path).st_size / (1024 * 1024) >= 32:
+                if not upload_url:
+                    raw_response = self.get_upload_url()
+                    upload_url = raw_response['data']
                 response = self._http_request(
                     'POST',
                     full_url=upload_url,
@@ -298,20 +498,59 @@ class Client(BaseClient):
         )
         return response.json()
 
+    def private_file_scan(self, file_path: str) -> dict:
+        """
+        See Also:
+            https://docs.virustotal.com/reference/upload-file-private-scanning
+        """
+        response: requests.Response
+        with open(file_path, 'rb') as file:
+            if os.stat(file_path).st_size / (1024 * 1024) >= 32:
+                raw_response = self.get_private_upload_url()
+                upload_url = raw_response['data']
+                response = self._http_request(
+                    'POST',
+                    full_url=upload_url,
+                    files={'file': file},
+                    resp_type='response'
+                )
+            else:
+                response = self._http_request(
+                    'POST',
+                    url_suffix='/private/files',
+                    files={'file': file},
+                    resp_type='response'
+                )
+        demisto.debug(
+            f'scan_file response:\n'
+            f'{str(response.status_code)=}, {str(response.headers)=}, {str(response.content)}'
+        )
+        return response.json()
+
     def get_upload_url(self) -> dict:
         """
         See Also:
-            https://developers.virustotal.com/v3.0/reference#files-upload-url
+            https://docs.virustotal.com/reference/files-upload-url
         """
         return self._http_request(
             'GET',
             'files/upload_url'
         )
 
+    def get_private_upload_url(self) -> dict:
+        """
+        See Also:
+            https://docs.virustotal.com/reference/private-files-upload-url
+        """
+        return self._http_request(
+            'GET',
+            'private/files/upload_url'
+        )
+
     def url_scan(self, url: str) -> dict:
         """
         See Also:
-            https://developers.virustotal.com/v3.0/reference#urls
+            https://docs.virustotal.com/reference/scan-url
         """
         return self._http_request(
             'POST',
@@ -324,29 +563,30 @@ class Client(BaseClient):
     def file_sandbox_report(self, file_hash: dict, limit: int) -> dict:
         """
         See Also:
-            https://developers.virustotal.com/v3.0/reference#files-relationships
+            https://docs.virustotal.com/reference/files-relationships
         """
         return self._http_request(
             'GET',
             f'files/{file_hash}/behaviours',
-            params={'limit': limit}
+            params={'limit': limit},
+            ok_codes=(404, 429, 200)
         )
 
-    def passive_dns_data(self, ip: str, limit: int) -> dict:
+    def passive_dns_data(self, id: dict, limit: int) -> dict:
         """
         See Also:
-            https://developers.virustotal.com/v3.0/reference#ip-relationships
+            https://docs.virustotal.com/reference/ip-relationships
         """
         return self._http_request(
             'GET',
-            f'ip_addresses/{ip}/resolutions',
+            f'{"ip_addresses" if id["type"] == "ip" else "domains"}/{id["value"]}/resolutions',
             params={'limit': limit}
         )
 
     def search(self, query: str, limit: int) -> dict:
         """
         See Also:
-            https://developers.virustotal.com/v3.0/reference#search-1
+            https://docs.virustotal.com/reference/api-search
         """
         return self._http_request(
             'GET',
@@ -357,11 +597,41 @@ class Client(BaseClient):
     def get_analysis(self, analysis_id: str) -> dict:
         """
         See Also:
-            https://developers.virustotal.com/v3.0/reference#analysis
+            https://docs.virustotal.com/reference/analysis
         """
         return self._http_request(
             'GET',
             f'/analyses/{analysis_id}'
+        )
+
+    def get_private_analysis(self, analysis_id: str) -> dict:
+        """
+        See Also:
+            https://docs.virustotal.com/reference/private-analysis
+        """
+        return self._http_request(
+            'GET',
+            f'private/analyses/{analysis_id}'
+        )
+
+    def get_private_file_from_analysis(self, analysis_id: str) -> dict:
+        """
+        See Also:
+            https://docs.virustotal.com/reference/private-analyses-object-item
+        """
+        return self._http_request(
+            'GET',
+            f'private/analyses/{analysis_id}/item?attributes=threat_severity,threat_verdict'
+        )
+
+    def get_file_sigma_analysis(self, file_hash: str) -> dict:
+        """
+        See Also:
+            https://docs.virustotal.com/reference/files#relationships
+        """
+        return self._http_request(
+            'GET',
+            f'files/{file_hash}/sigma_analysis',
         )
 
     # region Premium commands
@@ -372,11 +642,10 @@ class Client(BaseClient):
             indicator_type: urls or domains
             relationship: a relationship to search for
         See Also:
-            https://developers.virustotal.com/v3.0/reference#urls-relationships
-            https://developers.virustotal.com/v3.0/reference#domains-relationships
-            https://developers.virustotal.com/v3.0/reference#ip-relationships
+            https://docs.virustotal.com/reference/urls-relationships
+            https://docs.virustotal.com/reference/domains-relationships
+            https://docs.virustotal.com/reference/ip-relationships
         """
-
         return self._http_request(
             'GET',
             urljoin(urljoin(indicator_type, indicator), relationship)
@@ -387,7 +656,7 @@ class Client(BaseClient):
         Wrapper of get_relationship
 
         See Also:
-                https://developers.virustotal.com/v3.0/reference#domains-relationships
+                https://docs.virustotal.com/reference/domains-relationships
         """
         return self.get_relationship(domain, 'domains', relationship)
 
@@ -396,7 +665,7 @@ class Client(BaseClient):
         Wrapper of get_domain_relationships
 
         See Also:
-            https://developers.virustotal.com/v3.0/reference#domains-relationships
+            https://docs.virustotal.com/reference/domains-relationships
         """
         return self.get_domain_relationships(
             domain,
@@ -408,7 +677,7 @@ class Client(BaseClient):
         Wrapper of get_domain_relationships
 
         See Also:
-            https://developers.virustotal.com/v3.0/reference#domains-relationships
+            https://docs.virustotal.com/reference/domains-relationships
         """
         return self.get_domain_relationships(
             domain,
@@ -420,7 +689,7 @@ class Client(BaseClient):
         Wrapper of get_domain_relationships
 
         See Also:
-                https://developers.virustotal.com/v3.0/reference#domains-relationships
+                https://docs.virustotal.com/reference/domains-relationships
         """
         return self.get_domain_relationships(
             domain,
@@ -432,7 +701,7 @@ class Client(BaseClient):
         Wrapper of get_relationship
 
         See Also:
-                https://developers.virustotal.com/v3.0/reference#urls-relationships
+                https://docs.virustotal.com/reference/urls-relationships
         """
         return self.get_relationship(encode_url_to_base64(url), 'urls', relationship)
 
@@ -441,7 +710,7 @@ class Client(BaseClient):
         Wrapper of url_relationships
 
         See Also:
-                https://developers.virustotal.com/v3.0/reference#urls-relationships
+                https://docs.virustotal.com/reference/urls-relationships
         """
         return self.get_url_relationships(
             url,
@@ -453,7 +722,7 @@ class Client(BaseClient):
         Wrapper of url_relationships
 
         See Also:
-                https://developers.virustotal.com/v3.0/reference#urls-relationships
+                https://docs.virustotal.com/reference/urls-relationships
         """
         return self.get_url_relationships(
             url,
@@ -465,7 +734,7 @@ class Client(BaseClient):
         Wrapper of url_relationships
 
         See Also:
-                https://developers.virustotal.com/v3.0/reference#urls-relationships
+                https://docs.virustotal.com/reference/urls-relationships
         """
         return self.get_url_relationships(
             url,
@@ -477,7 +746,7 @@ class Client(BaseClient):
         Wrapper of get_relationship
 
         See Also:
-                https://developers.virustotal.com/v3.0/reference#urls-relationships
+                https://docs.virustotal.com/reference/urls-relationships
         """
         return self.get_relationship(ip, 'ip_addresses', relationship)
 
@@ -486,7 +755,7 @@ class Client(BaseClient):
         Wrapper of get_ip_relationships
 
         See Also:
-            https://developers.virustotal.com/v3.0/reference#urls-relationships
+            https://docs.virustotal.com/reference/urls-relationships
         """
         return self.get_ip_relationships(
             ip,
@@ -498,7 +767,7 @@ class Client(BaseClient):
         Wrapper of get_ip_relationships
 
         See Also:
-            https://developers.virustotal.com/v3.0/reference#urls-relationships
+            https://docs.virustotal.com/reference/urls-relationships
         """
         return self.get_ip_relationships(
             ip,
@@ -510,7 +779,7 @@ class Client(BaseClient):
         Wrapper of get_ip_relationships
 
         See Also:
-                https://developers.virustotal.com/v3.0/reference#urls-relationships
+                https://docs.virustotal.com/reference/urls-relationships
         """
         return self.get_ip_relationships(
             ip,
@@ -523,6 +792,9 @@ class ScoreCalculator:
     """
     Calculating DBotScore of files, ip, etc.
     """
+    DEFAULT_SUSPICIOUS_THRESHOLD = 5
+    DEFAULT_RELATIONSHIP_SUSPICIOUS_THRESHOLD = 2
+
     logs: List[str]
 
     # General
@@ -530,53 +802,69 @@ class ScoreCalculator:
     trusted_vendors: List[str]
 
     # IP
-    ip_threshold: int
-    url_threshold: int
+    ip_threshold: dict[str, int]
+
+    # URL
+    url_threshold: dict[str, int]
 
     # Domain
-    domain_threshold: int
+    domain_threshold: dict[str, int]
     domain_popularity_ranking: int
 
     # File
-    file_threshold: int
+    file_threshold: dict[str, int]
     sigma_ids_threshold: int
     crowdsourced_yara_rules_enabled: bool
     crowdsourced_yara_rules_threshold: int
-    relationship_threshold: int
+    relationship_threshold: dict[str, int]
 
     def __init__(self, params: dict):
         self.trusted_vendors = argToList(params['preferredVendors'])
-        trusted_vendors_threshold = arg_to_number_must_int(
-            params['preferredVendorsThreshold'],
-            arg_name='Preferred Vendor Threshold',
-            required=True
-        )
-        assert isinstance(trusted_vendors_threshold, int)
         self.trusted_vendors_threshold = arg_to_number_must_int(
             params['preferredVendorsThreshold'],
             arg_name='Preferred Vendor Threshold',
             required=True
         )
-        self.file_threshold = arg_to_number_must_int(
-            params['fileThreshold'],
-            arg_name='File Threshold',
-            required=True
-        )
-        self.ip_threshold = arg_to_number_must_int(
-            params['ipThreshold'],
-            arg_name='IP Threshold',
-            required=True
-        )
-        self.url_threshold = arg_to_number_must_int(
-            params['urlThreshold'],
-            arg_name='URL Threshold',
-            required=True
-        )
-        self.domain_threshold = arg_to_number_must_int(
-            params['domainThreshold'],
-            arg_name='Domain Threshold',
-            required=True
-        )
+        self.file_threshold = {
+            'malicious': arg_to_number_must_int(
+                params['fileThreshold'],
+                arg_name='File Malicious Threshold',
+                required=True),
+            'suspicious': arg_to_number_must_int(
+                params['fileSuspiciousThreshold'] or self.DEFAULT_SUSPICIOUS_THRESHOLD,
+                arg_name='File Suspicious Threshold',
+                required=True)
+        }
+        self.ip_threshold = {
+            'malicious': arg_to_number_must_int(
+                params['ipThreshold'],
+                arg_name='IP Malicious Threshold',
+                required=True),
+            'suspicious': arg_to_number_must_int(
+                params['ipSuspiciousThreshold'] or self.DEFAULT_SUSPICIOUS_THRESHOLD,
+                arg_name='IP Suspicious Threshold',
+                required=True)
+        }
+        self.url_threshold = {
+            'malicious': arg_to_number_must_int(
+                params['urlThreshold'],
+                arg_name='URL Malicious Threshold',
+                required=True),
+            'suspicious': arg_to_number_must_int(
+                params['urlSuspiciousThreshold'] or self.DEFAULT_SUSPICIOUS_THRESHOLD,
+                arg_name='URL Suspicious Threshold',
+                required=True)
+        }
+        self.domain_threshold = {
+            'malicious': arg_to_number_must_int(
+                params['domainThreshold'],
+                arg_name='Domain Malicious Threshold',
+                required=True),
+            'suspicious': arg_to_number_must_int(
+                params['domainSuspiciousThreshold'] or self.DEFAULT_SUSPICIOUS_THRESHOLD,
+                arg_name='Domain Suspicious Threshold',
+                required=True)
+        }
         self.crowdsourced_yara_rules_enabled = argToBoolean(params['crowdsourced_yara_rules_enabled'])
         self.crowdsourced_yara_rules_threshold = arg_to_number_must_int(params['yaraRulesThreshold'])
         self.sigma_ids_threshold = arg_to_number_must_int(
@@ -589,22 +877,50 @@ class ScoreCalculator:
             arg_name='Domain Popularity Ranking Threshold',
             required=True
         )
-        self.relationship_threshold = arg_to_number_must_int(
-            params['relationship_threshold'],
-            arg_name='Relationship Files Threshold',
-            required=True
-        )
-        self.logs = list()
+        self.relationship_threshold = {
+            'malicious': arg_to_number_must_int(
+                params['relationship_threshold'],
+                arg_name='Relationship Files Malicious Threshold',
+                required=True),
+            'suspicious': arg_to_number_must_int(
+                params['relationship_suspicious_threshold'] or self.DEFAULT_RELATIONSHIP_SUSPICIOUS_THRESHOLD,
+                arg_name='Relationship Files Suspicious Threshold',
+                required=True)
+        }
+        self.logs = []
 
     def get_logs(self) -> str:
         """Returns the log string
         """
         return '\n'.join(self.logs)
 
+    def _is_by_threshold(self, analysis_stats: dict, threshold: int, suspicious: bool = False) -> bool:
+        """Determines whatever the indicator malicious/suspicious by threshold.
+        if number of malicious (+ suspicious) >= threshold -> Malicious (Suspicious)
+
+        Args:
+            analysis_stats: the analysis stats from the response.
+            threshold: the threshold of the indicator type.
+            suspicious: whether suspicious is also added.
+
+        Returns:
+            Whatever the indicator is malicious/suspicious by threshold.
+        """
+        total = analysis_stats.get('malicious', 0)
+        if suspicious:
+            total += analysis_stats.get('suspicious', 0)
+        veredict = 'suspicious' if suspicious else 'malicious'
+        self.logs.append(f'{total} vendors found {veredict}.\n'
+                         f'The {veredict} threshold is {threshold}.')
+        if total >= threshold:
+            self.logs.append(f'Found as {veredict}: {total} >= {threshold}.')
+            return True
+        self.logs.append(f'Not found {veredict} by threshold: {total} < {threshold}.')
+        return False
+
     def is_suspicious_by_threshold(self, analysis_stats: dict, threshold: int) -> bool:
         """Determines whatever the indicator suspicious by threshold.
-        if number of malicious >= threshold /2 ||
-        number of suspicious >= threshold -> Suspicious
+        if number of malicious + suspicious >= threshold -> Suspicious
 
         Args:
             analysis_stats: the analysis stats from the response
@@ -613,17 +929,7 @@ class ScoreCalculator:
         Returns:
             Whatever the indicator is suspicious by threshold.
         """
-        if analysis_stats.get('malicious', 0) >= threshold / 2:
-            self.logs.append(
-                f'Found at least suspicious by {(analysis_stats.get("malicious", 0) >= threshold / 2)=}. '
-            )
-            return True
-        elif analysis_stats.get('suspicious', 0) >= threshold:
-            self.logs.append(
-                f'Found at least suspicious by {(analysis_stats.get("suspicious", 0) >= threshold)=}. '
-            )
-            return True
-        return False
+        return self._is_by_threshold(analysis_stats, threshold, suspicious=True)
 
     def is_good_by_popularity_ranks(self, popularity_ranks: dict) -> Optional[bool]:
         """Analyzing popularity ranks.
@@ -635,14 +941,11 @@ class ScoreCalculator:
             Whatever the indicator is good or not by popularity rank.
         """
         if popularity_ranks:
-            self.logs.append(
-                'Found popularity ranks. Analyzing. '
-            )
+            self.logs.append('Found popularity ranks. Analyzing.')
             average = sum(rank.get('rank', 0) for rank in popularity_ranks.values()) / len(popularity_ranks)
             self.logs.append(
-                f'The average of the ranks is {average} and the threshold is {self.domain_popularity_ranking}'
-            )
-            if average >= self.domain_popularity_ranking:
+                f'The average of the ranks is {average} and the threshold is {self.domain_popularity_ranking}')
+            if average <= self.domain_popularity_ranking:
                 self.logs.append('Indicator is good by popularity ranks.')
                 return True
             else:
@@ -656,7 +959,7 @@ class ScoreCalculator:
 
         crowdsourced_yara_results >= yara_rules_threshold ||
         sigma_analysis_stats.high + critical >= sigma_id_threshold ||
-         crowdsourced_ids_stats.high + critical >= sigma_id_threshold -> suspicious
+        crowdsourced_ids_stats.high + critical >= sigma_id_threshold -> suspicious
 
         Args:
             file_response: the file response
@@ -666,56 +969,37 @@ class ScoreCalculator:
         """
         data = file_response.get('data', {})
         if self.crowdsourced_yara_rules_enabled:
-            self.logs.append(
-                'Crowdsourced Yara Rules analyzing enabled. '
-            )
+            self.logs.append('Crowdsourced Yara Rules analyzing enabled.')
             if (total_yara_rules := len(
                     data.get('crowdsourced_yara_results', []))) >= self.crowdsourced_yara_rules_threshold:
                 self.logs.append(
                     'Found malicious by finding more Crowdsourced Yara Rules than threshold. \n'
-                    f'{total_yara_rules=} >= {self.crowdsourced_yara_rules_threshold=}'
-                )
+                    f'{total_yara_rules} >= {self.crowdsourced_yara_rules_threshold}')
                 return True
             if sigma_rules := data.get('sigma_analysis_stats'):
-                self.logs.append(
-                    'Found sigma rules, analyzing. '
-                )
+                self.logs.append('Found sigma rules, analyzing.')
                 sigma_high, sigma_critical = sigma_rules.get('high', 0), sigma_rules.get('critical', 0)
                 if (sigma_high + sigma_critical) >= self.sigma_ids_threshold:
                     self.logs.append(
-                        f'Found malicious, {(sigma_high + sigma_critical)=} >= {self.sigma_ids_threshold=}. '
-                    )
+                        f'Found malicious, {sigma_high + sigma_critical} >= {self.sigma_ids_threshold}. ')
                     return True
                 else:
-                    self.logs.append(
-                        'Not found malicious by sigma. '
-                    )
+                    self.logs.append('Not found malicious by sigma. ')
             else:
-                self.logs.append(
-                    'Not found sigma analysis. Skipping. '
-                )
+                self.logs.append('Not found sigma analysis. Skipping. ')
             if crowdsourced_ids_stats := data.get('crowdsourced_ids_stats'):
-                self.logs.append(
-                    'Found crowdsourced IDS analysis, analyzing. '
-                )
+                self.logs.append('Found crowdsourced IDS analysis, analyzing. ')
                 ids_high, ids_critical = crowdsourced_ids_stats.get('high'), crowdsourced_ids_stats.get('critical')
                 if (ids_high + ids_critical) >= self.sigma_ids_threshold:
                     self.logs.append(
-                        f'Found malicious, {((ids_high + ids_critical) >= self.sigma_ids_threshold)=}. '
-                    )
+                        f'Found malicious, {(ids_high + ids_critical) >= self.sigma_ids_threshold}.')
                     return True
                 else:
-                    self.logs.append(
-                        'Not found malicious by sigma. '
-                    )
+                    self.logs.append('Not found malicious by sigma.')
             else:
-                self.logs.append(
-                    'Not found crowdsourced IDS analysis. Skipping. '
-                )
+                self.logs.append('Not found crowdsourced IDS analysis. Skipping.')
         else:
-            self.logs.append(
-                'Crowdsourced Yara Rules analyzing is not enabled. Skipping. '
-            )
+            self.logs.append('Crowdsourced Yara Rules analyzing is not enabled. Skipping.')
         return False
 
     def is_preferred_vendors_pass_malicious(self, analysis_results: dict) -> bool:
@@ -752,7 +1036,7 @@ class ScoreCalculator:
 
     def is_malicious_by_threshold(self, analysis_stats: dict, threshold: int) -> bool:
         """Determines whatever the indicator malicious by threshold.
-        if number of malicious >= threshold -< Malicious
+        if number of malicious >= threshold -> Malicious
 
         Args:
             analysis_stats: the analysis stats from the response
@@ -761,31 +1045,22 @@ class ScoreCalculator:
         Returns:
             Whatever the indicator is malicious by threshold.
         """
-        total_malicious = analysis_stats.get('malicious', 0)
-        self.logs.append(
-            f'{total_malicious} vendors found malicious. \n'
-            f'The malicious threshold is {threshold}. '
-        )
-        if total_malicious >= threshold:
-            self.logs.append(f'Found as malicious: {total_malicious=} >= {threshold=}. ')
-            return True
-        self.logs.append(f'Not found malicious by threshold: {total_malicious=} >= {threshold=}. ')
-        return False
+        return self._is_by_threshold(analysis_stats, threshold)
 
-    def score_by_threshold(self, analysis_stats: dict, threshold: int) -> int:
+    def score_by_threshold(self, analysis_stats: dict, threshold: dict[str, int]) -> int:
         """Determines the DBOTSCORE of the indicator by threshold only.
 
         Returns:
             DBotScore of the indicator. Can by Common.DBotScore.BAD, Common.DBotScore.SUSPICIOUS or
             Common.DBotScore.GOOD
         """
-        if self.is_malicious_by_threshold(analysis_stats, threshold):
+        if self.is_malicious_by_threshold(analysis_stats, threshold['malicious']):
             return Common.DBotScore.BAD
-        if self.is_suspicious_by_threshold(analysis_stats, threshold):
+        if self.is_suspicious_by_threshold(analysis_stats, threshold['suspicious']):
             return Common.DBotScore.SUSPICIOUS
         return Common.DBotScore.GOOD
 
-    def score_by_results_and_stats(self, indicator: str, raw_response: dict, threshold: int) -> int:
+    def score_by_results_and_stats(self, indicator: str, raw_response: dict, threshold: dict[str, int]) -> int:
         """Determines indicator score by popularity preferred vendors and threshold.
 
         Args:
@@ -799,10 +1074,10 @@ class ScoreCalculator:
         """
         self.logs.append(f'Basic analyzing of "{indicator}"')
         data = raw_response.get('data', {})
-        attributes = data['attributes']
+        attributes = data.get('attributes', {})
         popularity_ranks = attributes.get('popularity_ranks')
-        last_analysis_results = attributes['last_analysis_results']
-        last_analysis_stats = attributes['last_analysis_stats']
+        last_analysis_results = attributes.get('last_analysis_results')
+        last_analysis_stats = attributes.get('last_analysis_stats')
         if self.is_good_by_popularity_ranks(popularity_ranks):
             return Common.DBotScore.GOOD
         if self.is_preferred_vendors_pass_malicious(last_analysis_results):
@@ -824,7 +1099,7 @@ class ScoreCalculator:
             DBotScore of the indicator. Can by Common.DBotScore.BAD, Common.DBotScore.SUSPICIOUS or
             Common.DBotScore.GOOD
         """
-        self.logs.append(f'Analysing file hash {given_hash}. ')
+        self.logs.append(f'Analysing file hash {given_hash}.')
         data = raw_response.get('data', {})
         attributes = data.get('attributes', {})
         analysis_results = attributes.get('last_analysis_results', {})
@@ -841,23 +1116,18 @@ class ScoreCalculator:
         suspicious_by_rules = self.is_suspicious_by_rules(raw_response)
         if score == Common.DBotScore.SUSPICIOUS and suspicious_by_rules:
             self.logs.append(
-                f'Hash: "{given_hash}" was found malicious as the hash is suspicious both by threshold and rules '
-                f'analysis.'
-            )
+                f'Hash: "{given_hash}" was found malicious as the '
+                'hash is suspicious both by threshold and rules analysis.')
             return Common.DBotScore.BAD
         elif suspicious_by_rules:
             self.logs.append(
-                f'Hash: "{given_hash}" was found suspicious by rules analysis.'
-            )
+                f'Hash: "{given_hash}" was found suspicious by rules analysis.')
             return Common.DBotScore.SUSPICIOUS
         elif score == Common.DBotScore.SUSPICIOUS:
             self.logs.append(
-                f'Hash: "{given_hash}" was found suspicious by passing the threshold analysis.'
-            )
+                f'Hash: "{given_hash}" was found suspicious by passing the threshold analysis.')
             return Common.DBotScore.SUSPICIOUS
-        self.logs.append(
-            f'Hash: "{given_hash}" was found good'
-        )
+        self.logs.append(f'Hash: "{given_hash}" was found good.')
         return Common.DBotScore.GOOD  # Nothing caught
 
     def ip_score(self, ip: str, raw_response: dict) -> int:
@@ -875,9 +1145,7 @@ class ScoreCalculator:
             DBotScore of the indicator. Can by Common.DBotScore.BAD, Common.DBotScore.SUSPICIOUS or
             Common.DBotScore.GOOD
         """
-        return self.score_by_results_and_stats(
-            ip, raw_response, self.ip_threshold
-        )
+        return self.score_by_results_and_stats(ip, raw_response, self.ip_threshold)
 
     def url_score(self, indicator: str, raw_response: dict) -> int:
         """Determines indicator score by popularity preferred vendors and threshold.
@@ -908,8 +1176,8 @@ class ScoreCalculator:
     # region Premium analysis
     def is_malicious_or_suspicious_by_relationship_files(self, relationship_files_response: dict, lookback=20) -> int:
         """Checks maliciousness of indicator on relationship files. Look on the recent 20 results returned.
-            if (number of relationship files that are malicious > threshold) -> Bad
-            if (number of relationship files that are malicious > threshold / 2) -> suspicious
+            if (number of relationship files that are malicious >= malicious threshold) -> Bad
+            if (number of relationship files that are malicious + suspicious >= suspicious threshold) -> suspicious
             else good
         Args:
             relationship_files_response: The raw_response of the relationship call
@@ -921,24 +1189,25 @@ class ScoreCalculator:
         """
         files = relationship_files_response.get('data', [])[:lookback]  # lookback on recent 20 results. By design
         total_malicious = 0
+        total_suspicious = 0
         for file in files:
-            if file_hash := file.get('sha256', file.get('sha1', file.get('md5', file.get('ssdeep')))):
-                if self.file_score(file_hash, files) == Common.DBotScore.BAD:
-                    total_malicious += 1
+            file_hash = file.get('sha256', file.get('sha1', file.get('md5', file.get('ssdeep'))))
+            if file_hash and self.file_score(file_hash, files) == Common.DBotScore.BAD:
+                total_malicious += 1
+            elif file_hash and self.file_score(file_hash, files) == Common.DBotScore.SUSPICIOUS:
+                total_suspicious += 1
 
-        if total_malicious >= self.url_threshold:
+        if total_malicious >= self.relationship_threshold['malicious']:
             self.logs.append(
-                f'Found malicious by relationship files. {total_malicious=} >= {self.relationship_threshold}'
-            )
+                f'Found malicious by relationship files. {total_malicious} >= {self.relationship_threshold["malicious"]}')
             return Common.DBotScore.BAD
-        if total_malicious >= self.url_threshold / 2:
+        if total_suspicious >= self.relationship_threshold['suspicious']:
             self.logs.append(
-                f'Found suspicious by relationship files. {total_malicious=} >= {self.relationship_threshold}'
-            )
+                'Found suspicious by relationship files. '
+                f'{total_malicious + total_suspicious} >= {self.relationship_threshold["suspicious"]}')
             return Common.DBotScore.SUSPICIOUS
         self.logs.append(
-            f'Found safe by relationship files. {total_malicious=} >= {self.relationship_threshold}'
-        )
+            f'Found safe by relationship files. {total_malicious} < {self.relationship_threshold["suspicious"]}')
         return Common.DBotScore.GOOD
 
     def analyze_premium_scores(
@@ -964,9 +1233,7 @@ class ScoreCalculator:
         is_suspicious = False
         for func in relationship_functions:
             self.logs.append(f'Analyzing by {func.__name__}')
-            premium_score = self.is_malicious_or_suspicious_by_relationship_files(
-                func(indicator)
-            )
+            premium_score = self.is_malicious_or_suspicious_by_relationship_files(func(indicator))
             if premium_score == Common.DBotScore.BAD:
                 return premium_score
             if premium_score == Common.DBotScore.SUSPICIOUS and base_score == Common.DBotScore.SUSPICIOUS:
@@ -1019,8 +1286,8 @@ class ScoreCalculator:
             base_score,
             [
                 client.get_domain_communicating_files,
-                client.get_url_downloaded_files,
-                client.get_url_referrer_files
+                client.get_domain_downloaded_files,
+                client.get_domain_referrer_files
             ]
         )
 
@@ -1139,26 +1406,129 @@ def decrease_data_size(data: Union[dict, list]) -> Union[dict, list]:
     return data
 
 
-def build_domain_output(
-        client: Client,
-        score_calculator: ScoreCalculator,
-        domain: str,
-        raw_response: dict,
-        extended_data: bool):
+def _get_error_result(client: Client, ioc_id: str, ioc_type: str, message: str) -> CommandResults:
+    dbot_type = ioc_type.upper()
+    assert dbot_type in ('FILE', 'DOMAIN', 'IP', 'URL')
+    common_type = dbot_type if dbot_type in ('IP', 'URL') else dbot_type.capitalize()
+    desc = f'{common_type} "{ioc_id}" {message}'
+    dbot = Common.DBotScore(ioc_id,
+                            getattr(DBotScoreType, dbot_type),
+                            INTEGRATION_NAME,
+                            Common.DBotScore.NONE,
+                            desc,
+                            client.reliability)
+    options: dict[str, Common.DBotScore | str] = {'dbot_score': dbot}
+    if dbot_type == 'FILE':
+        options[get_hash_type(ioc_id)] = ioc_id
+    else:
+        options[dbot_type.lower()] = ioc_id
+    return CommandResults(indicator=getattr(Common, common_type)(**options), readable_output=desc)
+
+
+def build_unknown_output(client: Client, ioc_id: str, ioc_type: str) -> CommandResults:
+    return _get_error_result(client, ioc_id, ioc_type, 'was not found in VirusTotal')
+
+
+def build_quota_exceeded_output(client: Client, ioc_id: str, ioc_type: str) -> CommandResults:
+    return _get_error_result(client, ioc_id, ioc_type, 'was not enriched. Quota was exceeded.')
+
+
+def build_error_output(client: Client, ioc_id: str, ioc_type: str) -> CommandResults:
+    return _get_error_result(client, ioc_id, ioc_type, 'could not be processed')
+
+
+def build_unknown_file_output(client: Client, file: str) -> CommandResults:
+    return build_unknown_output(client, file, 'file')
+
+
+def build_quota_exceeded_file_output(client: Client, file: str) -> CommandResults:
+    return build_quota_exceeded_output(client, file, 'file')
+
+
+def build_error_file_output(client: Client, file: str) -> CommandResults:
+    return build_error_output(client, file, 'file')
+
+
+def build_unknown_domain_output(client: Client, domain: str) -> CommandResults:
+    return build_unknown_output(client, domain, 'domain')
+
+
+def build_quota_exceeded_domain_output(client: Client, domain: str) -> CommandResults:
+    return build_quota_exceeded_output(client, domain, 'domain')
+
+
+def build_error_domain_output(client: Client, domain: str) -> CommandResults:
+    return build_error_output(client, domain, 'domain')
+
+
+def build_unknown_url_output(client: Client, url: str) -> CommandResults:
+    return build_unknown_output(client, url, 'url')
+
+
+def build_quota_exceeded_url_output(client: Client, url: str) -> CommandResults:
+    return build_quota_exceeded_output(client, url, 'url')
+
+
+def build_error_url_output(client: Client, url: str) -> CommandResults:
+    return build_error_output(client, url, 'url')
+
+
+def build_unknown_ip_output(client: Client, ip: str) -> CommandResults:
+    return build_unknown_output(client, ip, 'ip')
+
+
+def build_quota_exceeded_ip_output(client: Client, ip: str) -> CommandResults:
+    return build_quota_exceeded_output(client, ip, 'ip')
+
+
+def build_error_ip_output(client: Client, ip: str) -> CommandResults:
+    return build_error_output(client, ip, 'ip')
+
+
+def build_skipped_enrichment_ip_output(client: Client, ip: str) -> CommandResults:
+    return _get_error_result(client, ip, 'ip',
+                             'was not enriched. Reputation lookups have been disabled for private IP addresses.')
+
+
+def _get_domain_indicator(client: Client, score_calculator: ScoreCalculator, domain: str, raw_response: dict):
     data = raw_response.get('data', {})
     attributes = data.get('attributes', {})
-    relationships_response = data.get('relationships', {})
-    whois: defaultdict = get_whois(attributes.get('whois', ''))
+    last_analysis_stats = attributes.get('last_analysis_stats', {})
+    detection_engines = sum(last_analysis_stats.values())
+    positive_detections = last_analysis_stats.get('malicious', 0)
+    whois = get_whois(attributes.get('whois', ''))
+
     score = score_calculator.domain_score(domain, raw_response)
-    if score != Common.DBotScore.BAD and client.is_premium:
-        score = score_calculator.analyze_premium_domain_score(client, domain, score)
+
     logs = score_calculator.get_logs()
     demisto.debug(logs)
-    relationships_list = create_relationships(entity_a=domain, entity_a_type=FeedIndicatorType.Domain,
-                                              relationships_response=relationships_response,
-                                              reliability=client.reliability)
-    domain_indicator = Common.Domain(
+
+    relationships_response = data.get('relationships', {})
+    relationships_list = create_relationships(
+        entity_a=domain,
+        entity_a_type=FeedIndicatorType.Domain,
+        relationships_response=relationships_response,
+        reliability=client.reliability
+    )
+
+    vt_vendors_which_flagged_malicious = {
+        x['engine_name']: x['result'] for x in attributes.get('last_analysis_results', {}).values()
+        if x.get('category') == 'malicious'
+    }
+
+    return VTDomain(
         domain=domain,
+        dbot_score=Common.DBotScore(
+            domain,
+            DBotScoreType.DOMAIN,
+            INTEGRATION_NAME,
+            score=score,
+            malicious_description=logs,
+            reliability=client.reliability,
+        ),
+        count_vt_vendors_which_flagged_malicious=len(vt_vendors_which_flagged_malicious),
+        vt_vendors_which_flagged_malicious=list(vt_vendors_which_flagged_malicious.keys()),
+        vt_detection_names=list(vt_vendors_which_flagged_malicious.values()),
         name_servers=whois['Name Server'],
         creation_date=whois['Creation Date'],
         updated_date=whois['Updated Date'],
@@ -1171,20 +1541,192 @@ def build_domain_output(
         registrar_name=whois['Registrar'],
         registrar_abuse_email=whois['Registrar Abuse Contact Email'],
         registrar_abuse_phone=whois['Registrar Abuse Contact Phone'],
+        detection_engines=detection_engines,
+        positive_detections=positive_detections,
+        relationships=relationships_list,
+    )
+
+
+def _get_url_indicator(client: Client, score_calculator: ScoreCalculator, url: str, raw_response: dict):
+    data = raw_response.get('data', {})
+    attributes = data.get('attributes', {})
+    last_analysis_stats = attributes.get('last_analysis_stats', {})
+    detection_engines = sum(last_analysis_stats.values())
+    positive_detections = last_analysis_stats.get('malicious', 0)
+
+    score = score_calculator.url_score(url, raw_response)
+
+    logs = score_calculator.get_logs()
+    demisto.debug(logs)
+
+    relationships_response = data.get('relationships', {})
+    relationships_list = create_relationships(
+        entity_a=url,
+        entity_a_type=FeedIndicatorType.URL,
+        relationships_response=relationships_response,
+        reliability=client.reliability
+    )
+
+    vt_vendors_which_flagged_malicious = {
+        x['engine_name']: x['result'] for x in attributes.get('last_analysis_results', {}).values()
+        if x.get('category') == 'malicious'
+    }
+
+    return VTURL(
+        url,
         dbot_score=Common.DBotScore(
-            domain,
-            DBotScoreType.DOMAIN,
+            url,
+            DBotScoreType.URL,
+            INTEGRATION_NAME,
+            score=score,
+            reliability=client.reliability,
+            malicious_description=logs,
+        ),
+        count_vt_vendors_which_flagged_malicious=len(vt_vendors_which_flagged_malicious),
+        vt_vendors_which_flagged_malicious=list(vt_vendors_which_flagged_malicious.keys()),
+        vt_detection_names=list(vt_vendors_which_flagged_malicious.values()),
+        category=attributes.get('categories'),
+        detection_engines=detection_engines,
+        positive_detections=positive_detections,
+        relationships=relationships_list,
+    )
+
+
+def _get_ip_indicator(client: Client, score_calculator: ScoreCalculator, ip: str, raw_response: dict):
+    data = raw_response.get('data', {})
+    attributes = data.get('attributes', {})
+    last_analysis_stats = attributes.get('last_analysis_stats', {})
+    detection_engines = sum(last_analysis_stats.values())
+    positive_engines = last_analysis_stats.get('malicious', 0)
+
+    score = score_calculator.ip_score(ip, raw_response)
+
+    logs = score_calculator.get_logs()
+    demisto.debug(logs)
+
+    relationships_response = data.get('relationships', {})
+    relationships_list = create_relationships(
+        entity_a=ip,
+        entity_a_type=FeedIndicatorType.IP,
+        relationships_response=relationships_response,
+        reliability=client.reliability
+    )
+
+    vt_vendors_which_flagged_malicious = {
+        x['engine_name']: x['result'] for x in attributes.get('last_analysis_results', {}).values()
+        if x.get('category') == 'malicious'
+    }
+
+    return VTIP(
+        ip,
+        dbot_score=Common.DBotScore(
+            ip,
+            DBotScoreType.IP,
             INTEGRATION_NAME,
             score=score,
             malicious_description=logs,
-            reliability=client.reliability
+            reliability=client.reliability,
         ),
-        relationships=relationships_list
+        count_vt_vendors_which_flagged_malicious=len(vt_vendors_which_flagged_malicious),
+        vt_vendors_which_flagged_malicious=list(vt_vendors_which_flagged_malicious.keys()),
+        vt_detection_names=list(vt_vendors_which_flagged_malicious.values()),
+        asn=attributes.get('asn'),
+        geo_country=attributes.get('country'),
+        detection_engines=detection_engines,
+        positive_engines=positive_engines,
+        as_owner=attributes.get('as_owner'),
+        relationships=relationships_list,
     )
+
+
+def _get_file_indicator(client: Client, score_calculator: ScoreCalculator, file_hash: str, raw_response: dict):
+    data = raw_response.get('data', {})
+    attributes = data.get('attributes', {})
+    exiftool = attributes.get('exiftool', {})
+    signature_info = attributes.get('signature_info', {})
+
+    score = score_calculator.file_score(file_hash, raw_response)
+
+    logs = score_calculator.get_logs()
+    demisto.debug(logs)
+
+    relationships_response = data.get('relationships', {})
+    relationships_list = create_relationships(
+        entity_a=file_hash,
+        entity_a_type=FeedIndicatorType.File,
+        relationships_response=relationships_response,
+        reliability=client.reliability
+    )
+
+    vt_vendors_which_flagged_malicious = {
+        x['engine_name']: x['result'] for x in attributes.get('last_analysis_results', {}).values()
+        if x.get('category') == 'malicious'
+    }
+
+    return VTFile(
+        dbot_score=Common.DBotScore(
+            file_hash,
+            DBotScoreType.FILE,
+            integration_name=INTEGRATION_NAME,
+            score=score,
+            malicious_description=logs,
+            reliability=client.reliability,
+        ),
+        count_vt_vendors_which_flagged_malicious=len(vt_vendors_which_flagged_malicious),
+        vt_vendors_which_flagged_malicious=list(vt_vendors_which_flagged_malicious.keys()),
+        vt_detection_names=list(vt_vendors_which_flagged_malicious.values()),
+        name=exiftool.get('OriginalFileName'),
+        size=attributes.get('size'),
+        sha1=attributes.get('sha1'),
+        sha256=attributes.get('sha256'),
+        file_type=exiftool.get('MIMEType'),
+        md5=attributes.get('md5'),
+        ssdeep=attributes.get('ssdeep'),
+        extension=exiftool.get('FileTypeExtension'),
+        company=exiftool.get('CompanyName'),
+        product_name=exiftool.get('ProductName'),
+        tags=attributes.get('tags'),
+        signature=Common.FileSignature(
+            authentihash=attributes.get('authentihash'),
+            copyright=signature_info.get('copyright'),
+            file_version=signature_info.get('file version'),
+            description=signature_info.get('description'),
+            internal_name=signature_info.get('internal name'),
+            original_name=signature_info.get('original name'),
+        ),
+        relationships=relationships_list,
+    )
+
+
+def build_domain_output(
+        client: Client,
+        score_calculator: ScoreCalculator,
+        domain: str,
+        raw_response: dict,
+        extended_data: bool
+) -> CommandResults:
+    data = raw_response.get('data', {})
+    attributes = data.get('attributes', {})
+
+    last_analysis_stats = attributes.get('last_analysis_stats', {})
+    positive_engines = last_analysis_stats.get('malicious', 0)
+    detection_engines = sum(last_analysis_stats.values())
+
+    whois = get_whois(attributes.get('whois', ''))
+
+    relationships_response = data.get('relationships', {})
+    relationships_list = create_relationships(
+        entity_a=domain,
+        entity_a_type=FeedIndicatorType.Domain,
+        relationships_response=relationships_response,
+        reliability=client.reliability
+    )
+
+    domain_indicator = _get_domain_indicator(client, score_calculator, domain, raw_response)
+
     if not extended_data:
         data = decrease_data_size(data)
 
-    attributes = data.get('attributes', {})
     return CommandResults(
         outputs_prefix=f'{INTEGRATION_ENTRY_CONTEXT}.Domain',
         outputs_key_field='id',
@@ -1192,16 +1734,19 @@ def build_domain_output(
         readable_output=tableToMarkdown(
             f'Domain data of {domain}',
             {
-                'last_modified': epoch_to_timestamp(attributes.get('last_modification_date')),
                 **data,
+                **attributes,
                 **whois,
-                **attributes
+                'last_modified': epoch_to_timestamp(attributes.get('last_modification_date')),
+                'positives': f'{positive_engines}/{detection_engines}'
             },
             headers=[
                 'id',
                 'Registrant Country',
+                'Registrar',
                 'last_modified',
-                'last_analysis_stats'
+                'reputation',
+                'positives'
             ],
             removeNull=True,
             headerTransform=underscoreToCamelCase
@@ -1220,37 +1765,25 @@ def build_url_output(
         extended_data: bool
 ) -> CommandResults:
     data = raw_response.get('data', {})
-    score = score_calculator.url_score(url, raw_response)
-    if score != Common.DBotScore.BAD and client.is_premium:
-        score = score_calculator.analyze_premium_url_score(client, url, score)
-    logs = score_calculator.get_logs()
-    demisto.debug(logs)
-    # creating readable output
     attributes = data.get('attributes', {})
+
     last_analysis_stats = attributes.get('last_analysis_stats', {})
-    relationships_response = data.get('relationships', {})
     positive_detections = last_analysis_stats.get('malicious', 0)
     detection_engines = sum(last_analysis_stats.values())
-    relationships_list = create_relationships(entity_a=url, entity_a_type=FeedIndicatorType.URL,
-                                              relationships_response=relationships_response,
-                                              reliability=client.reliability)
-    url_indicator = Common.URL(
-        url,
-        category=attributes.get('categories'),
-        detection_engines=detection_engines,
-        positive_detections=positive_detections,
-        relationships=relationships_list,
-        dbot_score=Common.DBotScore(
-            url,
-            DBotScoreType.URL,
-            INTEGRATION_NAME,
-            score=score,
-            reliability=client.reliability,
-            malicious_description=logs
-        )
+
+    relationships_response = data.get('relationships', {})
+    relationships_list = create_relationships(
+        entity_a=url,
+        entity_a_type=FeedIndicatorType.URL,
+        relationships_response=relationships_response,
+        reliability=client.reliability
     )
+
+    url_indicator = _get_url_indicator(client, score_calculator, url, raw_response)
+
     if not extended_data:
         data = decrease_data_size(data)
+
     return CommandResults(
         outputs_prefix=f'{INTEGRATION_ENTRY_CONTEXT}.URL',
         outputs_key_field='id',
@@ -1259,19 +1792,19 @@ def build_url_output(
             f'URL data of "{url}"',
             {
                 **data,
-                **data.get('attributes', {}),
+                **attributes,
                 'url': url,
+                'last_modified': epoch_to_timestamp(attributes.get('last_modification_date')),
                 'positives': f'{positive_detections}/{detection_engines}',
-                'last_modified': epoch_to_timestamp(attributes.get('last_modification_date'))
             },
             headers=[
                 'url',
                 'title',
-                'last_modified',
                 'has_content',
                 'last_http_response_content_sha256',
-                'positives',
-                'reputation'
+                'last_modified',
+                'reputation',
+                'positives'
             ],
             removeNull=True,
             headerTransform=underscoreToCamelCase
@@ -1282,40 +1815,33 @@ def build_url_output(
     )
 
 
-def build_ip_output(client: Client, score_calculator: ScoreCalculator, ip: str, raw_response: dict,
-                    extended_data: bool) -> CommandResults:
-    score = score_calculator.ip_score(ip, raw_response)
-    if score != Common.DBotScore.BAD and client.is_premium:
-        score = score_calculator.analyze_premium_ip_score(client, ip, score)
-    logs = score_calculator.get_logs()
-    demisto.debug(logs)
+def build_ip_output(
+        client: Client,
+        score_calculator: ScoreCalculator,
+        ip: str,
+        raw_response: dict,
+        extended_data: bool
+) -> CommandResults:
     data = raw_response.get('data', {})
     attributes = data.get('attributes', {})
-    relationships_response = data.get('relationships', {})
-    last_analysis_stats = attributes.get('last_analysis_stats')
+
+    last_analysis_stats = attributes.get('last_analysis_stats', {})
     positive_engines = last_analysis_stats.get('malicious', 0)
     detection_engines = sum(last_analysis_stats.values())
-    relationships_list = create_relationships(entity_a=ip, entity_a_type=FeedIndicatorType.IP,
-                                              relationships_response=relationships_response,
-                                              reliability=client.reliability)
-    ip_indicator = Common.IP(
-        ip,
-        asn=attributes.get('asn'),
-        geo_country=attributes.get('country'),
-        detection_engines=detection_engines,
-        positive_engines=positive_engines,
-        relationships=relationships_list,
-        dbot_score=Common.DBotScore(
-            ip,
-            DBotScoreType.IP,
-            INTEGRATION_NAME,
-            score=score,
-            malicious_description=logs,
-            reliability=client.reliability
-        )
+
+    relationships_response = data.get('relationships', {})
+    relationships_list = create_relationships(
+        entity_a=ip,
+        entity_a_type=FeedIndicatorType.IP,
+        relationships_response=relationships_response,
+        reliability=client.reliability
     )
+
+    ip_indicator = _get_ip_indicator(client, score_calculator, ip, raw_response)
+
     if not extended_data:
         data = decrease_data_size(data)
+
     return CommandResults(
         outputs_prefix=f'{INTEGRATION_ENTRY_CONTEXT}.IP',
         outputs_key_field='id',
@@ -1328,7 +1854,7 @@ def build_ip_output(client: Client, score_calculator: ScoreCalculator, ip: str, 
                 'last_modified': epoch_to_timestamp(attributes.get('last_modification_date')),
                 'positives': f'{positive_engines}/{detection_engines}'
             },
-            headers=['id', 'network', 'country', 'last_modified', 'reputation', 'positives'],
+            headers=['id', 'network', 'country', 'as_owner', 'last_modified', 'reputation', 'positives'],
             headerTransform=underscoreToCamelCase
         ),
         outputs=data,
@@ -1345,48 +1871,25 @@ def build_file_output(
         extended_data: bool
 ) -> CommandResults:
     data = raw_response.get('data', {})
-    attributes = data.get('attributes')
+    attributes = data.get('attributes', {})
+
+    last_analysis_stats = attributes.get('last_analysis_stats', {})
+    malicious = last_analysis_stats.get('malicious', 0)
+    total = sum(last_analysis_stats.values())
+
     relationships_response = data.get('relationships', {})
-    score = score_calculator.file_score(file_hash, raw_response)
-    logs = score_calculator.get_logs()
-    demisto.debug(logs)
-    signature_info = attributes.get('signature_info', {})
-    exiftool = attributes.get('exiftool', {})
-    relationships_list = create_relationships(entity_a=file_hash, entity_a_type=FeedIndicatorType.File,
-                                              relationships_response=relationships_response,
-                                              reliability=client.reliability)
-    file_indicator = Common.File(
-        dbot_score=Common.DBotScore(
-            file_hash,
-            DBotScoreType.FILE,
-            integration_name=INTEGRATION_NAME,
-            score=score,
-            malicious_description=logs,
-            reliability=client.reliability
-        ),
-        name=exiftool.get('OriginalFileName'),
-        size=attributes.get('size'),
-        sha1=attributes.get('sha1'),
-        sha256=attributes.get('sha256'),
-        file_type=exiftool.get('MIMEType'),
-        md5=attributes.get('md5'),
-        ssdeep=attributes.get('ssdeep'),
-        extension=exiftool.get('FileTypeExtension'),
-        company=exiftool.get('CompanyName'),
-        product_name=exiftool.get('ProductName'),
-        tags=attributes.get('tags'),
-        signature=Common.FileSignature(
-            authentihash=attributes.get('authentihash'),
-            copyright=signature_info.get('copyright'),
-            file_version=signature_info.get('file version'),
-            description=signature_info.get('description'),
-            internal_name=signature_info.get('internal name'),
-            original_name=signature_info.get('original name')
-        ),
-        relationships=relationships_list
+    relationships_list = create_relationships(
+        entity_a=file_hash,
+        entity_a_type=FeedIndicatorType.File,
+        relationships_response=relationships_response,
+        reliability=client.reliability
     )
+
+    file_indicator = _get_file_indicator(client, score_calculator, file_hash, raw_response)
+
     if not extended_data:
         data = decrease_data_size(data)
+
     last_analysis_stats = attributes.get("last_analysis_stats", {})
     malicious = last_analysis_stats.get('malicious', 0)
     total = sum(last_analysis_stats.values())
@@ -1417,6 +1920,37 @@ def build_file_output(
     )
 
 
+def build_private_file_output(file_hash: str, raw_response: dict) -> CommandResults:
+    data = raw_response.get('data', {})
+    attributes = data.get('attributes', {})
+    threat_severity = attributes.get('threat_severity', {})
+    threat_severity_level = threat_severity.get('threat_severity_level', '')
+    threat_severity_data = threat_severity.get('threat_severity_data', {})
+    popular_threat_category = threat_severity_data.get('popular_threat_category', '')
+    threat_verdict = attributes.get('threat_verdict', '')
+    return CommandResults(
+        outputs_prefix=f'{INTEGRATION_ENTRY_CONTEXT}.File',
+        outputs_key_field='id',
+        readable_output=tableToMarkdown(
+            f'Results of file hash {file_hash}',
+            {
+                **attributes,
+                'Threat Severity Level': severity_levels.get(threat_severity_level, threat_severity_level),
+                'Popular Threat Category': popular_threat_category,
+                'Threat Verdict': verdicts.get(threat_verdict, threat_verdict)
+            },
+            headers=[
+                'sha1', 'sha256', 'md5', 'meaningful_name', 'type_extension',
+                'Threat Severity Level', 'Popular Threat Category', 'Threat Verdict'
+            ],
+            removeNull=True,
+            headerTransform=string_to_table_header
+        ),
+        outputs=data,
+        raw_response=raw_response,
+    )
+
+
 def get_whois(whois_string: str) -> defaultdict:
     """Gets a WHOIS string and returns a parsed dict of the WHOIS String.
 
@@ -1434,7 +1968,11 @@ def get_whois(whois_string: str) -> defaultdict:
     for line in whois_string.splitlines():
         key: str
         value: str
-        key, value = line.split(sep=':', maxsplit=1)
+        try:
+            key, value = line.split(sep=':', maxsplit=1)
+        except ValueError:
+            demisto.debug(f'Could not unpack Whois string: {line}. Skipping')
+            continue
         key = key.strip()
         value = value.strip()
         if key in whois:
@@ -1519,29 +2057,55 @@ def encode_url_to_base64(url: str) -> str:
     return base64.urlsafe_b64encode(url.encode()).decode().strip('=')
 
 
+def merge_two_dicts(dict_a, dict_b):
+    merged_dict = dict_a.copy()
+    merged_dict.update(dict_b)
+    return merged_dict
+
 # endregion
 
 # region Reputation commands
 
 
-def ip_command(client: Client, score_calculator: ScoreCalculator, args: dict, relationships: str) -> List[CommandResults]:
+def ip_command(client: Client, score_calculator: ScoreCalculator, args: dict,
+               relationships: str, disable_private_ip_lookup: bool) -> List[CommandResults]:
     """
     1 API Call for regular
     1-4 API Calls for premium subscriptions
     """
     ips = argToList(args['ip'])
-    results: List[CommandResults] = list()
+    results: List[CommandResults] = []
+    execution_metrics = ExecutionMetrics()
+    override_private_lookup = argToBoolean(args.get('override_private_lookup', False))
+
     for ip in ips:
         raise_if_ip_not_valid(ip)
+        if disable_private_ip_lookup and ipaddress.ip_address(ip).is_private and not override_private_lookup:
+            results.append(build_skipped_enrichment_ip_output(client, ip))
+            execution_metrics.success += 1
+            continue
         try:
             raw_response = client.ip(ip, relationships)
-        except Exception as exception:
+            if raw_response.get('error', {}).get('code') == "QuotaExceededError":
+                execution_metrics.quota_error += 1
+                results.append(build_quota_exceeded_ip_output(client, ip))
+                continue
+            if raw_response.get('error', {}).get('code') == 'NotFoundError':
+                results.append(build_unknown_ip_output(client, ip))
+                continue
+        except Exception as exc:
             # If anything happens, just keep going
-            demisto.debug(f'Could not process IP: "{ip}"\n {str(exception)}')
+            demisto.debug(f'Could not process IP: "{ip}"\n {str(exc)}')
+            execution_metrics.general_error += 1
+            results.append(build_error_ip_output(client, ip))
             continue
+        execution_metrics.success += 1
         results.append(
-            build_ip_output(client, score_calculator, ip, raw_response, argToBoolean(args.get('extended_data')))
-        )
+            build_ip_output(client, score_calculator, ip, raw_response, argToBoolean(args.get('extended_data', False))))
+    if execution_metrics.is_supported():
+        _metric_results = execution_metrics.metrics
+        metric_results = cast(CommandResults, _metric_results)
+        results.append(metric_results)
     return results
 
 
@@ -1550,17 +2114,67 @@ def file_command(client: Client, score_calculator: ScoreCalculator, args: dict, 
     1 API Call
     """
     files = argToList(args['file'])
-    extended_data = argToBoolean(args.get('extended_data'))
-    results: List[CommandResults] = list()
+    extended_data = argToBoolean(args.get('extended_data', False))
+    results: List[CommandResults] = []
+    execution_metrics = ExecutionMetrics()
+
     for file in files:
         raise_if_hash_not_valid(file)
         try:
             raw_response = client.file(file, relationships)
+            if raw_response.get('error', {}).get('code') == "QuotaExceededError":
+                execution_metrics.quota_error += 1
+                results.append(build_quota_exceeded_file_output(client, file))
+                continue
+            if raw_response.get('error', {}).get('code') == 'NotFoundError':
+                results.append(build_unknown_file_output(client, file))
+                continue
             results.append(build_file_output(client, score_calculator, file, raw_response, extended_data))
+            execution_metrics.success += 1
         except Exception as exc:
             # If anything happens, just keep going
-            results.append(CommandResults(readable_output=f'Could not process file: "{file}"\n {str(exc)}'))
+            demisto.debug(f'Could not process file: "{file}"\n {str(exc)}')
+            execution_metrics.general_error += 1
+            results.append(build_error_file_output(client, file))
+            continue
+    if execution_metrics.is_supported():
+        _metric_results = execution_metrics.metrics
+        metric_results = cast(CommandResults, _metric_results)
+        results.append(metric_results)
+    return results
 
+
+def private_file_command(client: Client, args: dict) -> List[CommandResults]:
+    """
+    1 API Call
+    """
+    files = argToList(args['file'])
+    results: List[CommandResults] = []
+    execution_metrics = ExecutionMetrics()
+
+    for file in files:
+        raise_if_hash_not_valid(file)
+        try:
+            raw_response = client.private_file(file)
+            if raw_response.get('error', {}).get('code') == "QuotaExceededError":
+                execution_metrics.quota_error += 1
+                results.append(build_quota_exceeded_file_output(client, file))
+                continue
+            if raw_response.get('error', {}).get('code') == 'NotFoundError':
+                results.append(build_unknown_file_output(client, file))
+                continue
+            results.append(build_private_file_output(file, raw_response))
+            execution_metrics.success += 1
+        except Exception as exc:
+            # If anything happens, just keep going
+            demisto.debug(f'Could not process file: "{file}"\n {str(exc)}')
+            execution_metrics.general_error += 1
+            results.append(build_error_file_output(client, file))
+            continue
+    if execution_metrics.is_supported():
+        _metric_results = execution_metrics.metrics
+        metric_results = cast(CommandResults, _metric_results)
+        results.append(metric_results)
     return results
 
 
@@ -1570,18 +2184,31 @@ def url_command(client: Client, score_calculator: ScoreCalculator, args: dict, r
     1-4 API Calls for premium subscriptions
     """
     urls = argToList(args['url'])
-    extended_data = argToBoolean(args.get('extended_data'))
-    results: List[CommandResults] = list()
+    extended_data = argToBoolean(args.get('extended_data', False))
+    results: List[CommandResults] = []
+    execution_metrics = ExecutionMetrics()
     for url in urls:
         try:
-            raw_response = client.url(
-                url, relationships
-            )
-        except Exception as exception:
+            raw_response = client.url(url, relationships)
+            if raw_response.get('error', {}).get('code') == "QuotaExceededError":
+                execution_metrics.quota_error += 1
+                results.append(build_quota_exceeded_url_output(client, url))
+                continue
+            if raw_response.get('error', {}).get('code') == 'NotFoundError':
+                results.append(build_unknown_url_output(client, url))
+                continue
+        except Exception as exc:
             # If anything happens, just keep going
-            demisto.debug(f'Could not process URL: "{url}".\n {str(exception)}')
+            demisto.debug(f'Could not process URL: "{url}".\n {str(exc)}')
+            execution_metrics.general_error += 1
+            results.append(build_error_url_output(client, url))
             continue
+        execution_metrics.success += 1
         results.append(build_url_output(client, score_calculator, url, raw_response, extended_data))
+    if execution_metrics.is_supported():
+        _metric_results = execution_metrics.metrics
+        metric_results = cast(CommandResults, _metric_results)
+        results.append(metric_results)
     return results
 
 
@@ -1590,18 +2217,34 @@ def domain_command(client: Client, score_calculator: ScoreCalculator, args: dict
     1 API Call for regular
     1-4 API Calls for premium subscriptions
     """
+    execution_metrics = ExecutionMetrics()
     domains = argToList(args['domain'])
-    results: List[CommandResults] = list()
+    results: List[CommandResults] = []
     for domain in domains:
         try:
             raw_response = client.domain(domain, relationships)
-        except Exception as exception:
+            if raw_response.get('error', {}).get('code') == "QuotaExceededError":
+                execution_metrics.quota_error += 1
+                results.append(build_quota_exceeded_domain_output(client, domain))
+                continue
+            if raw_response.get('error', {}).get('code') == 'NotFoundError':
+                results.append(build_unknown_domain_output(client, domain))
+                continue
+        except Exception as exc:
             # If anything happens, just keep going
-            demisto.debug(f'Could not process domain: "{domain}"\n {str(exception)}')
+            demisto.debug(f'Could not process domain: "{domain}"\n {str(exc)}')
+            execution_metrics.general_error += 1
+            results.append(build_error_domain_output(client, domain))
             continue
-        results.append(
-            build_domain_output(client, score_calculator, domain, raw_response, argToBoolean(args.get('extended_data')))
-        )
+        execution_metrics.success += 1
+        result = build_domain_output(client, score_calculator, domain, raw_response,
+                                     argToBoolean(args.get('extended_data', False)))
+        results.append(result)
+    if execution_metrics.is_supported():
+        _metric_results = execution_metrics.metrics
+        metric_results = cast(CommandResults, _metric_results)
+        results.append(metric_results)
+
     return results
 
 
@@ -1651,7 +2294,7 @@ def encode_to_base64(md5: str, id_: Union[str, int]) -> str:
     Returns:
         base64 encoded of md5:id_
     """
-    return base64.b64encode(f'{md5}:{id_}'.encode('utf-8')).decode('utf-8')
+    return base64.b64encode(f'{md5}:{id_}'.encode()).decode('utf-8')
 
 
 def get_working_id(id_: str, entry_id: str) -> str:
@@ -1678,16 +2321,33 @@ def file_scan(client: Client, args: dict) -> List[CommandResults]:
     """
     1 API Call
     """
+    return upload_file(client, args)
+
+
+def private_file_scan(client: Client, args: dict) -> List[CommandResults]:
+    """
+    1 API Call
+    """
+    return upload_file(client, args, True)
+
+
+def upload_file(client: Client, args: dict, private: bool = False) -> List[CommandResults]:
+    """
+    1 API Call
+    """
     entry_ids = argToList(args['entryID'])
     upload_url = args.get('uploadURL')
     if len(entry_ids) > 1 and upload_url:
         raise DemistoException('You can supply only one entry ID with an upload URL.')
-    results = list()
+    results = []
     for entry_id in entry_ids:
         try:
             file_obj = demisto.getFilePath(entry_id)
             file_path = file_obj['path']
-            raw_response = client.file_scan(file_path, upload_url=upload_url)
+            if private:
+                raw_response = client.private_file_scan(file_path)
+            else:
+                raw_response = client.file_scan(file_path, upload_url)
             data = raw_response.get('data', {})
             # add current file as identifiers
             data.update(
@@ -1706,6 +2366,7 @@ def file_scan(client: Client, args: dict) -> List[CommandResults]:
                     f'The file has been submitted "{file_obj["name"]}"',
                     data,
                     headers=['id', 'EntryID', 'MD5', 'SHA1', 'SHA256'],
+                    removeNull=True
                 ),
                 outputs=context,
                 raw_response=raw_response
@@ -1747,18 +2408,35 @@ def scan_url_command(client: Client, args: dict) -> CommandResults:
     1 API Call
     """
     url = args['url']
-    raw_response = client.url_scan(url)
-    data = raw_response['data']
-    data['url'] = url
-    context = {
-        f'{INTEGRATION_ENTRY_CONTEXT}.Submission(val.id && val.id === obj.id)': data,
-        'vtScanID': data.get('id')  # BC preservation
-    }
+    raw_response: Dict[str, Any] = {}
+    data: Dict[str, Any] = {}
+    context: Dict[str, Any] = {}
+    headers = ['id', 'url']
+
+    try:
+        raw_response = client.url_scan(url)
+        data = raw_response['data']
+
+        data['url'] = url
+        context = {
+            f'{INTEGRATION_ENTRY_CONTEXT}.Submission(val.id && val.id === obj.id)': data,
+            'vtScanID': data.get('id')  # BC preservation
+        }
+    except DemistoException as ex:
+        error = ex.res.json().get('error')
+
+        # Invalid url, probably due to an unknown TLD
+        if error['code'] == 'InvalidArgumentError':
+            data = {'url': url, 'id': '', 'error': error['message']}
+            headers.append('error')
+        else:
+            raise
+
     return CommandResults(
         readable_output=tableToMarkdown(
             'New url submission:',
             data,
-            headers=['id', 'url']
+            headers=headers
         ),
         outputs=context,
         raw_response=raw_response
@@ -1800,7 +2478,7 @@ def get_comments_command(client: Client, args: dict) -> CommandResults:
         raw_response = client.get_ip_comments(resource, limit)
     elif resource_type == 'url':
         raw_response = client.get_url_comments(resource, limit)
-    elif resource_type == 'hash':
+    elif resource_type in ('hash', 'file'):
         raise_if_hash_not_valid(resource)
         raw_response = client.get_hash_comments(resource, limit)
     elif resource_type == 'domain':
@@ -1922,10 +2600,12 @@ def get_comments_by_id_command(client: Client, args: dict) -> CommandResults:
 
 # endregion
 
-def file_sandbox_report_command(client: Client, args: dict) -> CommandResults:
+def file_sandbox_report_command(client: Client, args: dict) -> List[CommandResults]:
     """
     1 API Call
     """
+    execution_metrics = ExecutionMetrics()
+    results: List[CommandResults] = []
     file_hash = args['file']
     limit = arg_to_number(
         args['limit'],
@@ -1935,45 +2615,83 @@ def file_sandbox_report_command(client: Client, args: dict) -> CommandResults:
     assert isinstance(limit, int)  # mypy fix
     raise_if_hash_not_valid(file_hash)
     raw_response = client.file_sandbox_report(file_hash, limit)
-    data = raw_response['data']
-    return CommandResults(
-        f'{INTEGRATION_ENTRY_CONTEXT}.SandboxReport',
-        'id',
-        readable_output=tableToMarkdown(
-            f'Sandbox Reports for file hash: {file_hash}',
-            [
-                {
-                    'id': item['id'],
-                    **item['attributes'],
-                    'link': item['links']['self']
-                } for item in data
-            ],
-            headers=['analysis_date', 'last_modification_date', 'sandbox_name', 'link'],
-            removeNull=True,
-            headerTransform=underscoreToCamelCase
-        ),
-        outputs=data,
-        raw_response=raw_response
-    )
+    if 'data' in raw_response:
+        data = raw_response['data']
+        execution_metrics.quota_error += 1
+        results.append(
+            CommandResults(
+                f'{INTEGRATION_ENTRY_CONTEXT}.SandboxReport',
+                'id',
+                readable_output=tableToMarkdown(
+                    f'Sandbox Reports for file hash: {file_hash}',
+                    [
+                        {
+                            'id': item['id'],
+                            **item['attributes'],
+                            'link': item['links']['self']
+                        } for item in data
+                    ],
+                    headers=['analysis_date', 'last_modification_date', 'sandbox_name', 'link'],
+                    removeNull=True,
+                    headerTransform=underscoreToCamelCase
+                ),
+                outputs=data,
+                raw_response=raw_response
+            )
+        )
+    elif raw_response.get('error', {}).get('code') == 'NotFoundError':
+        results.append(build_unknown_file_output(client, file_hash))
+    else:
+        execution_metrics.quota_error += 1
+        results.append(build_quota_exceeded_file_output(client, file_hash))
+
+    if execution_metrics.is_supported():
+        _metric_results = execution_metrics.metrics
+        metric_results = cast(CommandResults, _metric_results)
+        results.append(metric_results)
+
+    return results
 
 
 def passive_dns_data(client: Client, args: dict) -> CommandResults:
     """
     1 API Call
     """
-    ip = args['ip']
+
+    id = {}
+    if 'ip' in args:
+        id['value'] = args['ip']
+        id['type'] = 'ip'
+        raise_if_ip_not_valid(id['value'])
+    elif 'domain' in args:
+        id['value'] = args['domain']
+        id['type'] = 'domain'
+    elif 'id' in args:
+        id['value'] = args['id']
+        if is_ip_valid(id['value']):
+            id['type'] = 'ip'
+        else:
+            id['type'] = 'domain'
+    else:
+        return CommandResults(readable_output='No IP address or domain was given.')
+
     limit = arg_to_number_must_int(
         args['limit'],
         arg_name='limit',
         required=True
     )
-    raw_response = client.passive_dns_data(ip, limit)
+
+    try:
+        raw_response = client.passive_dns_data(id, limit)
+    except Exception:
+        return CommandResults(readable_output=f'{"IP" if id["type"] == "ip" else "Domain"} {id["value"]} was not found.')
+
     data = raw_response['data']
     return CommandResults(
         f'{INTEGRATION_ENTRY_CONTEXT}.PassiveDNS',
         'id',
         readable_output=tableToMarkdown(
-            f'Passive DNS data for IP {ip}',
+            f'Passive DNS data for {"IP" if id["type"] == "ip" else "domain"} {id["value"]}',
             [
                 {
                     'id': item['id'],
@@ -1997,7 +2715,7 @@ def search_command(client: Client, args: dict) -> CommandResults:
     limit = arg_to_number_must_int(args.get('limit'), 'limit', required=True)
     raw_response = client.search(query, limit)
     data = raw_response.get('data', [])
-    if not argToBoolean(args.get('extended_data')):
+    if not argToBoolean(args.get('extended_data', False)):
         data = decrease_data_size(data)
     return CommandResults(
         f'{INTEGRATION_ENTRY_CONTEXT}.SearchResults',
@@ -2030,10 +2748,52 @@ def get_analysis_command(client: Client, args: dict) -> CommandResults:
             {
                 **data.get('attributes', {}),
                 'id': analysis_id
-
             },
             headers=['id', 'stats', 'status'],
             headerTransform=underscoreToCamelCase
+        ),
+        outputs={
+            **raw_response,
+            'id': analysis_id
+        },
+        raw_response=raw_response
+    )
+
+
+def private_get_analysis_command(client: Client, args: dict) -> CommandResults:
+    """
+    1-2 API Call
+    """
+    analysis_id = args['id']
+    raw_response = client.get_private_analysis(analysis_id)
+    data = raw_response.get('data', {})
+    attributes = data.get('attributes', {})
+    stats = {'threat_severity_level': '',
+             'popular_threat_category': '',
+             'threat_verdict': ''}
+    if attributes.get('status', '') == 'completed':
+        file_response = client.get_private_file_from_analysis(analysis_id)
+        file_attributes = file_response.get('data', {}).get('attributes', {})
+        threat_severity = file_attributes.get('threat_severity', {})
+        severity_level = threat_severity.get('threat_severity_level', '')
+        stats['threat_severity_level'] = severity_levels.get(severity_level, severity_level)
+        threat_severity_data = threat_severity.get('threat_severity_data', {})
+        stats['popular_threat_category'] = threat_severity_data.get('popular_threat_category', '')
+        verdict = file_attributes.get('threat_verdict', '')
+        stats['threat_verdict'] = verdicts.get(verdict, verdict)
+    attributes.update(stats)
+    return CommandResults(
+        f'{INTEGRATION_ENTRY_CONTEXT}.Analysis',
+        'id',
+        readable_output=tableToMarkdown(
+            'Analysis results:',
+            {
+                **attributes,
+                'id': analysis_id
+            },
+            headers=['id', 'threat_severity_level', 'popular_threat_category', 'threat_verdict', 'status'],
+            removeNull=True,
+            headerTransform=string_to_table_header
         ),
         outputs={
             **raw_response,
@@ -2058,6 +2818,52 @@ def delete_comment(client: Client, args: dict) -> CommandResults:
     return CommandResults(readable_output=f'Comment {id_} has been deleted!')
 
 
+def file_sigma_analysis_command(client: Client, args: dict) -> CommandResults:
+    """Get last sigma analysis for a given file"""
+    file_hash = args['file']
+    only_stats = argToBoolean(args.get('only_stats', False))
+    raw_response = client.file(file_hash)
+    data = raw_response['data']
+
+    if 'sigma_analysis_stats' not in data['attributes'] or 'sigma_analysis_results' not in data['attributes']:
+        return CommandResults(readable_output=f'No Sigma analyses for file {file_hash} were found.')
+
+    if only_stats:
+        return CommandResults(
+            f'{INTEGRATION_ENTRY_CONTEXT}.SigmaAnalysis',
+            'id',
+            readable_output=tableToMarkdown(
+                f'Summary of the last Sigma analysis for file {file_hash}:',
+                {
+                    **data['attributes']['sigma_analysis_stats'],
+                    '**TOTAL**': sum(data['attributes']['sigma_analysis_stats'].values())
+                },
+                headers=['critical', 'high', 'medium', 'low', '**TOTAL**'],
+                removeNull=True,
+                headerTransform=underscoreToCamelCase
+            ),
+            outputs=data,
+            raw_response=data['attributes']['sigma_analysis_stats'],
+        )
+    else:
+        return CommandResults(
+            f'{INTEGRATION_ENTRY_CONTEXT}.SigmaAnalysis',
+            'id',
+            readable_output=tableToMarkdown(
+                f'Matched rules for file {file_hash} in the last Sigma analysis:',
+                data['attributes']['sigma_analysis_results'],
+                headers=[
+                    'rule_level', 'rule_description', 'rule_source',
+                    'rule_title', 'rule_id', 'rule_author', 'match_context'
+                ],
+                removeNull=True,
+                headerTransform=underscoreToCamelCase
+            ),
+            outputs=data,
+            raw_response=data['attributes']['sigma_analysis_results'],
+        )
+
+
 def main(params: dict, args: dict, command: str):
     results: Union[CommandResults, str, List[CommandResults]]
     handle_proxy()
@@ -2069,13 +2875,15 @@ def main(params: dict, args: dict, command: str):
     domain_relationships = (','.join(argToList(params.get('domain_relationships')))).replace('* ', '').replace(" ", "_")
     file_relationships = (','.join(argToList(params.get('file_relationships')))).replace('* ', '').replace(" ", "_")
 
+    disable_private_ip_lookup = argToBoolean(params.get('disable_private_ip_lookup', False))
+
     demisto.debug(f'Command called {command}')
     if command == 'test-module':
         results = check_module(client)
     elif command == 'file':
         results = file_command(client, score_calculator, args, file_relationships)
     elif command == 'ip':
-        results = ip_command(client, score_calculator, args, ip_relationships)
+        results = ip_command(client, score_calculator, args, ip_relationships, disable_private_ip_lookup)
     elif command == 'url':
         results = url_command(client, score_calculator, args, url_relationships)
     elif command == 'domain':
@@ -2104,6 +2912,14 @@ def main(params: dict, args: dict, command: str):
         results = search_command(client, args)
     elif command == f'{COMMAND_PREFIX}-analysis-get':
         results = get_analysis_command(client, args)
+    elif command == f'{COMMAND_PREFIX}-file-sigma-analysis':
+        results = file_sigma_analysis_command(client, args)
+    elif command == f'{COMMAND_PREFIX}-privatescanning-file':
+        results = private_file_command(client, args)
+    elif command == f'{COMMAND_PREFIX}-privatescanning-file-scan':
+        results = private_file_scan(client, args)
+    elif command == f'{COMMAND_PREFIX}-privatescanning-analysis-get':
+        results = private_get_analysis_command(client, args)
     else:
         raise NotImplementedError(f'Command {command} not implemented')
     return_results(results)

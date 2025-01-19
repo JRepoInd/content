@@ -1,47 +1,26 @@
 from CommonServerPython import *
 import json
 import requests
-from typing import List, Dict, Any, Union
+import urllib3
+from typing import Any
 
 # Disable insecure warnings
-requests.packages.urllib3.disable_warnings()
+urllib3.disable_warnings()
 
 '''Constants'''
 CATEGORY = 'alarm'  # only focus on alarms
 
-'''Globals'''
-AUTH_SERVER: str
-AUTH_URL: str
-ARC_URL: str
-CLIENT_ID: str
-CLIENT_SECRET: str
-AUTH_HEADERS: dict
-CLIENT_HEADERS: dict
-VERIFY_CERT: bool
-PROXY: bool
+AUTH_SERVER = demisto.getParam('auth_url')
+AUTH_URL = AUTH_SERVER + '/as/token.oauth2'
+ARC_URL = demisto.getParam('arc_url')
+ARC_URL += '/rest/1.0'
 
-
-def init_globals():
-    """
-
-    :return: void
-    """
-
-    global AUTH_SERVER, AUTH_URL, ARC_URL, CLIENT_ID, CLIENT_SECRET, AUTH_HEADERS, CLIENT_HEADERS, VERIFY_CERT, PROXY
-
-    AUTH_SERVER = demisto.getParam('auth_url')
-    AUTH_URL = AUTH_SERVER + '/as/token.oauth2'
-    ARC_URL = demisto.getParam('arc_url')
-    ARC_URL += '/rest/1.0'
-
-    CLIENT_ID = demisto.getParam('client_id')
-    CLIENT_SECRET = demisto.getParam('client_secret')
-    VERIFY_CERT = not demisto.params().get('insecure', False)
-    AUTH_HEADERS = {'Content-Type': 'application/x-www-form-urlencoded'}
-    CLIENT_HEADERS = {'Authorization': ''}
-    PROXY = demisto.getParam('proxy')
-
-    handle_proxy()
+CLIENT_ID = demisto.getParam('client_id')
+CLIENT_SECRET = demisto.getParam('client_secret')
+VERIFY_CERT = not demisto.params().get('insecure', False)
+AUTH_HEADERS = {'Content-Type': 'application/x-www-form-urlencoded'}
+CLIENT_HEADERS = {'Authorization': ''}
+PROXY = demisto.getParam('proxy')
 
 
 def request_api_token():
@@ -59,7 +38,7 @@ def request_api_token():
     r = requests.post(url=AUTH_URL, headers=AUTH_HEADERS, data=payload, verify=VERIFY_CERT)
     response_json = r.json()
     if 200 <= r.status_code <= 299:
-        api_key = response_json['access_token']
+        api_key = response_json.get('access_token')
         CLIENT_HEADERS['Authorization'] = 'Bearer ' + api_key
     else:
         return_error(f'Error in request_api_token [{r.status_code}] - {r.reason}')
@@ -91,7 +70,7 @@ def get_watchlist_id(watchlist_name: str) -> str:
     list_id = None
     if 200 <= r.status_code <= 299:
         for item in json_text:
-            if item.get('display_name').lower() == watchlist_name.lower():
+            if item.get('display_name', '').lower() == watchlist_name.lower():
                 list_id = item.get('name')
     else:
         return_error(f'Error retrieving watchlist_id for {watchlist_name}, {r.status_code}: {r.text}')
@@ -112,8 +91,8 @@ def get_list_id(list_name: str, list_type: str) -> str:
     list_id = None
     if 200 <= r.status_code <= 299:
         for jText in json_text:
-            if str(jText['name']).lower() == list_name.lower():
-                list_id = jText['id']
+            if str(jText.get('name', '')).lower() == list_name.lower():
+                list_id = jText.get('id')
     else:
         return_error(f'Error retrieving list_id for {list_name}, {r.status_code}: {r.text}')
 
@@ -146,8 +125,8 @@ def get_watchlist_entry_id(watchlist_name: str, watchlist_entry: str) -> str:
         if r.status_code != requests.codes.ok:
             return_error('Unable to retrieve watchlist entries')
         for jText in json_text:
-            if str(jText['value_name']).lower() == watchlist_entry.lower():
-                watchlist_entry_id = jText['value_id']
+            if str(jText.get('value_name', '')).lower() == watchlist_entry.lower():
+                watchlist_entry_id = jText.get('value_id')
 
     return str(watchlist_entry_id)
 
@@ -187,9 +166,9 @@ def check_componentlist_entry():
 
     Sets DigitalGuardian.Componentlist.Found flag.
     """
-    componentlist_name = demisto.args().get('componentlist_name', None)
-    componentlist_entry = demisto.args().get('componentlist_entry', None)
-    if componentlist_name is None or componentlist_entry is None:
+    componentlist_name = demisto.args().get('componentlist_name', '')
+    componentlist_entry = demisto.args().get('componentlist_entry', '')
+    if not componentlist_name or not componentlist_entry:
         return_error('Please provide both componentlist_name and componentlist_entry')
 
     componentlist = None
@@ -201,8 +180,8 @@ def check_componentlist_entry():
 
         if 200 <= r.status_code <= 299:
             for jText in json_text:
-                if str(jText['content_value']).lower() == componentlist_entry.lower():
-                    componentlist = jText['content_value']
+                if str(jText.get('content_value', '')).lower() == componentlist_entry.lower():
+                    componentlist = jText.get('content_value')
         else:
             return_error(f'Unable to find componentlist named {componentlist_name}, {r.status_code}')
 
@@ -254,7 +233,7 @@ def add_entry_to_watchlist():
     r = requests.post(url=full_url + watchlist_id + '/values/', data=watchlist_entry_json,
                       headers=CLIENT_HEADERS, verify=VERIFY_CERT)
     if 200 <= r.status_code <= 299:
-        demisto.results('added watchlist entry ({}) to watchlist name ({})'.format(watchlist_entry, watchlist_name))
+        demisto.results(f'added watchlist entry ({watchlist_entry}) to watchlist name ({watchlist_name})')
     else:
         return_error(
             'Failed to add watchlist entry({}) to watchlist name ({}). The response failed with status code {}. '
@@ -298,7 +277,7 @@ def rm_entry_from_watchlist():
                         headers=CLIENT_HEADERS, verify=VERIFY_CERT)
     if 200 <= r.status_code <= 299:
         demisto.results(
-            'removed watchlist entry ({}) from watchlist name ({})'.format(watchlist_entry, watchlist_name))
+            f'removed watchlist entry ({watchlist_entry}) from watchlist name ({watchlist_name})')
     else:
         return_error(
             'Failed to remove watchlist entry({}) from watchlist name ({}). The response failed with status code {}. '
@@ -324,15 +303,16 @@ def get_items_request():
     if r.status_code == 200:
         header_field = []
 
-        for field in json_text['fields']:
-            header_field.append(field['name'])
+        for field in json_text.get('fields'):
+            header_field.append(field.get('name'))
         exportdata = []
-        if json_text['total_hits'] == 0:
+        if json_text.get('total_hits') == 0:
             DEBUG('found no data')
+            return None
         else:
             DEBUG('found data')
 
-            for data in json_text['data']:
+            for data in json_text.get('data'):
                 entry_line = {}
                 header_position = 0
 
@@ -342,11 +322,11 @@ def get_items_request():
                 exportdata.append(entry_line)
 
             for items in exportdata:
-                if not (items['dg_alert.dg_detection_source']) == 'alert' and items['dg_tags']:
-                    comm = items['dg_alarm_name'].find(',')
+                if items.get('dg_alert.dg_detection_source') != 'alert' and items.get('dg_tags'):
+                    comm = items.get('dg_alarm_name', "").find(',')
                     if comm == -1:
                         comm = 100
-                    name = '{alarm_name}-{id}'.format(alarm_name=items['dg_alarm_name'][0:comm], id=items['dg_guid'])
+                    name = '{alarm_name}-{id}'.format(alarm_name=items.get('dg_alarm_name', "")[0:comm], id=items.get('dg_guid'))
                     DEBUG(name + " != " + oldname)
                     if name != oldname:
                         DEBUG("create_artifacts...")
@@ -359,6 +339,7 @@ def get_items_request():
         return_error('DigitalGuardian ARC Export Failed '
                      'Please check authentication related parameters. ' + json.dumps(r.json(), indent=4,
                                                                                      sort_keys=True))
+        return None
 
 
 def convert_to_demisto_severity(dg_severity: str) -> int:
@@ -479,13 +460,13 @@ def create_artifacts(alert):
     DEBUG("before alert")
     DEBUG(json.dumps(alert))
     if CATEGORY in specific_alert_mapping:
-        temp_dict: Dict[Union[str, Any], Union[Union[str, int], Any]] = {}
-        cef: Dict[Union[str, Any], Union[Union[str, int], Any]] = {}
+        temp_dict: dict[str | Any, str | int | Any] = {}
+        cef: dict[str | Any, str | int | Any] = {}
         cef_types = {}
         cef['Vendor ID'] = 'DG'
         cef['Vendor Product'] = 'Digital Guardian'
-        cef['severity'] = convert_to_demisto_severity(alert['dg_alarm_sev'])
-        cef['sensitivity'] = convert_to_demisto_sensitivity(alert['dg_class.dg_name'])
+        cef['severity'] = convert_to_demisto_severity(alert.get('dg_alarm_sev'))
+        cef['sensitivity'] = convert_to_demisto_sensitivity(alert.get('dg_class.dg_name'))
 
         DEBUG("cef: " + json.dumps(cef))
         for artifact_key, artifact_tuple in specific_alert_mapping.get(CATEGORY).items():  # type: ignore
@@ -493,13 +474,13 @@ def create_artifacts(alert):
                 cef[artifact_key] = alert[artifact_tuple[0]]
                 cef_types[artifact_key] = artifact_tuple[1]
         if cef:
-            comm = alert['dg_alarm_name'].find(',')
+            comm = alert.get('dg_alarm_name', '').find(',')
             if comm == -1:
                 comm = 100
-            name = '{alarm_name}-{id}'.format(alarm_name=alert['dg_alarm_name'][0:comm], id=alert['dg_guid'])
+            name = '{alarm_name}-{id}'.format(alarm_name=alert.get('dg_alarm_name')[0:comm], id=alert.get('dg_guid'))
             temp_dict['name'] = name
-            temp_dict['severity'] = convert_to_demisto_severity(alert['dg_alarm_sev'])
-            temp_dict['type'] = alert['dg_tags']
+            temp_dict['severity'] = convert_to_demisto_severity(alert.get('dg_alarm_sev'))
+            temp_dict['type'] = alert.get('dg_tags')
             temp_dict['occurred'] = datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%SZ')
             temp_dict['rawJSON'] = json.dumps(cef)
             artifacts_list.update(temp_dict)
@@ -539,7 +520,7 @@ def main():
     }
 
     try:
-        init_globals()
+        handle_proxy()
 
         command = demisto.command()
 

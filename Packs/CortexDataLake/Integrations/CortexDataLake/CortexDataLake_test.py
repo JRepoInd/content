@@ -67,6 +67,12 @@ def test_parse_tree_by_root_to_leaf_paths():
 def test_build_where_clause():
     from CortexDataLake import build_where_clause
     test_cases = [({'query': 'Test'}, 'Test'),
+                  ({'rule': 'rule'}, '(rule_matched = "rule")'),
+                  ({'rule': 'rule,another_rule'}, '(rule_matched = "rule" OR rule_matched = "another_rule")'),
+                  ({'rule': 'rule',
+                    'from_zone': 'UTC'},
+                   '(rule_matched = "rule") '
+                   'AND (from_zone = "UTC")'),
                   ({'source_ip': 'ip1,ip2',
                     'dest_ip': 'ip3,ip4',
                     'rule_matched': 'rule1',
@@ -125,6 +131,36 @@ def test_prepare_fetch_incidents_query():
                                                               fetch_fields,
                                                               fetch_limit)
 
+    # Assert that an exception is raised in case the fetch filter_query and fetch subtype/severity are given:
+    filter_query = 'dest_port = 54321 AND session_id = 97425'
+    try:
+        prepare_fetch_incidents_query(timestamp,
+                                      firewall_severity,
+                                      table_name,
+                                      firewall_subtype,
+                                      fetch_fields,
+                                      fetch_limit,
+                                      filter_query)
+    except DemistoException as e:
+        assert 'Fetch Filter parameter cannot be used with Subtype/Severity parameters' in str(e)
+
+    # Given the fetch filter_query and no fetch subtype/severity filters, assert the returned response is as expected:
+    firewall_severity = []
+    firewall_subtype = []
+    expected_response = 'SELECT * FROM `firewall.threat` WHERE ' \
+                        'time_generated Between TIMESTAMP("2020-02-20T16:49:05") ' \
+                        'AND CURRENT_TIMESTAMP AND' \
+                        ' dest_port = 54321 AND session_id = 97425 ' \
+                        'ORDER BY time_generated ASC ' \
+                        'LIMIT 10'
+    assert expected_response == prepare_fetch_incidents_query(timestamp,
+                                                              firewall_severity,
+                                                              table_name,
+                                                              firewall_subtype,
+                                                              fetch_fields,
+                                                              fetch_limit,
+                                                              filter_query)
+
 
 MILLISECONDS_HUMAN_READABLE_TIME_FROM_EPOCH_TIME_TEST_CASES = [(1582017903000000, '2020-02-18T09:25:03.001Z'),
                                                                (1582027208002000, '2020-02-18T12:00:08.003Z')]
@@ -160,7 +196,7 @@ def test_query_logs_command_transform_results_1():
     cdl_records_xform = load_test_data('./test_data/test_query_logs_command_transform_results_xformed.json')
 
     class MockClient():
-        def query_loggings(self, query):
+        def query_loggings(self, query, page_number=None, page_size=None):
             return cdl_records, []
 
     # test 1, with no transform_results options, should transform to common context
@@ -175,10 +211,92 @@ def test_query_logs_command_transform_results_1():
     assert results_noxform == {'CDL.Logging': cdl_records}
 
 
+def test_query_logs_command_transform_sysmtem_logs():
+    """
+    Given:
+        - a list of CDL query results from the log.system table.
+    When
+        - running query_logs_command function
+    Then
+        - the CDL query results from the log.system table should be transformed to the system log context format.
+    """
+    from CortexDataLake import query_logs_command
+
+    cdl_records = load_test_data('./test_data/test_query_logs_command_transform_results_system_logs.json')
+    cdl_records_xform = load_test_data('./test_data/test_query_logs_command_transform_results_system_logs_xformed.json')
+
+    class MockClient():
+        def query_loggings(self, query, page_number=None, page_size=None):
+            return cdl_records, []
+
+    _, results_xform, _ = query_logs_command({'limit': '1', 'query': 'SELECT * FROM `log.system`'}, MockClient())
+
+    assert results_xform == {'CDL.Logging': cdl_records_xform}
+
+
+class TestPagination:
+    """
+    A class to test the pagination mechanism in the Cortex Data Lake integration
+    """
+    args = {
+        'page_size': "10",
+        'page': "2",
+        'limit': "10",
+        "fields": "all",
+        "start_time": "1970-01-01 00:00:00"
+    }
+
+    class MockClient:
+
+        def query_loggings(self, query, page_number=None, page_size=None):
+            assert 'LIMIT' not in query
+            assert page_number is not None
+            return [], []
+
+    @pytest.mark.parametrize("command_function", [
+        "query_logs_command",
+        "get_critical_logs_command",
+        "get_social_applications_command",
+        "search_by_file_hash_command",
+        "query_threat_logs_command",
+        "query_url_logs_command",
+        "query_file_data_command"
+    ])
+    def test_command_pagination(self, command_function):
+        """
+        Given:
+            - A query to fetch data from the Cortex Data Lake
+            - A page size of 10
+            - A page number of 2
+        When
+            - Running any command function that involves pagination
+        Then
+            - Validate that the query is built correctly without the LIMIT value, and the page number is set
+        """
+        command = getattr(__import__('CortexDataLake'), command_function)
+        _, _, _ = command(self.args, self.MockClient())
+
+    def test_build_query(self):
+        """
+        Given:
+            - A query to fetch data from the Cortex Data Lake
+            - A page size of 10
+            - A page number of 2
+        When
+            - Building the query to fetch data from the Cortex Data Lake
+        Then
+            - Validate that the query is built correctly without the LIMIT value
+        """
+        from CortexDataLake import build_query
+        fields, query = build_query(self.args, 'firewall.traffic')
+        assert 'LIMIT' not in query
+
+
 class TestBackoffStrategy:
     """ A class to test the backoff strategy mechanism
 
     """
+
     @pytest.mark.parametrize('integration_context, exception', [
         ({FIRST_FAILURE_TIME_CONST: (datetime.utcnow() - timedelta(minutes=30)).isoformat(),
           LAST_FAILURE_TIME_CONST: datetime.utcnow().isoformat()}, True),

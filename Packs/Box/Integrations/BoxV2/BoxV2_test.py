@@ -1,6 +1,4 @@
 import json
-import io
-
 import demistomock as demisto
 from BoxV2 import Client
 
@@ -12,11 +10,11 @@ def util_load_json(path):
     :param path: str - Path to the JSON file
     :return: dict - A dict representation of the JSON
     """
-    with io.open(path, mode='r', encoding='utf-8') as f:
+    with open(path, encoding='utf-8') as f:
         return json.loads(f.read())
 
 
-class TestBox:
+class ClientTestBox:
     """
     Test class to handle the client.
     """
@@ -35,7 +33,7 @@ class TestBox:
         mocker.patch.object(Client, '_request_token', return_value=testing_auth_header)
 
         self.client = Client(
-            base_url='https://api.box.com/2.0',
+            base_url='https://api.box.com',
             verify=False,
             proxy=False,
             auth_params=test_params
@@ -71,7 +69,7 @@ def test_find_file_folder_by_share_link(requests_mock, mocker):
         'password': 'some_pass',
         'as_user': '1234567'
     }
-    client = TestBox(mocker).client
+    client = ClientTestBox(mocker).client
     response = find_file_folder_by_share_link_command(client, args)
 
     assert requests_mock.request_history[0].headers.get(
@@ -165,7 +163,7 @@ def test_create_update_file_share_link(requests_mock, mocker):
         'https://api.box.com/2.0/files/742246263170/?fields=shared_link',
         json=mock_response)
 
-    client = TestBox(mocker).client
+    client = ClientTestBox(mocker).client
 
     args = {
         'file_id': '742246263170',
@@ -208,7 +206,7 @@ def test_remove_file_share_link_command(requests_mock, mocker):
         'https://api.box.com/2.0/files/742246263170/?fields=shared_link',
         json=mock_response)
 
-    client = TestBox(mocker).client
+    client = ClientTestBox(mocker).client
 
     args = {
         'file_id': '742246263170',
@@ -251,7 +249,7 @@ def test_get_shared_link_for_file_command(requests_mock, mocker):
         'https://api.box.com/2.0/files/742246263170/',
         json=mock_response)
 
-    client = TestBox(mocker).client
+    client = ClientTestBox(mocker).client
 
     args = {
         'file_id': '742246263170',
@@ -291,7 +289,7 @@ def test_create_update_folder_share_link_command(requests_mock, mocker):
         'https://api.box.com/2.0/folders/742246263170/',
         json=mock_response)
 
-    client = TestBox(mocker).client
+    client = ClientTestBox(mocker).client
 
     args = {
         'access': 'open',
@@ -335,7 +333,7 @@ def test_remove_folder_share_link_command(requests_mock, mocker):
         'https://api.box.com/2.0/folders/742246263170/',
         json=mock_response)
 
-    client = TestBox(mocker).client
+    client = ClientTestBox(mocker).client
 
     args = {
         'folder_id': '742246263170',
@@ -375,7 +373,7 @@ def test_get_folder_command(requests_mock, mocker):
         'https://api.box.com/2.0/folders/0/',
         json=mock_response)
 
-    client = TestBox(mocker).client
+    client = ClientTestBox(mocker).client
 
     args = {
         'folder_id': '0',
@@ -415,7 +413,7 @@ def test_list_folder_items_command(requests_mock, mocker):
         'https://api.box.com/2.0/folders/0/',
         json=mock_response)
 
-    client = TestBox(mocker).client
+    client = ClientTestBox(mocker).client
 
     args = {
         'folder_id': '0',
@@ -458,7 +456,7 @@ def test_folder_create_command(requests_mock, mocker):
         'https://api.box.com/2.0/folders/',
         json=mock_response)
 
-    client = TestBox(mocker).client
+    client = ClientTestBox(mocker).client
 
     args = {
         'parent_id': '0',
@@ -499,7 +497,7 @@ def test_file_delete_command(requests_mock, mocker):
         'https://api.box.com/2.0/files/12345',
         status_code=successful_file_deletion_status_code)
 
-    client = TestBox(mocker).client
+    client = ClientTestBox(mocker).client
 
     args = {
         'as_user': '1234567',
@@ -538,7 +536,7 @@ def test_list_users_command(requests_mock, mocker):
         'https://api.box.com/2.0/users/',
         json=mock_response)
 
-    client = TestBox(mocker).client
+    client = ClientTestBox(mocker).client
 
     args = {
         'fields': 'name',
@@ -622,7 +620,7 @@ def test_upload_file_command_with_chunks(requests_mock, mocker):
         json=session_commit_response
     )
 
-    client = TestBox(mocker).client
+    client = ClientTestBox(mocker).client
 
     args = {
         'entry_id': '123@123',
@@ -691,7 +689,7 @@ def test_test_upload_file_command_small_file(requests_mock, mocker):
     # Mock for the request to open an upload session.
     requests_mock.post('https://upload.box.com/api/2.0/files/content', json=session_response)
 
-    client = TestBox(mocker).client
+    client = ClientTestBox(mocker).client
 
     args = {
         'entry_id': '123@123',
@@ -733,7 +731,7 @@ def test_get_current_user_command(requests_mock, mocker):
 
     mock_response = util_load_json('test_data/get_current_user.json')
 
-    client = TestBox(mocker).client
+    client = ClientTestBox(mocker).client
 
     args = {
         'as_user': 'sample_current_user'
@@ -752,6 +750,49 @@ def test_get_current_user_command(requests_mock, mocker):
     assert response.outputs_prefix == 'Box.User'
     assert response.outputs_key_field == 'id'
     assert response.outputs == mock_response
+
+
+def test_url_as_param(requests_mock, mocker):
+    """Assert the request url changes when url parameter changes."""
+    from BoxV2 import get_current_user_command
+
+    # Generic test client params
+    test_params = {'credentials_json': str('{"boxAppSettings": {"clientID": '
+                                           '"1234", '
+                                           '"clientSecret": '
+                                           '"1234", "appAuth": {'
+                                           '"publicKeyID": "1234", "privateKey": '
+                                           '"-----BEGIN ENCRYPTED PRIVATE KEY----------END '
+                                           'ENCRYPTED PRIVATE KEY-----", "passphrase": '
+                                           '"1234"}}, '
+                                           '"enterpriseID": "1234"}')}
+    testing_auth_header = {'Authorization': 'Bearer JWT_TOKEN'}
+    mocker.patch.object(Client, '_request_token', return_value=testing_auth_header)
+
+    mock_response = util_load_json('test_data/get_current_user.json')
+
+    # The different url
+    other_url = 'https://api.triangle.com'
+    client = Client(
+        base_url=other_url,
+        verify=False,
+        proxy=False,
+        auth_params=test_params
+    )
+
+    args = {
+        'as_user': 'sample_current_user'
+    }
+
+    mocked_request = requests_mock.get(
+        f'{other_url}/2.0/users/me/',
+        json=mock_response
+    )
+
+    get_current_user_command(client, args)
+
+    # Asset different url is used.
+    assert mocked_request.called
 
 
 def test_create_user_command(requests_mock, mocker):
@@ -776,7 +817,7 @@ def test_create_user_command(requests_mock, mocker):
 
     mock_response = util_load_json('test_data/create_user.json')
 
-    client = TestBox(mocker).client
+    client = ClientTestBox(mocker).client
 
     args = {
         'as_user': 'sample_current_user',
@@ -843,7 +884,7 @@ def test_update_user_command(requests_mock, mocker):
 
     mock_response = util_load_json('test_data/create_user.json')
 
-    client = TestBox(mocker).client
+    client = ClientTestBox(mocker).client
 
     args = {
         'as_user': 'sample_current_user',
@@ -908,7 +949,7 @@ def test_delete_user_command(requests_mock, mocker):
      """
     from BoxV2 import delete_user_command
 
-    client = TestBox(mocker).client
+    client = ClientTestBox(mocker).client
 
     args = {
         'as_user': 'sample_current_user',
@@ -952,7 +993,7 @@ def test_fetch_incidents(requests_mock, mocker):
      """
     from BoxV2 import fetch_incidents
 
-    client = TestBox(mocker).client
+    client = ClientTestBox(mocker).client
 
     as_user = 'sample_current_user'
     max_results = 10
@@ -997,7 +1038,7 @@ def test_list_user_events_command(requests_mock, mocker):
      """
     from BoxV2 import list_user_events_command
 
-    client = TestBox(mocker).client
+    client = ClientTestBox(mocker).client
 
     args = {
         'as_user': 'sample_current_user',
@@ -1037,7 +1078,7 @@ def test_list_enterprise_events_command(requests_mock, mocker):
      """
     from BoxV2 import list_enterprise_events_command
 
-    client = TestBox(mocker).client
+    client = ClientTestBox(mocker).client
 
     args = {
         'as_user': 'sample_current_user',
@@ -1078,7 +1119,7 @@ def test_move_folder_command(requests_mock, mocker):
      """
     from BoxV2 import move_folder_command
 
-    client = TestBox(mocker).client
+    client = ClientTestBox(mocker).client
 
     args = {
         'from_user_id': '123456',
@@ -1100,3 +1141,110 @@ def test_move_folder_command(requests_mock, mocker):
     assert response.outputs == mock_response
 
     assert len(response.outputs) > 0
+
+
+def test_main(mocker):
+    """
+    Given:
+    - Valid arguments for each command.
+    When:
+    - Running the main function.
+    Then:
+    - Ensure that each command runs successfully without raising any exceptions.
+    """
+    import BoxV2
+    client = ClientTestBox(mocker).client
+    demisto_args = {
+        'max_fetch': 50,
+        'fields': 'name',
+        'filter_term': 'test_user',
+        'limit': '100',
+        'offset': '0'
+    }
+    demisto_command = 'test-module'
+    mocker.patch.object(demisto, 'args', return_value=demisto_args)
+    mocker.patch.object(demisto, 'command', return_value=demisto_command)
+    client = ClientTestBox(mocker).client
+    mocker.patch.object(BoxV2, 'Client', return_value=client)
+    mock_response = util_load_json('test_data/get_folder.json')
+    mocker.patch.object(Client, 'list_users', return_value=mock_response)
+    BoxV2.main()
+
+
+def test_trashed_items_list_command(mocker):
+    """
+        Given:
+        - A client object
+        - Arguments for the trashed_items_list_command function
+
+        When:
+        - Calling the trashed_items_list_command function and the API returns entries
+
+        Then:
+        - Ensure the function returns a CommandResults object with entries
+    """
+    from BoxV2 import trashed_items_list_command
+    client = ClientTestBox(mocker).client
+    args = {'limit': '100', 'offset': '0', 'as_user': 'test_user'}
+    response = {'entries': [{'id': '123', 'name': 'test_file'}, {'id': '456', 'name': 'test_folder'}]}
+    mocker.patch.object(client, 'trashed_items_list', return_value=response)
+    results = trashed_items_list_command(client, args)
+    assert results.outputs_prefix == 'Box.Trash'
+    assert results.outputs == response.get('entries')
+    assert results.readable_output == '### Trashed items were found.\n|Id|Name|\n|---|---|\n'\
+                                      '| 123 | test_file |\n| 456 | test_folder |\n'
+
+
+def test_trashed_item_restore_command_happy_path(mocker):
+    """
+    Given:
+    - Valid item_id, type and as_user parameters.
+
+    When:
+    - Calling trashed_item_restore_command function.
+
+    Then:
+    - Ensure the function returns a CommandResults object with the expected outputs.
+    """
+    from BoxV2 import trashed_item_restore_command
+    item_id = '123'
+    file_type = 'file'
+    as_user = 'user1'
+    response = {'id': item_id, 'name': 'test_file', 'type': file_type, 'restored': True}
+    client = ClientTestBox(mocker).client
+    mocker.patch.object(client, 'trashed_item_restore', return_value=response)
+    args = {'item_id': item_id, 'type': file_type, 'as_user': as_user}
+    result = trashed_item_restore_command(client, args)
+
+    assert result.outputs_prefix == 'Box.Item'
+    assert result.outputs_key_field == 'id'
+    assert result.outputs == response
+    assert result.readable_output == f'Item with the ID {item_id} was restored.'
+
+
+def test_event_init_source_none_with_created_at():
+    """
+    Tests the initialization of the Event class when:
+      - `source` exists but is `None` in `raw_input`.
+      - `created_at` exists directly in `raw_input`.
+
+    Given:
+        - `raw_input` with `source` set to `None` and a valid `created_at`.
+    When:
+        - Instantiating the Event class.
+    Then:
+        - Ensure the `created_at` field is set correctly.
+        - Ensure no `AttributeError` is raised due to `source` being `None`.
+    """
+    from BoxV2 import Event
+    raw_input = {
+        "created_at": "2024-12-16T15:00:00Z",
+        "source": None,
+        "event_id": "test_id_source_none",
+        "event_type": "test_type_source_none"
+    }
+    event = Event(raw_input)
+
+    assert event.created_at == "2024-12-16T15:00:00Z"  # `created_at` is set directly
+    assert event.event_id == "test_id_source_none"
+    assert event.event_type == "test_type_source_none"

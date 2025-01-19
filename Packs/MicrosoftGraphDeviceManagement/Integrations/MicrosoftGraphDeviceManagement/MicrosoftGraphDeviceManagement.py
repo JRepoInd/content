@@ -1,14 +1,15 @@
-import demistomock as demisto
-from CommonServerPython import *
-from CommonServerUserPython import *
-
+import demistomock as demisto  # noqa: F401
+from CommonServerPython import *  # noqa: F401
 ''' IMPORTS '''
-import requests
-from typing import Tuple, Any
 import json
+from typing import Any
+
+import urllib3
+from MicrosoftApiModule import *  # noqa: E402
+
 
 # Disable insecure warnings
-requests.packages.urllib3.disable_warnings()
+urllib3.disable_warnings()
 
 
 ''' GLOBAL VARS '''
@@ -26,24 +27,49 @@ HEADERS: dict = {
                    'manufacturer', 'model', 'imei', 'meid'],
 }
 
+API_VERSION: str = 'v1.0'
 
 ''' CLIENT '''
 
 
 class MsGraphClient:
-    def __init__(self, self_deployed, tenant_id, auth_and_token_url, enc_key, app_name, base_url, use_ssl, proxy,
-                 ok_codes):
+    def __init__(self, self_deployed, tenant_id, auth_and_token_url, enc_key, app_name, azure_cloud, use_ssl, proxy,
+                 ok_codes, certificate_thumbprint, private_key,
+                 managed_identities_client_id: Optional[str] = None):
+        self.azure_cloud = azure_cloud or AZURE_WORLDWIDE_CLOUD
+        self.base_url = urljoin(self.azure_cloud.endpoints.microsoft_graph_resource_id, f'/{API_VERSION}')
         self.ms_client = MicrosoftClient(self_deployed=self_deployed, tenant_id=tenant_id, auth_id=auth_and_token_url,
-                                         enc_key=enc_key, app_name=app_name, base_url=base_url, verify=use_ssl,
-                                         proxy=proxy, ok_codes=ok_codes)
+                                         enc_key=enc_key, app_name=app_name, base_url=self.base_url, verify=use_ssl,
+                                         proxy=proxy, ok_codes=ok_codes, certificate_thumbprint=certificate_thumbprint,
+                                         private_key=private_key,
+                                         managed_identities_client_id=managed_identities_client_id,
+                                         managed_identities_resource_uri=Resources.graph,
+                                         command_prefix="msgraph-device",
+                                         azure_cloud=self.azure_cloud
+                                         )
 
-    def list_managed_devices(self, limit: int) -> Tuple[list, Any]:
-        url_suffix: str = '/deviceManagement/managedDevices'
+    def list_managed_devices(self, limit: int, page_size: int | None,
+                             next_link: str | None = None) -> tuple[list, str | None, Any]:
+        limit = page_size if page_size else limit
+        url_suffix: str = f'/deviceManagement/managedDevices?$top={limit}&'
+        if next_link:
+            url_suffix = next_link.split(API_VERSION)[1]
         raw_response = self.ms_client.http_request('GET', url_suffix)
-        return raw_response.get('value', [])[:limit], raw_response
+        next_link = raw_response.get('@odata.nextLink')
 
-    def get_managed_device(self, device_id: str) -> Tuple[Any, str]:
+        return raw_response.get('value', []), next_link, raw_response
+
+    def find_managed_devices(self, device_name: str) -> tuple[Any, str]:
+        url_suffix: str = f"/deviceManagement/managedDevices?$filter=deviceName eq '{device_name}'"
+        raw_response = self.ms_client.http_request('GET', url_suffix)
+        return raw_response.get('value', []), raw_response
+
+    def get_managed_device(self, device_id: str) -> tuple[Any, str]:
         url_suffix: str = f'/deviceManagement/managedDevices/{device_id}'
+        return self.ms_client.http_request('GET', url_suffix), device_id
+
+    def get_managed_device_physical_memory(self, device_id: str) -> tuple[Any, str]:
+        url_suffix: str = f'/deviceManagement/managedDevices/{device_id}?$select=id,physicalMemoryInBytes,deviceName'
         return self.ms_client.http_request('GET', url_suffix), device_id
 
     def make_action(self, device_id: str, action: str, body: str = None) -> None:
@@ -115,7 +141,7 @@ def parse_device_action_results(raw_device_action_results: list) -> list:
     :param raw_device_action_results: The raw list of device action results
     :return: The parsed list of device action results
     """
-    action_results: list = list()
+    action_results: list = []
     for device_action_result in raw_device_action_results:
         action_result = assign_params(**{
             'Name': device_action_result.get('actionName'),
@@ -214,6 +240,7 @@ def build_device_object(raw_device: dict) -> dict:
         'TotalStorageSpaceInBytes': raw_device.get('totalStorageSpaceInBytes'),
         'FreeStorageSpaceInBytes': raw_device.get('freeStorageSpaceInBytes'),
         'ManagedDeviceName': raw_device.get('managedDeviceName'),
+        'PhysicalMemoryInBytes': raw_device.get('physicalMemoryInBytes'),
         'PartnerReportedThreatState': raw_device.get('partnerReportedThreatState')
     })
 
@@ -223,12 +250,34 @@ def build_device_object(raw_device: dict) -> dict:
 
 def list_managed_devices_command(client: MsGraphClient, args: dict) -> None:
     limit: int = try_parse_integer(args.get('limit', 10), err_msg='This value for limit must be an integer.')
-    list_raw_devices, raw_response = client.list_managed_devices(limit)
+    page_size: int | None = arg_to_number(args.get('page_size'))
+    next_link = args.get('next_link')
+    list_raw_devices, next_link, raw_response = client.list_managed_devices(limit, page_size, next_link)
     list_devices: list = [build_device_object(device) for device in list_raw_devices if device]
     entry_context: dict = {'MSGraphDeviceManagement.Device(val.ID === obj.ID)': list_devices}
+    if next_link:
+        entry_context['MSGraphDeviceManagement.DeviceNextLink(val.NextLink)'] = {"NextLink": next_link}
     human_readable: str = 'No managed devices found.'
     if list_devices:
         name: str = 'List managed devices'
+        if len(list_devices) == 1:
+            name = f'Managed device {list_devices[0].get("Name", "")}'
+        human_readable = tableToMarkdown(name=name, t=list_raw_devices, headers=HEADERS['raw_device'],
+                                         headerTransform=lambda h: SPECIAL_HEADERS.get(h, pascalToSpace(h)),
+                                         removeNull=True) + (f"\nThere are more results than shown. "
+                                                             f"For more data please enter the next_link argument:\n "
+                                                             f"next_link={next_link}" if next_link else "")
+    return_outputs(human_readable, entry_context, raw_response)
+
+
+def find_managed_devices_command(client: MsGraphClient, args: dict) -> None:
+    device_name: str = str(args.get('device_name'))
+    list_raw_devices, raw_response = client.find_managed_devices(device_name)
+    list_devices: list = [build_device_object(device) for device in list_raw_devices if device]
+    entry_context: dict = {'MSGraphDeviceManagement.Device(val.ID === obj.ID)': list_devices}
+    human_readable: str = f'Managed device {device_name} not found.'
+    if list_devices:
+        name: str = f'List managed devices with name {device_name}'
         if len(list_devices) == 1:
             name = f'Managed device {list_devices[0].get("Name", "")}'
         human_readable = tableToMarkdown(name=name, t=list_raw_devices, headers=HEADERS['raw_device'],
@@ -250,6 +299,25 @@ def get_managed_device_command(client: MsGraphClient, args: dict) -> None:
                                          headerTransform=lambda h: SPECIAL_HEADERS.get(h, pascalToSpace(h)),
                                          removeNull=True)
     return_outputs(human_readable, entry_context, raw_response)
+
+
+def get_managed_device_physical_memory_command(client: MsGraphClient, args: dict) -> None:
+    """
+    Returns the device physical memory.
+    :param device_id: The device id
+    :return: A CommandResults object
+    """
+    device_id: str = args.get('device_id', '')
+    raw_response, device_id = client.get_managed_device_physical_memory(device_id)
+
+    device: dict = build_device_object(raw_response)
+    entry_context: dict = {'MSGraphDeviceManagement.Device(val.ID === obj.ID)': device}
+    device_name: str = device.get('Name', '')
+    human_readable: str = f'Managed device {device_id} not found.'
+    if device:
+        human_readable = tableToMarkdown(name=f'Managed device {device_name}', t=device, removeNull=True,
+                                         headers=['PhysicalMemoryInBytes'])
+    return_outputs(human_readable, entry_context, device)
 
 
 def disable_lost_mode_command(client: MsGraphClient, args: dict) -> None:
@@ -338,23 +406,23 @@ def windows_device_defender_update_signatures_command(client: MsGraphClient, arg
 
 
 def clean_windows_device_command(client: MsGraphClient, args: dict) -> None:
-    keep_user_data: bool = bool(args.get('keep_user_data'))
+    keep_user_data: bool = argToBoolean(args.get('keep_user_data', True))
     device_id: str = str(args.get('device_id'))
     client.clean_windows_device(keep_user_data, device_id, 'cleanWindowsDevice')
     return_outputs('Clean windows device action activated successfully.', {}, {})
 
 
 def windows_device_defender_scan_command(client: MsGraphClient, args: dict) -> None:
-    quick_scan: bool = bool(args.get('quick_scan'))
+    quick_scan: bool = argToBoolean(args.get('quick_scan', True))
     device_id: str = str(args.get('device_id'))
     client.windows_device_defender_scan(quick_scan, device_id, 'windowsDefenderScan')
     return_outputs('Windows device defender scan action activated successfully.', {}, {})
 
 
 def wipe_device_command(client: MsGraphClient, args: dict) -> None:
-    keep_enrollment_data: bool = bool(args.get('keep_enrollment_data'))
-    keep_user_data: bool = bool(args.get('keep_user_data'))
-    mac_os_unlock_code: str = str(args.get('mac_os_unlock_code'))
+    keep_enrollment_data: bool = argToBoolean(args.get('keep_enrollment_data', True))
+    keep_user_data: bool = argToBoolean(args.get('keep_user_data', True))
+    mac_os_unlock_code: str = str(args.get('mac_os_unlock_code', ""))
     device_id: str = str(args.get('device_id'))
     client.wipe_device(keep_enrollment_data, keep_user_data, mac_os_unlock_code, device_id, 'wipe')
     return_outputs('Wipe device action activated successfully.', {}, {})
@@ -362,8 +430,8 @@ def wipe_device_command(client: MsGraphClient, args: dict) -> None:
 
 def update_windows_device_account_command(client: MsGraphClient, args: dict) -> None:
     device_account_password: str = str(args.get('device_account_password'))
-    password_rotation_enabled: bool = bool(args.get('password_rotation_enabled'))
-    calendar_sync_enabled: bool = bool(args.get('calendar_sync_enabled'))
+    password_rotation_enabled: bool = argToBoolean(args.get('password_rotation_enabled', False))
+    calendar_sync_enabled: bool = argToBoolean(args.get('calendar_sync_enabled', False))
     device_account_email: str = str(args.get('device_account_email'))
     exchange_server: str = str(args.get('exchange_server'))
     session_initiation_protocal_address: str = str(args.get('session_initiation_protocal_address'))
@@ -380,18 +448,31 @@ def update_windows_device_account_command(client: MsGraphClient, args: dict) -> 
 def main():
     args: dict = demisto.args()
     params: dict = demisto.params()
-    self_deployed: bool = params.get('self_deployed', False)
-    tenant_id: str = params.get('tenant_id', '')
-    auth_and_token_url: str = params.get('auth_id', '')
-    enc_key: str = params.get('enc_key', '')
-    base_url: str = urljoin(params.get('url', ''), '/v1.0')
+    tenant_id: str = params.get('credentials_tenant_id', {}).get('password') or params.get('tenant_id', '')
+    auth_and_token_url: str = params.get('credentials_auth_id', {}).get('password') or params.get('auth_id', '')
+    enc_key: str = params.get('credentials_enc_key', {}).get('password') or params.get('enc_key', '')
+    azure_cloud = get_azure_cloud(params, 'Microsoft Graph Device Management')
     app_name: str = 'ms-graph-device-management'
     ok_codes: tuple = (200, 201, 202, 204)
     use_ssl: bool = not params.get('insecure', False)
     proxy: bool = params.get('proxy', False)
+    certificate_thumbprint: str = params.get('credentials_certificate_thumbprint', {}).get(
+        'password') or params.get('certificate_thumbprint', '')
+    private_key: str = params.get('private_key', '')
+    managed_identities_client_id: Optional[str] = get_azure_managed_identities_client_id(params)
+    self_deployed: bool = params.get('self_deployed', False) or managed_identities_client_id is not None
 
-    client: MsGraphClient = MsGraphClient(self_deployed, tenant_id, auth_and_token_url, enc_key, app_name, base_url,
-                                          use_ssl, proxy, ok_codes)
+    if not managed_identities_client_id:
+        if not self_deployed and not enc_key:
+            raise DemistoException('Key must be provided. For further information see '
+                                   'https://xsoar.pan.dev/docs/reference/articles/microsoft-integrations---authentication')
+        elif not enc_key and not (certificate_thumbprint and private_key):
+            raise DemistoException('Key or Certificate Thumbprint and Private Key must be provided.')
+
+    client: MsGraphClient = MsGraphClient(self_deployed, tenant_id, auth_and_token_url, enc_key, app_name, azure_cloud,
+                                          use_ssl, proxy, ok_codes, certificate_thumbprint=certificate_thumbprint,
+                                          private_key=private_key,
+                                          managed_identities_client_id=managed_identities_client_id)
 
     command: str = demisto.command()
     LOG(f'Command being called is {command}')
@@ -404,6 +485,8 @@ def main():
             list_managed_devices_command(client, args)
         elif command == 'msgraph-get-managed-device-by-id':
             get_managed_device_command(client, args)
+        elif command == 'msgraph-get-managed-device-physical-memory-by-id':
+            get_managed_device_physical_memory_command(client, args)
         elif command == 'msgraph-device-disable-lost-mode':
             disable_lost_mode_command(client, args)
         elif command == 'msgraph-locate-device':
@@ -440,13 +523,15 @@ def main():
             wipe_device_command(client, args)
         elif command == 'msgraph-update-windows-device-account':
             update_windows_device_account_command(client, args)
+        elif command == 'msgraph-find-managed-devices-by-name':
+            find_managed_devices_command(client, args)
+        elif command == 'msgraph-device-auth-reset':
+            return_results(reset_auth())
 
     # log exceptions
     except Exception as err:
         return_error(str(err))
 
-
-from MicrosoftApiModule import *  # noqa: E402
 
 if __name__ in ['__main__', 'builtins']:
     main()

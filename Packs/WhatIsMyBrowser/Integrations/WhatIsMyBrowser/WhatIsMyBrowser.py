@@ -4,13 +4,14 @@ from CommonServerPython import *
 import requests
 import json
 from collections import defaultdict
-# disable insecure warnings
-requests.packages.urllib3.disable_warnings()
+import urllib3
+
+# Disable insecure warnings
+urllib3.disable_warnings()
 
 
 '''GLOBAL VARS'''
 API_URL = demisto.params().get('url')
-API_KEY = demisto.params().get('api_key')
 USE_SSL = not demisto.params().get('insecure')
 PROXY = demisto.params().get('proxy')
 
@@ -19,8 +20,11 @@ PROXY = demisto.params().get('proxy')
 
 
 def http_request(data):
+    api_key = demisto.params().get('credentials_api_key', {}).get('password') or demisto.params().get('api_key')
+    if not api_key:
+        raise DemistoException('API key must be provided.')
     headers = {
-        'X-API-KEY': API_KEY,
+        'X-API-KEY': api_key,
     }
     r = requests.request(
         'POST',
@@ -50,6 +54,8 @@ def ua_parse_command():
     user_agent = demisto.args().get('UserAgent')
     raw = ua_parse(user_agent)
     r = json.loads(raw)
+    dbot_score = {}
+    demisto.debug("Initializing dbot_score")
     if 'success' in r['result']['code']:
         parsed = r['parse']
         hr = defaultdict()  # type: dict
@@ -100,7 +106,7 @@ def ua_parse_command():
             'Type': entryTypes['note'],
             'ContentsFormat': formats['json'],
             'Contents': r,
-            'HumanReadable': tableToMarkdown('Parsed result for {}'.format(user_agent), hr),
+            'HumanReadable': tableToMarkdown(f'Parsed result for {user_agent}', hr),
             'EntryContext': ec
         })
     if r['result']['code'] == 'error':
@@ -109,7 +115,7 @@ def ua_parse_command():
             'Type': entryTypes['note'],
             'ContentsFormat': formats['markdown'],
             'Contents': r,
-            'HumanReadable': '{}'.format(error_msg)
+            'HumanReadable': f'{error_msg}'
         })
 
 

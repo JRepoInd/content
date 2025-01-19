@@ -12,10 +12,10 @@ from oauth2client import service_account
 from googleapiclient import discovery
 
 import json
-import requests
+import urllib3
 
 # Disable insecure warnings
-requests.packages.urllib3.disable_warnings()
+urllib3.disable_warnings()
 
 # CONSTANTS
 SERVICE_NAME = "pubsub"
@@ -525,11 +525,12 @@ class PubSubClient(BaseGoogleClient):
 
 
 def init_google_client(
-    service_account_json,
     default_subscription,
     default_project,
     default_max_msgs,
     insecure,
+    credentials: dict = None,
+    service_account_json: str = None,
     **kwargs,
 ) -> PubSubClient:
     """
@@ -543,7 +544,10 @@ def init_google_client(
     :return:
     """
     try:
-        service_account_json = json.loads(service_account_json)
+        service_account_json = json.loads(str(
+            credentials.get('password')
+            if isinstance(credentials, dict)
+            else service_account_json))
         client = PubSubClient(
             default_project=default_project,
             default_subscription=default_subscription,
@@ -694,6 +698,7 @@ def publish_message_command(
     project_id: str,
     data: str = None,
     attributes: str = None,
+    delim_char_attributes: str = ",",
 ) -> Tuple[str, dict, dict]:
     """
     Publishes message in the topic
@@ -707,9 +712,10 @@ def publish_message_command(
     :param attributes: message attributes separated by key=val pairs sepearated by ','
     :param data: message data str
     :param client: GoogleClient
+    :param delim_char_attributes: delimiter character between atrribute pairs
     :return: list of topics
     """
-    body = get_publish_body(attributes, data)
+    body = get_publish_body(attributes, data, delim_char_attributes)
     published_messages = client.publish_message(project_id, topic_id, body)
 
     output = []
@@ -736,19 +742,20 @@ def publish_message_command(
     )
 
 
-def get_publish_body(message_attributes, message_data):
+def get_publish_body(message_attributes, message_data, delim_char):
     """
     Creates publish messages body from given arguments
     :param message_attributes: message attributes
     :param message_data: message data
+    :param delim_char: delimiter character between atrribute pairs
     :return: publish message body
     """
     message = {}
     if message_data:
         # convert to base64 string
-        message["data"] = str(base64.b64encode(message_data.encode("utf8")))[2:-1]
+        message["data"] = base64.b64encode(message_data.encode("utf8")).decode('utf8')
     if message_attributes:
-        message["attributes"] = attribute_pairs_to_dict(message_attributes)
+        message["attributes"] = attribute_pairs_to_dict(message_attributes, delim_char)
     body = {"messages": [message]}
     return body
 
@@ -832,9 +839,10 @@ def extract_acks_and_msgs(raw_msgs, add_ack_to_msg=True):
             msg = raw_msg.get("message", {})
             decoded_data = str(msg.get("data", ""))
             try:
-                decoded_data = str(base64.b64decode(decoded_data))[2:-1]
-            except Exception:
+                decoded_data = base64.b64decode(decoded_data).decode("utf-8")
+            except Exception as e:
                 # display message with b64 value
+                demisto.debug(f'Unable to encode {decoded_data}:\n{e}')
                 pass
 
             msg["data"] = decoded_data
@@ -1316,9 +1324,8 @@ def fetch_incidents(
     )
 
     # Pull unique messages if available
-    msgs, msg_ids, acknowledges, max_publish_time = try_pull_unique_messages(
-        client, sub_name, last_run_fetched_ids, last_run_time, retry_times=1
-    )
+    msgs, msg_ids, acknowledges, max_publish_time = try_pull_unique_messages(client, sub_name, last_run_fetched_ids,
+                                                                             last_run_time, ack_incidents, retry_times=1)
 
     # Handle fetch results
     return handle_fetch_results(
@@ -1363,15 +1370,14 @@ def setup_subscription_last_run(
     return last_run_fetched_ids, last_run_time
 
 
-def try_pull_unique_messages(
-    client, sub_name, previous_msg_ids, last_run_time, retry_times=0
-):
+def try_pull_unique_messages(client, sub_name, previous_msg_ids, last_run_time, ack_incidents, retry_times=0):
     """
     Tries to pull unique messages for the subscription
     :param client: PubSub client
     :param sub_name: Subscription name
     :param previous_msg_ids: Previous message ids set
     :param last_run_time: previous run time
+    :param ack_incidents: should ack incidents
     :param retry_times: How many times to retry pulling
     :return:
         1. Unique list of messages
@@ -1398,11 +1404,9 @@ def try_pull_unique_messages(
                 demisto.debug(
                     f"GCP_PUBSUB_MSG Duplicates with max_publish_time: {max_publish_time}"
                 )
-                return try_pull_unique_messages(
-                    client, sub_name, previous_msg_ids, retry_times - 1
-                )
-            # clean non-unique ids from raw_msgs
-            else:
+                return try_pull_unique_messages(client, sub_name, previous_msg_ids, retry_times - 1, ack_incidents)
+            # clean non-unique ids from raw_msgs (in case non-ack)
+            elif not ack_incidents:
                 filtered_raw_msgs = filter_non_unique_messages(
                     raw_msgs, previous_msg_ids, last_run_time
                 )
@@ -1426,6 +1430,9 @@ def is_unique_msg(msg, previous_msg_ids, previous_run_time):
     if message_dict:
         msg_id = message_dict.get("messageId")
         msg_pub_time = message_dict.get("publishTime", "")
+        unique_msg = msg_id not in previous_msg_ids and msg_pub_time > previous_run_time
+        if not unique_msg:
+            demisto.debug(f"Dropping {msg_id=}. {msg_pub_time=}")
         return msg_id not in previous_msg_ids and msg_pub_time > previous_run_time
     return False
 
@@ -1475,24 +1482,25 @@ def handle_fetch_results(
     """
     incidents = []
     if pulled_msg_ids and max_publish_time:
-        if last_run_time <= max_publish_time:
-            # Create incidents
-            for msg in pulled_msgs:
-                incident = message_to_incident(msg)
-                incidents.append(incident)
-            # ACK messages if relevant
-            if ack_incidents:
-                client.ack_messages(sub_name, acknowledges)
-            # Recreate last run to return with new values
-            last_run = {
-                LAST_RUN_TIME_KEY: max_publish_time,
-                LAST_RUN_FETCHED_KEY: list(pulled_msg_ids),
-            }
+        # Create incidents
+        for msg in pulled_msgs:
+            incident = message_to_incident(msg)
+            incidents.append(incident)
+        # ACK messages if relevant
+        if ack_incidents:
+            demisto.debug(f"ACK: {acknowledges}")
+            client.ack_messages(sub_name, acknowledges)
+        # Recreate last run to return with new values
+        last_run = {
+            LAST_RUN_TIME_KEY: max_publish_time,
+            LAST_RUN_FETCHED_KEY: list(pulled_msg_ids),
+        }
     # We didn't manage to pull any unique messages, so we're trying to increment micro seconds - not relevant for ack
     elif not ack_incidents:
         last_run_time_dt = dateparser.parse(
             max_publish_time if max_publish_time else last_run_time
         )
+        assert last_run_time_dt is not None
         last_run_time = convert_datetime_to_iso_str(
             last_run_time_dt + timedelta(microseconds=1)
         )

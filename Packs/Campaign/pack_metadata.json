@@ -1,19 +1,17 @@
 {
-    "name": "Campaign",
-    "description": "This pack can help you find related phishing, spam, or other types of email incidents and characterize campaigns.",
+    "name": "Phishing Campaign",
+    "description": "This pack can help you find related phishing, spam or other types of email incidents and characterize campaigns.",
     "support": "xsoar",
-    "currentVersion": "2.0.2",
+    "currentVersion": "3.4.18",
     "author": "Cortex XSOAR",
     "url": "https://www.paloaltonetworks.com/cortex",
     "email": "",
     "created": "2021-03-01T16:31:47Z",
     "categories": [
-        "Messaging"
+        "Case Management"
     ],
     "tags": [
-        "Scam",
-        "Spam",
-        "Email"
+        "Use Case"
     ],
     "useCases": [
         "Phishing"
@@ -23,6 +21,32 @@
         "Phishing": {
             "mandatory": true,
             "display_name": "Phishing"
+        },
+        "DemistoLocking": {
+            "mandatory": true,
+            "display_name": "Demisto Lock"
+        },
+        "CommonTypes": {
+            "mandatory": true,
+            "display_name": "Common Types"
+        },
+        "CommonScripts": {
+            "mandatory": true,
+            "display_name": "Common Scripts"
         }
-    }
+    },
+    "itemPrefix": [
+        "Actions On Low Similarity",
+        "Select Low Similarity",
+        "Campaign"
+    ],
+    "displayedImages": [
+        "Phishing",
+        "DemistoLocking",
+        "CommonTypes",
+        "CommonScripts"
+    ],
+    "marketplaces": [
+        "xsoar"
+    ]
 }

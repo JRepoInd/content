@@ -1,15 +1,14 @@
+import demistomock as demisto  # noqa: F401
+from CommonServerPython import *  # noqa: F401
 import dateparser
+import urllib3
 
-import demistomock as demisto
-from CommonServerPython import *
 
 import json
-import requests
-import traceback
 from typing import Any, Dict, Tuple, List
 
 # Disable insecure warnings
-requests.packages.urllib3.disable_warnings()
+urllib3.disable_warnings()
 
 ''' CONSTANTS '''
 MAX_INCIDENTS_TO_FETCH = 500
@@ -235,7 +234,7 @@ def parse_date_to_isoformat(arg: str, arg_name: str):
     if not date:
         return_error(f'invalid date value for: {arg_name}\n{arg} should be in the format of:'
                      f' "2016-07-22T01:51:31.001Z." or "10 minutes"')
-
+    assert date is not None
     date = f'{date.isoformat()}Z'
     return date
 
@@ -603,10 +602,13 @@ def main() -> None:
         'Japan': 'https://api.tmcas.trendmicro.co.jp/v1/',
         'Australia and New Zealand': 'https://api-au.tmcas.trendmicro.com/v1/',
         'UK': 'https://api.tmcas.trendmicro.co.uk/v1/',
-        'Canada': 'https://api-ca.tmcas.trendmicro.com/v1/'
+        'Canada': 'https://api-ca.tmcas.trendmicro.com/v1/',
+        'India': 'https://api-in.tmcas.trendmicro.com/v1/'
     }
     params = demisto.params()
-    token = params.get('token')
+    token = params.get('credentials_token', {}).get('password') or params.get('token')
+    if not token:
+        raise DemistoException('Token must be provided.')
     # get the service API url
     base_url = URLS.get(params.get("serviceURL"))
     verify_certificate = not params.get('insecure', False)
@@ -645,7 +647,6 @@ def main() -> None:
 
     # Log exceptions and return errors
     except Exception as e:
-        demisto.error(traceback.format_exc())  # print the traceback
         return_error(f'Failed to execute {demisto.command()} command.\nError:\n{str(e)}')
 
 

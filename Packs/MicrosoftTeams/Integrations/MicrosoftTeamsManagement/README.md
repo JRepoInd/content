@@ -27,22 +27,22 @@ Required Permissions
 * TeamMember.ReadWrite.All - Application
 
 
-## Configure Microsoft Teams Management on Cortex XSOAR
+## Configure Microsoft Teams Management in Cortex
 
-1. Navigate to **Settings** > **Integrations** > **Servers & Services**.
-2. Search for Microsoft Teams Management.
-3. Click **Add instance** to create and configure a new integration instance.
 
-    | **Parameter** | **Description** | **Required** |
-    | --- | --- | --- |
-    | app_id | Application ID | True |
-    | azure_ad_endpoint | Azure AD endpoint associated with a national cloud | False |
-    | insecure | Trust any certificate \(not secure\) | False |
-    | proxy | Use system proxy settings | False |
+| **Parameter** | **Description** | **Required** |
+| --- | --- | --- |
+| Application ID |  | False |
+| Azure AD endpoint | Azure AD endpoint associated with a national cloud. | False |
+| Trust any certificate (not secure) |  | False |
+| Use system proxy settings |  | False |
+| Authentication Type | Type of authentication - could be Client Credentials Authorization Flow \(recommended\) or Device Flow | False |
+| Tenant ID (for Client Credentials mode) |  | False |
+| Client Secret (for Client Credentials mode) |  | False |
+| Azure Managed Identities Client ID | The Managed Identities client id for authentication - relevant only if the integration is running on Azure VM. | False |
 
-4. Click **Test** to validate the URLs, token, and connection.
 ## Commands
-You can execute these commands from the Cortex XSOAR CLI, as part of an automation, or in a playbook.
+You can execute these commands from the CLI, as part of an automation, or in a playbook.
 After you successfully execute a command, a DBot message appears in the War Room with the command details.
 ### microsoft-teams-auth-test
 ***
@@ -614,7 +614,7 @@ Add a user to be a team member.
 | **Argument Name** | **Description** | **Required** |
 | --- | --- | --- |
 | team_id | ID of the team to add the user to. Can be retrieved by running the microsoft-teams-teams-list command. | Required | 
-| user_id | ID of the user to add to the team. Can be retrieved by running the microsoft-teams-members-list command. | Required | 
+| user_id | Email address or ID of the user to add to the team. The ID can be retrieved by running the microsoft-teams-members-list command. | Required | 
 | is_owner | Whether to add the member with the owner role. Possible values are: "false" and "true". Default is "false". Possible values are: false, true. Default is false. | Optional | 
 
 

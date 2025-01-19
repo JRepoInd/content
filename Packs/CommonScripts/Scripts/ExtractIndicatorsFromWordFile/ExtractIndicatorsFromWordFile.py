@@ -3,7 +3,6 @@ from CommonServerPython import *
 from CommonServerUserPython import *
 import subprocess
 from docx import Document
-from typing import List, Dict
 from docx.opc.constants import RELATIONSHIP_TYPE as RT
 from docx.opc.exceptions import PackageNotFoundError
 
@@ -20,28 +19,26 @@ class WordParser:
         self.file_path = ""
         self.file_name = ""
         self.file_type = ""
-        self.all_data = ""
+        self.paragraphs = ""
+        self.tables = ""
+        self.hyperlinks = ""
+        self.core_properties = {}
 
     def get_file_details(self):
-        cmd_res = demisto.executeCommand('getFilePath', {'id': demisto.args().get("entryID")})
-        file_res = cmd_res[0]
-        if isError(file_res):
-            file_res["Contents"] = "Error fetching entryID: " + file_res["Contents"]
-            self.res = file_res
-        else:  # Got file path:
-            self.file_path = file_res.get('Contents').get('path')
-            self.file_name = file_res.get('Contents').get('name')
-            file = demisto.dt(demisto.context(), "File(val.EntryID === '{}')".format(demisto.args().get('entryID')))
-            if isinstance(file, list):
-                file = file[0]
+        file_path_data = demisto.getFilePath(demisto.args().get("entryID"))
+        self.file_path = file_path_data.get('path')
+        self.file_name = file_path_data.get('name')
+        file_entry = demisto.dt(self.get_context(), "File(val.EntryID === '{}')".format(demisto.args().get('entryID')))
+        if isinstance(file_entry, list):
+            file_entry = file_entry[0]
 
-            self.file_type = file.get("Type")
+        self.file_type = file_entry.get("Type")
 
     def convert_doc_to_docx(self):
         output = subprocess.check_output(
             ['soffice', '--headless', '-env:UserInstallation=file:///tmp/.config/extractindicators', '--convert-to',
              'docx', self.file_path], stderr=subprocess.STDOUT)
-        demisto.debug("soffice output: [{}]".format(str(output)))
+        demisto.debug(f"soffice output: [{str(output)}]")
         # Requires office-utils docker image
         output_file_name = self.file_name[0:self.file_name.rfind('.')] + '.docx'
         self.file_path = self.file_path + ".docx"
@@ -49,16 +46,16 @@ class WordParser:
             with open(self.file_path, 'rb') as f:
                 f_data = f.read()
                 self.res = fileResult(output_file_name, f_data)
-        except IOError:
+        except OSError:
             return_error("Error: was not able to convert the input file to docx format.")
 
     def extract_indicators(self):
         try:
             document = Document(self.file_path)
-            self.all_data = self.get_paragraphs(document)
-            self.all_data += self.get_tables(document)
-            self.all_data += self.get_core_properties(document)
-            self.all_data += self.get_hyperlinks(document)
+            self.paragraphs = self.get_paragraphs(document)
+            self.tables = self.get_tables(document)
+            self.hyperlinks = self.get_hyperlinks(document)
+            self.get_core_properties(document)
         except PackageNotFoundError:
             self.errEntry["Contents"] = "Input file is not a valid docx/doc file."
             self.res = self.errEntry  # type: ignore
@@ -80,14 +77,13 @@ class WordParser:
         return " ".join(all_cells_txt.split())  # Removes extra whitespaces
 
     def get_core_properties(self, document):
-        all_properties_txt = document.core_properties.author + " " + \
-            document.core_properties.category + " " + \
-            document.core_properties.comments + " " + \
-            document.core_properties.identifier + " " + \
-            document.core_properties.keywords + " " + \
-            document.core_properties.subject + " " + \
-            document.core_properties.title + " "
-        return " ".join(all_properties_txt.split())
+        self.core_properties['author'] = document.core_properties.author
+        self.core_properties['category'] = document.core_properties.category
+        self.core_properties['comments'] = document.core_properties.comments
+        self.core_properties['identifier'] = document.core_properties.identifier
+        self.core_properties['keywords'] = document.core_properties.keywords
+        self.core_properties['subject'] = document.core_properties.subject
+        self.core_properties['title'] = document.core_properties.title
 
     def get_hyperlinks(self, document):
         all_hyperlinks = ""
@@ -107,6 +103,11 @@ class WordParser:
         else:
             return_error("Input file is not a doc file.")
 
+    def get_context(self):
+        incident_id = demisto.incident()['id']
+        res = execute_command('getContext', {'id': incident_id})
+        return demisto.get(res, 'context')
+
 
 def main():
     # Parsing:
@@ -114,28 +115,30 @@ def main():
     try:
         parser.parse_word()
     except subprocess.CalledProcessError as perr:
-        return_error("ProcessError: exit code: {}. Output: {}".format(perr.returncode, perr.output))
+        return_error(f"ProcessError: exit code: {perr.returncode}. Output: {perr.output}")
     except Exception as e:
         return_error(str(e))
 
+    core_properties_str = " ".join(prop for prop in parser.core_properties.values())
+    all_data = " ".join([parser.paragraphs, parser.tables, parser.hyperlinks, core_properties_str])
+
     # Returning Indicators:
-    indicators_hr = demisto.executeCommand("extractIndicators", {
-        'text': parser.all_data})[0][u'Contents']
-    demisto.results({
-        'Type': entryTypes['note'],
-        'ContentsFormat': formats['text'],
-        'Contents': indicators_hr,
-        'HumanReadable': indicators_hr
-    })
+    indicators_hr = demisto.executeCommand("extractIndicators", {'text': all_data})
+    return_results(indicators_hr)
+
+    hr_output = tableToMarkdown('Properties', parser.core_properties)
+    hr_output += f'### Paragraphs\n{parser.paragraphs}\n'
+    hr_output += f'### Tables\n{parser.tables}\n'
+    hr_output += f'### Hyperlinks\n{parser.hyperlinks}'
 
     # Returning all parsed data:
-    demisto.results(parser.all_data.encode('utf-8'))
+    return_results(CommandResults(readable_output=hr_output))
 
     # Returning error:
     if parser.res:  # If there was an error:
         contents = parser.res["Contents"]  # type: ignore
         if "Error occurred while parsing input" in contents or "Input file is not a valid" in contents:
-            demisto.results(parser.res)  # Return error too
+            return_results(parser.res)  # Return error too
 
 
 # python2 uses __builtin__ python3 uses builtins

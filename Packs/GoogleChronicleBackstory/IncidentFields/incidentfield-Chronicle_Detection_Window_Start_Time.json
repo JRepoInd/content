@@ -19,7 +19,8 @@
     "group": 0,
     "hidden": false,
     "associatedTypes": [
-        "Chronicle Rule Detection"
+        "Chronicle Rule Detection",
+        "Chronicle Curated Rule Detection"
     ],
     "associatedToAll": false,
     "unmapped": false,
@@ -27,5 +28,8 @@
     "caseInsensitive": true,
     "sla": 0,
     "threshold": 72,
-    "fromVersion": "5.0.0"
+    "fromVersion": "5.0.0",
+    "marketplaces": [
+        "xsoar"
+    ]
 }

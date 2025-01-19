@@ -1,7 +1,6 @@
+import demistomock as demisto  # noqa: F401
+from CommonServerPython import *  # noqa: F401
 import uuid
-
-from CommonServerPython import *
-import demistomock as demisto
 
 ''' IMPORTS '''
 
@@ -12,7 +11,7 @@ from smbclient import (
     scandir,
     remove,
     mkdir,
-    rmdir
+    rmdir,
 )
 
 
@@ -32,6 +31,14 @@ def handle_path(path):
     return path.strip('\\/')
 
 
+def create_share_path(hostname, path):
+    """
+    Create a path to the shared folder according to the smbprotocol convention: '\\server\share'.
+    For reference see https://github.com/jborean93/smbprotocol/blob/master/examples/high-level/directory-management.py
+    """
+    return fr'\\{hostname}\{path}'
+
+
 class SMBClient:
     def __init__(self, hostname, user, password, encrypt, port):
         self.hostname = hostname
@@ -47,7 +54,9 @@ class SMBClient:
             username=user or self._user,
             password=password or self._password,
             port=port or self._port,
-            encrypt=encrypt or self._encrypt)
+            encrypt=encrypt or self._encrypt,
+            auth_protocol='ntlm',
+        )
 
 
 def test_module(client: SMBClient):
@@ -58,7 +67,7 @@ def test_module(client: SMBClient):
 def smb_upload(client: SMBClient, args: dict):
     hostname = args.get('hostname')
     path = handle_path(args.get('file_path'))
-    path = os.path.join(hostname or client.hostname, path)
+    path = create_share_path(hostname or client.hostname, path)
     username = args.get('username')
     password = args.get('password')
     entryID = args.get('entryID')
@@ -88,7 +97,7 @@ def smb_upload(client: SMBClient, args: dict):
 def smb_download(client: SMBClient, args: dict):
     hostname = args.get('hostname')
     path = handle_path(args.get('file_path'))
-    path = os.path.join(hostname or client.hostname, path)
+    path = create_share_path(hostname or client.hostname, path)
     username = args.get('username')
     password = args.get('password')
 
@@ -103,7 +112,7 @@ def smb_download(client: SMBClient, args: dict):
 def smb_remove_file(client: SMBClient, args: dict):
     hostname = args.get('hostname')
     path = handle_path(args.get('file_path'))
-    path = os.path.join(hostname or client.hostname, path)
+    path = create_share_path(hostname or client.hostname, path)
     username = args.get('username')
     password = args.get('password')
 
@@ -118,7 +127,7 @@ def list_dir(client: SMBClient, args: dict):
     username = args.get('username')
     password = args.get('password')
     path = handle_path(args.get('path'))
-    path = os.path.join(hostname or client.hostname, path)
+    path = create_share_path(hostname or client.hostname, path)
 
     client.create_session(hostname, username, password)
     entries = list(scandir(path))
@@ -150,7 +159,7 @@ def smb_mkdir(client: SMBClient, args: dict):
     username = args.get('username')
     password = args.get('password')
     path = handle_path(args.get('path'))
-    path = os.path.join(hostname or client.hostname, path)
+    path = create_share_path(hostname or client.hostname, path)
 
     client.create_session(hostname, username, password)
 
@@ -164,7 +173,7 @@ def smb_rmdir(client: SMBClient, args: dict):
     username = args.get('username')
     password = args.get('password')
     path = handle_path(args.get('path'))
-    path = os.path.join(hostname or client.hostname, path)
+    path = create_share_path(hostname or client.hostname, path)
 
     client.create_session(hostname, username, password)
     rmdir(path)
@@ -182,15 +191,19 @@ def main():
     dc = params.get('dc', None)
     verify = params.get('require_secure_negotiate', True)
     client_guid = params.get('client_guid', None)
+
+    # Temporary workaround to an issue in the smbprotocol package.
+    # Git issue: https://github.com/jborean93/smbprotocol/issues/109
+    config = smbclient.ClientConfig(username=user, password=password, require_secure_negotiate=verify)
+    config.domain_controller = dc
+
     if client_guid:
         try:
             client_guid = uuid.UUID(client_guid)
+            config.client_guid = client_guid
         except ValueError:
-            demisto.info(f'Failed to convert {client_guid} to a valid UUID string. Using a random generated UUID instead')
-            client_guid = None
-
-    smbclient.ClientConfig(username=user, password=password, require_secure_negotiate=verify, domain_controller=dc,
-                           client_guid=client_guid)
+            demisto.info(
+                f'Failed to convert {client_guid} to a valid UUID string. Using a random generated UUID instead')
 
     client = SMBClient(hostname=hostname,
                        user=user,

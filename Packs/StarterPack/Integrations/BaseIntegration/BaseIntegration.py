@@ -1,3 +1,5 @@
+import demistomock as demisto  # noqa: F401
+from CommonServerPython import *  # noqa: F401
 """Base Integration for Cortex XSOAR (aka Demisto)
 
 This is an empty Integration with some basic structure according
@@ -14,16 +16,13 @@ https://github.com/demisto/content/blob/master/Packs/HelloWorld/Integrations/Hel
 
 """
 
-import demistomock as demisto
-from CommonServerPython import *  # noqa # pylint: disable=unused-wildcard-import
 from CommonServerUserPython import *  # noqa
 
-import requests
-import traceback
-from typing import Dict, Any
+import urllib3
+from typing import Any
 
 # Disable insecure warnings
-requests.packages.urllib3.disable_warnings()  # pylint: disable=no-member
+urllib3.disable_warnings()
 
 
 ''' CONSTANTS '''
@@ -44,7 +43,7 @@ class Client(BaseClient):
     """
 
     # TODO: REMOVE the following dummy function:
-    def baseintegration_dummy(self, dummy: str) -> Dict[str, str]:
+    def baseintegration_dummy(self, dummy: str) -> dict[str, str]:
         """Returns a simple python dict with the information provided
         in the input (dummy).
 
@@ -95,7 +94,7 @@ def test_module(client: Client) -> str:
 
 
 # TODO: REMOVE the following dummy command function
-def baseintegration_dummy_command(client: Client, args: Dict[str, Any]) -> CommandResults:
+def baseintegration_dummy_command(client: Client, args: dict[str, Any]) -> CommandResults:
 
     dummy = args.get('dummy', None)
     if not dummy:
@@ -123,7 +122,7 @@ def main() -> None:
     """
 
     # TODO: make sure you properly handle authentication
-    # api_key = demisto.params().get('apikey')
+    # api_key = demisto.params().get('credentials', {}).get('password')
 
     # get the service API url
     base_url = urljoin(demisto.params()['url'], '/api/v1')
@@ -142,7 +141,7 @@ def main() -> None:
 
         # TODO: Make sure you add the proper headers for authentication
         # (i.e. "Authorization": {api key})
-        headers: Dict = {}
+        headers: dict = {}
 
         client = Client(
             base_url=base_url,
@@ -162,7 +161,6 @@ def main() -> None:
 
     # Log exceptions and return errors
     except Exception as e:
-        demisto.error(traceback.format_exc())  # print the traceback
         return_error(f'Failed to execute {demisto.command()} command.\nError:\n{str(e)}')
 
 

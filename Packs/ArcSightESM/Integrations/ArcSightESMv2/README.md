@@ -57,6 +57,7 @@ Cortex XSOAR is designed for an automatic response, so make sure to define condi
     - **Use system proxy settings**: Select whether to communicate via the system proxy server or not.
     - **Fetch incidents**: Mark the Fetch incidents checkbox to automatically create Cortex XSOAR incidents from this integration instance.
     - **Incident type**: Select the incident type to trigger.
+    - **Product Version**: Select the ArcSight ESM version. 7.4 above using the new Swagger detect-api. Note - not all the commands are using the new API at the moment.
     - **Use REST Endpoints**: Mark this checkbox to use REST endpoints for the commands related to 'entries' instead of the default legacy SOAP endpoints.
 4. Click **Test** to validate the URLs, token, and connection.
     If you are experiencing issues with the service configuration, please contact Cortex XSOAR support at support@paloaltonetworks.com.
@@ -66,7 +67,7 @@ Cortex XSOAR is designed for an automatic response, so make sure to define condi
 - **Fetch events** - New events that match the predefined condition will be fetched to Cortex XSOAR as an incident and will trigger playbooks for automation and response. Such events could be any kind of security events.
 - **Fetch cases** - New cases that match the predefined condition will be fetched to Cortex XSOAR as an incident and will trigger playbooks for automation and response. Such cases could include any kind of security events. The final step of the playbook could be updating, closing or deleting the case.
 - **Search events** - Query specific events based on an existing query viewer.
-- **Getting active** list entries - Returning active list entries (such as “Blacklist IPS”, “Malicious MD5s”, etc) by using as-get-entries and providing the resource ID of the active list. The entries can be added as a list in Cortex XSOAR for cross-platform usage, additional automation, and data enrichment.
+- **Getting active** list entries - Returning active list entries (such as “Block list IPS”, “Malicious MD5s”, etc) by using as-get-entries and providing the resource ID of the active list. The entries can be added as a list in Cortex XSOAR for cross-platform usage, additional automation, and data enrichment.
 
 ## Fetched Incidents Data
 The integration can fetch events and cases.
@@ -155,7 +156,6 @@ Gets information about a single case.
 | --- | --- | --- |
 | resourceId | Resource ID of the case to get information for | Required | 
 | withBaseEvents | If "true", then will return case and base events of that case | Optional | 
-
 
 #### Context Output
 
@@ -564,9 +564,9 @@ Returns the security event details
                     "addressAsBytes": "abgBRQ==",
                     "assetId": "123xxqmYBABCAWiGUuYaX-w==",
                     "assetLocalId": 17179869185,
-                    "assetName": "content.demisto.works",
+                    "assetName": "xsoar-example",
                     "decodedAddress": "1.1.1.1",
-                    "hostName": "content.demisto.works",
+                    "hostName": "xsoar-example",
                     "id": "123xxqmYBABCAY8SQ92zN9g==",
                     "mutable": true,
                     "name": "Manager Internal Agent",
@@ -600,9 +600,9 @@ Returns the security event details
                     "addressAsBytes": "abgBRQ==",
                     "assetId": "123xxqmYBABCAWiGUuYaX-w==",
                     "assetLocalId": 17179869185,
-                    "assetName": "content.demisto.works",
+                    "assetName": "xsoar-example",
                     "decodedAddress": "1.1.1.1",
-                    "hostName": "content.demisto.works",
+                    "hostName": "xsoar-example",
                     "id": "123xxqmYBABCAY8SQ92zN9g==",
                     "mutable": true,
                     "name": "Manager Internal Agent",
@@ -624,9 +624,9 @@ Returns the security event details
                     "addressAsBytes": "abgBRQ==",
                     "assetId": "126xxqmYBABCAWiGUuYaX-w==",
                     "assetLocalId": 17179869185,
-                    "assetName": "content.demisto.works",
+                    "assetName": "xsoar-example",
                     "decodedAddress": "1.1.1.1",
-                    "hostName": "content.demisto.works",
+                    "hostName": "xsoar-example",
                     "mutable": true,
                     "product": "ArcSight",
                     "vendor": "ArcSight",
@@ -648,7 +648,7 @@ Returns the security event details
                     "addressAsBytes": "abgBRQ==",
                     "assetId": "126xxqmYBABCAWiGUuYaX-w==",
                     "assetLocalId": 17179869185,
-                    "assetName": "content.demisto.works",
+                    "assetName": "xsoar-example",
                     "decodedAddress": "1.1.1.1",
                     "geo": {
                         "latitude": 0,
@@ -657,7 +657,7 @@ Returns the security event details
                         "longitudeLong": 0,
                         "mutable": true
                     },
-                    "hostName": "content.demisto.works",
+                    "hostName": "xsoar-example",
                     "mutable": true,
                     "zone": {
                         "id": "12U32AABABCDVFpYAT3UdQ==",
@@ -675,9 +675,9 @@ Returns the security event details
                     "addressAsBytes": "abgBRQ==",
                     "assetId": "126xxqmYBABCAWiGUuYaX-w==",
                     "assetLocalId": 17179869185,
-                    "assetName": "content.demisto.works",
+                    "assetName": "xsoar-example",
                     "decodedAddress": "1.1.1.1",
-                    "hostName": "content.demisto.works",
+                    "hostName": "xsoar-example",
                     "mutable": true,
                     "product": "ArcSight",
                     "vendor": "ArcSight",
@@ -739,9 +739,9 @@ Returns the security event details
                     "addressAsBytes": "abgBRQ==",
                     "assetId": "123xxqmYBABCAWiGUuYaX-w==",
                     "assetLocalId": 17179869185,
-                    "assetName": "content.demisto.works",
+                    "assetName": "xsoar-example",
                     "decodedAddress": "1.1.1.1",
-                    "hostName": "content.demisto.works",
+                    "hostName": "xsoar-example",
                     "mutable": true,
                     "product": "ArcSight",
                     "vendor": "ArcSight",
@@ -768,9 +768,9 @@ Returns the security event details
                     "addressAsBytes": "abgBRQ==",
                     "assetId": "123xxqmYBABCAWiGUuYaX-w==",
                     "assetLocalId": 17179869185,
-                    "assetName": "content.demisto.works",
+                    "assetName": "xsoar-example",
                     "decodedAddress": "1.1.1.1",
-                    "hostName": "content.demisto.works",
+                    "hostName": "xsoar-example",
                     "id": "123xxqmYBABCAY8SQ92zN9g==",
                     "mutable": true,
                     "name": "Manager Internal Agent",
@@ -802,9 +802,9 @@ Returns the security event details
                     "addressAsBytes": "abgBRQ==",
                     "assetId": "123xxqmYBABCAWiGUuYaX-w==",
                     "assetLocalId": 17179869185,
-                    "assetName": "content.demisto.works",
+                    "assetName": "xsoar-example",
                     "decodedAddress": "1.1.1.1",
-                    "hostName": "content.demisto.works",
+                    "hostName": "xsoar-example",
                     "id": "123xxqmYBABCAY8SQ92zN9g==",
                     "mutable": true,
                     "name": "Manager Internal Agent",
@@ -838,9 +838,9 @@ Returns the security event details
                     "addressAsBytes": "abgBRQ==",
                     "assetId": "123xxqmYBABCAWiGUuYaX-w==",
                     "assetLocalId": 17179869185,
-                    "assetName": "content.demisto.works",
+                    "assetName": "xsoar-example",
                     "decodedAddress": "1.1.1.1",
-                    "hostName": "content.demisto.works",
+                    "hostName": "xsoar-example",
                     "id": "123xxqmYBABCAY8SQ92zN9g==",
                     "mutable": true,
                     "name": "Manager Internal Agent",
@@ -862,9 +862,9 @@ Returns the security event details
                     "addressAsBytes": "abgBRQ==",
                     "assetId": "123xxqmYBABCAWiGUuYaX-w==",
                     "assetLocalId": 17179869185,
-                    "assetName": "content.demisto.works",
+                    "assetName": "xsoar-example",
                     "decodedAddress": "1.1.1.1",
-                    "hostName": "content.demisto.works",
+                    "hostName": "xsoar-example",
                     "mutable": true,
                     "product": "ArcSight",
                     "vendor": "ArcSight",
@@ -886,7 +886,7 @@ Returns the security event details
                     "addressAsBytes": "abgBRQ==",
                     "assetId": "123xxqmYBABCAWiGUuYaX-w==",
                     "assetLocalId": 17179869185,
-                    "assetName": "content.demisto.works",
+                    "assetName": "xsoar-example",
                     "decodedAddress": "1.1.1.1",
                     "geo": {
                         "latitude": 0,
@@ -895,7 +895,7 @@ Returns the security event details
                         "longitudeLong": 0,
                         "mutable": true
                     },
-                    "hostName": "content.demisto.works",
+                    "hostName": "xsoar-example",
                     "mutable": true,
                     "port": 8443,
                     "userId": "123FwqmYBABCA23X2wprUSg==",
@@ -916,9 +916,9 @@ Returns the security event details
                     "addressAsBytes": "abgBRQ==",
                     "assetId": "123xxqmYBABCAWiGUuYaX-w==",
                     "assetLocalId": 17179869185,
-                    "assetName": "content.demisto.works",
+                    "assetName": "xsoar-example",
                     "decodedAddress": "1.1.1.1",
-                    "hostName": "content.demisto.works",
+                    "hostName": "xsoar-example",
                     "mutable": true,
                     "product": "ArcSight",
                     "vendor": "ArcSight",
@@ -989,9 +989,9 @@ Returns the security event details
                     "addressAsBytes": "abgBRQ==",
                     "assetId": "123xxqmYBABCAWiGUuYaX-w==",
                     "assetLocalId": 17179869185,
-                    "assetName": "content.demisto.works",
+                    "assetName": "xsoar-example",
                     "decodedAddress": "1.1.1.1",
-                    "hostName": "content.demisto.works",
+                    "hostName": "xsoar-example",
                     "mutable": true,
                     "product": "ArcSight",
                     "vendor": "ArcSight",
@@ -1018,9 +1018,9 @@ Returns the security event details
                     "addressAsBytes": "abgBRQ==",
                     "assetId": "123xxqmYBABCAWiGUuYaX-w==",
                     "assetLocalId": 17179869185,
-                    "assetName": "content.demisto.works",
+                    "assetName": "xsoar-example",
                     "decodedAddress": "1.1.1.1",
-                    "hostName": "content.demisto.works",
+                    "hostName": "xsoar-example",
                     "id": "123xxqmYBABCAY8SQ92zN9g==",
                     "mutable": true,
                     "name": "Manager Internal Agent",
@@ -1056,7 +1056,7 @@ Returns the security event details
                         "postalCode": "D02",
                         "regionCode": "L"
                     },
-                    "hostName": "ec2-52-213-8-14.eu-west-1.compute.amazonaws.com",
+                    "hostName": "ec2.eu.compute-1.amazonaws.com",
                     "mutable": true,
                     "zone": {
                         "externalID": "E.I. duPont de Nemours and Co. Inc.",

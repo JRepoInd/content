@@ -9,6 +9,7 @@ import re
 import os
 import json
 import requests
+import urllib3
 from base64 import b64encode
 
 ''' GLOBAL VARS / INSTANCE CONFIGURATION '''
@@ -16,8 +17,11 @@ from base64 import b64encode
 PARAMS = demisto.params()
 USERNAME = PARAMS.get('credentials', {}).get('identifier', '')
 PASSWORD = PARAMS.get('credentials', {}).get('password', '')
-AUTH = (USERNAME + ':' + PASSWORD).encode('utf-8')
-BASIC_AUTH = 'Basic ' + b64encode(AUTH).decode()
+if USERNAME == '_token':
+    AUTHORIZATION = f"API-Key {PASSWORD}"
+else:
+    AUTH = (USERNAME + ':' + PASSWORD).encode('utf-8')
+    AUTHORIZATION = 'Basic ' + b64encode(AUTH).decode()
 # Remove trailing slash to prevent wrong URL path to service
 SERVER = PARAMS.get('url', '')
 SERVER = SERVER[:-1] if (SERVER and SERVER.endswith('/')) else SERVER
@@ -28,7 +32,7 @@ USE_SSL = not PARAMS.get('insecure', False)
 PROXY = PARAMS.get('proxy', False)
 # Headers to be sent in requests
 HEADERS = {
-    'Authorization': BASIC_AUTH
+    'Authorization': AUTHORIZATION
 }
 # Context fields that should always be uppercase
 ALWAYS_UPPER_CASE = {
@@ -44,7 +48,7 @@ THREAT_TEXT_TO_DBOTSCORE = {
 ''' SETUP '''
 
 # Disable insecure warnings
-requests.packages.urllib3.disable_warnings()
+urllib3.disable_warnings()
 
 # Remove proxy if not set to true in params
 if not PROXY:
@@ -407,7 +411,7 @@ def images_from_report(response):
     screen_captures = []
     for idx, shot in enumerate(screenshots):
         screen_cap_url = shot.get('permanentUrl')
-        img_response = requests.request('GET', screen_cap_url, verify=USE_SSL)
+        img_response = requests.request('GET', screen_cap_url, verify=USE_SSL, headers=HEADERS)
         stored_img = fileResult('screenshot{}.png'.format(idx), img_response.content)
         img_entry = {
             'Type': entryTypes['image'],
@@ -847,6 +851,7 @@ def run_analysis(args):
         entry_id = args.pop('file', None)
         obj_url = args.get('obj_url')
         obj_type = args.get('obj_type')
+        obj_ext_cmd = args.get('obj_ext_cmd')
         if obj_type == 'remote file':
             obj_type = 'download'
             args['obj_type'] = 'download'
@@ -874,6 +879,8 @@ def run_analysis(args):
             args['env_version'] = '10'
         else:
             args['env_version'] = '7'
+        if obj_ext_cmd and (obj_type == 'file' or obj_type == 'download'):
+            args['obj_ext_cmd'] = args.get('obj_ext_cmd')
         url_suffix = 'analysis'
         response = http_request('POST', url_suffix, data=args, files=files)
         return response

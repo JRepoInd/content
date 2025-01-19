@@ -1,12 +1,11 @@
-from typing import Dict
+import demistomock as demisto  # noqa: F401
+from CommonServerPython import *  # noqa: F401
+import json
 
-import demistomock as demisto
-from CommonServerPython import *
-from CommonServerUserPython import *
+import urllib3
+
 
 ''' IMPORTS '''
-import json
-import urllib3
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 ''' GLOBALS/PARAMS '''
@@ -17,19 +16,33 @@ DEFAULT_COMPLETION_PERCENTAGE = "95"
 
 
 class Client(BaseClient):
-    def __init__(self, base_url, username, password, domain, **kwargs):
+    def __init__(self, base_url, username, password, domain, api_token=None, **kwargs):
         self.username = username
         self.password = password
         self.domain = domain
         self.session = ''
-        super(Client, self).__init__(base_url, **kwargs)
+        self.api_token = api_token
+        self.check_authentication()
+        super().__init__(base_url, **kwargs)
 
     def do_request(self, method, url_suffix, data=None):
         if not self.session:
             self.update_session()
 
         res = self._http_request(method, url_suffix, headers={'session': self.session}, json_data=data,
-                                 resp_type='response', ok_codes=[200, 400, 403, 404])
+                                 resp_type='response', ok_codes=[200, 400, 401, 403, 404])
+
+        if res.status_code == 401:
+            if self.api_token:
+                err_msg = 'Unauthorized Error: please verify that the given API token is valid and that the IP of the ' \
+                          'client is listed in the api_token_trusted_ip_address_list global setting.\n'
+            else:
+                err_msg = ''
+            try:
+                err_msg += str(res.json())
+            except ValueError:
+                err_msg += str(res)
+            return_error(err_msg)
 
         if res.status_code == 403:
             self.update_session()
@@ -43,19 +56,38 @@ class Client(BaseClient):
         return res.json()
 
     def update_session(self):
-        body = {
-            'username': self.username,
-            'domain': self.domain,
-            'password': self.password
-        }
+        if self.api_token:
+            self.session = self.api_token
+        elif self.username and self.password:
+            body = {
+                'username': self.username,
+                'domain': self.domain,
+                'password': self.password
+            }
 
-        res = self._http_request('GET', 'session/login', json_data=body, ok_codes=[200])
+            res = self._http_request('POST', 'session/login', json_data=body, ok_codes=[200])
 
-        self.session = res.get('data').get('session')
+            self.session = res.get('data').get('session')
+        else:  # no API token and no credentials were provided, raise an error:
+            return_error('Please provide either an API Token or Username & Password.')
+
         return self.session
 
     def login(self):
         return self.update_session()
+
+    def check_authentication(self):
+        """
+        Check that the authentication process is valid, i.e. user provided either API token to use OAuth 2.0
+        authentication or user provided Username & Password for basic authentication, but not both credentials and
+        API token.
+        """
+        if self.username and self.password and self.api_token:
+            return_error('Please clear either the Credentials or the API Token fields.\n'
+                         'If you wish to use basic authentication please provide username and password, '
+                         'and leave the API Token field empty.\n'
+                         'If you wish to use OAuth 2 authentication, please provide an API Token and leave the '
+                         'Credentials and Password fields empty.')
 
     def parse_sensor_parameters(self, parameters):
         sensors = parameters.split(';')
@@ -85,11 +117,11 @@ class Client(BaseClient):
         Returns:
             parameter_conditions (List): list of dictionaries
         """
-        parameters = parameters.split(';')
-        parameter_conditions: List[Dict[str, str]] = list()
+        parameters_list = parameters.split(';')
+        parameter_conditions: List[dict[str, str]] = []
         add_to_the_previous_pram = ''
         # Goes over the parameters from the end and any param that does not contain a key and value is added to the previous param
-        for param in reversed(parameters):
+        for param in reversed(parameters_list):
             param += add_to_the_previous_pram
             add_to_the_previous_pram = ''
             if '=' not in param or param.startswith('='):
@@ -185,8 +217,10 @@ class Client(BaseClient):
         for row in results_sets.get('rows'):
             tmp_row = {}
             for item, column in zip(row.get('data', []), columns):
-                item_value = list(map(lambda x: x.get('text', ''), item))
-                item_value = ', '.join(item_value)
+                item_value_lst = [x.get('text', '') for x in item]
+                if "[current result unavailable]" in item_value_lst:
+                    break
+                item_value = ', '.join(item_value_lst)
 
                 if item_value != '[no results]':
                     tmp_row[column] = item_value
@@ -203,7 +237,7 @@ class Client(BaseClient):
 
     def build_create_action_body(self, by_host, action_name,
                                  parameters, package_id='', package_name='', action_group_id='', action_group_name='',
-                                 target_group_id='', target_group_name='', hostname='', ip_address=''):
+                                 target_group_id='', target_group_name='', hostname='', ip_address='', expire=None):
         """
         This method used to build create_action request body by host or by target group
         """
@@ -226,7 +260,7 @@ class Client(BaseClient):
             get_package_res = self.do_request('GET', 'packages/by-name/' + package_name)
             package_id = get_package_res.get('data').get('id')
 
-        expire_seconds = get_package_res.get('data').get('expire_seconds', 0)
+        expire_seconds = expire if expire else get_package_res.get('data').get('expire_seconds', 0)
 
         target_group = {}  # type: ignore
 
@@ -235,6 +269,8 @@ class Client(BaseClient):
             if not ip_address and not hostname:
                 raise ValueError('hostname and ip address are missing, Please specify one of them.')
 
+            group_question = ""
+            demisto.debug(f"Initializing {group_question=}")
             if ip_address:
                 group_question = f'Get Computer Name from all machines with ip address equals {ip_address}'
             if hostname:
@@ -338,7 +374,7 @@ class Client(BaseClient):
             'QueryText': question.get('query_text')
         }
 
-        saved_question_id = question.get('saved_question').get('id')
+        saved_question_id = (question.get('saved_question') or {}).get('id')
         if saved_question_id:
             item['SavedQuestionId'] = saved_question_id
 
@@ -529,7 +565,7 @@ class Client(BaseClient):
 
 
 def test_module(client, data_args):
-    if client.login():
+    if client.do_request('GET', 'system_status'):
         return demisto.results('ok')
     raise ValueError('Test Tanium integration failed - please check your username and password')
 
@@ -699,7 +735,7 @@ def get_question_result(client, data_args):
 
     if rows is None:
         context = {'QuestionID': id_, 'Status': 'Pending'}
-        return f'Question is still executing, Question id: {str(id_)}',\
+        return f'Question is still executing, Question id: {str(id_)}', \
             {f'Tanium.QuestionResult(val.QuestionID == {id_})': context}, res
 
     context = {'QuestionID': id_, 'Status': 'Completed', 'Results': rows}
@@ -755,7 +791,7 @@ def get_saved_question_result(client, data_args):
     rows = client.parse_question_results(res, completion_percentage)
     if rows is None:
         context = {'SavedQuestionID': id_, 'Status': 'Pending'}
-        return f'Question is still executing, Question id: {str(id_)}',\
+        return f'Question is still executing, Question id: {str(id_)}', \
             {f'Tanium.SavedQuestionResult(val.SavedQuestionID == {id_})': context}, res
 
     context = {'SavedQuestionID': id_, 'Status': 'Completed', 'Results': rows}
@@ -814,11 +850,12 @@ def create_action_by_host(client, data_args):
     parameters = data_args.get('parameters')
     ip_address = data_args.get('ip-address')
     hostname = data_args.get('hostname')
+    expire = arg_to_number(data_args.get('expiration-time'))
 
     body = client.build_create_action_body(True, action_name, parameters, package_id=package_id,
                                            package_name=package_name, action_group_id=action_group_id,
                                            action_group_name=action_group_name,
-                                           hostname=hostname, ip_address=ip_address)
+                                           hostname=hostname, ip_address=ip_address, expire=expire)
 
     raw_response = client.do_request('POST', 'actions', body)
     action = client.get_action_item(raw_response.get('data'))
@@ -1021,13 +1058,47 @@ def delete_group(client, data_args):
     return human_readable, outputs, raw_response
 
 
+def get_action_result(client, data_args):
+    actions_ids = argToList(data_args.get('id'))
+    action_res_outputs: List = []
+    action_res_hr: List = []
+
+    for action_id in actions_ids:
+        endpoint_url = '/result_data/action/' + str(action_id)
+        raw_response = client.do_request('GET', endpoint_url)
+        try:
+            all_devices_results = raw_response['data']['result_sets'][0]['rows']
+            device_results = []
+            for device_res in all_devices_results:
+                formatted_device = {
+                    'HostName': device_res['data'][0][0]['text'],
+                    'Status': str(device_res['data'][1][0]['text']).split(':')[1],
+                    'ComputerID': device_res['cid']
+                }
+                device_results.append(formatted_device)
+            raw_response = raw_response.get('data')
+            raw_response['ID'] = action_id
+            action_res_outputs.append(raw_response)
+            if device_results:
+                action_res_hr.extend(device_results)
+        except Exception:
+            continue
+
+    human_readable = tableToMarkdown('Device Statuses', t=action_res_hr, removeNull=True,
+                                     headers=['HostName', "Status", "ComputerID"])
+
+    context = createContext(action_res_outputs, removeNull=True)
+    outputs = {'Tanium.ActionResult(val.ID && val.ID === obj.ID)': context}
+    return human_readable, outputs, action_res_outputs
+
+
 ''' COMMANDS MANAGER / SWITCH PANEL '''
 
 
 def main():
     params = demisto.params()
-    username = params.get('credentials').get('identifier')
-    password = params.get('credentials').get('password')
+    username = params.get('credentials', {}).get('identifier')
+    password = params.get('credentials', {}).get('password')
     domain = params.get('domain')
     # Remove trailing slash to prevent wrong URL path to service
     server = params['url'].strip('/')
@@ -1035,11 +1106,12 @@ def main():
     base_url = server + '/api/v2/'
     # Should we use SSL
     use_ssl = not params.get('insecure', False)
+    proxy = argToBoolean(params.get('proxy', False))
+    api_token = params.get('credentials_api_token', {}).get('password') or params.get('api_token')
 
-    # Remove proxy if not set to true in params
-    handle_proxy()
     command = demisto.command()
-    client = Client(base_url, username, password, domain, verify=use_ssl)
+    client = Client(base_url, username, password, domain, api_token=api_token, verify=use_ssl, proxy=proxy)
+    handle_proxy()
     demisto.info(f'Command being called is {command}')
 
     commands = {
@@ -1069,7 +1141,8 @@ def main():
         'tn-create-manual-group': create_manual_group,
         'tn-get-group': get_group,
         'tn-list-groups': get_groups,
-        'tn-delete-group': delete_group
+        'tn-delete-group': delete_group,
+        'tn-get-action-result': get_action_result
     }
 
     try:

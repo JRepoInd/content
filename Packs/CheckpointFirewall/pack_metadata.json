@@ -2,7 +2,7 @@
     "name": "Check Point Firewall",
     "description": "Manage Check Point firewall via API",
     "support": "xsoar",
-    "currentVersion": "2.0.8",
+    "currentVersion": "2.3.25",
     "author": "Cortex XSOAR",
     "url": "https://www.paloaltonetworks.com/cortex",
     "email": "",
@@ -14,6 +14,11 @@
     "useCases": [],
     "keywords": [
         "checkpoint",
-        "firewall"
+        "check point",
+        "Firewall"
+    ],
+    "marketplaces": [
+        "xsoar",
+        "marketplacev2"
     ]
 }

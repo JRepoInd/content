@@ -1,8 +1,8 @@
 {
     "name": "Chronicle",
-    "description": "Use the Chronicle integration to retrieve Asset alerts or IOC Domain matches as Incidents. Use it to fetch a list of infected assets based on the indicator accessed. This integration also provides reputation and threat enrichment of indicators observed in the enterprise",
+    "description": "Retrieve Chronicle detections, impacted assets, IOC matches, and 3P alerts to enrich your XSOAR workflows.",
     "support": "partner",
-    "currentVersion": "2.0.0",
+    "currentVersion": "4.1.2",
     "certification": "certified",
     "author": "Chronicle",
     "url": "https://go.chronicle.security/contact",
@@ -10,8 +10,11 @@
     "categories": [
         "Analytics & SIEM"
     ],
-    "tags": [],
+    "tags": [
+        "Incident Handling"
+    ],
     "created": "2020-04-14T00:00:00Z",
+    "defaultDataSource": "Google Chronicle Backstory Streaming API",
     "useCases": [],
     "keywords": [],
     "githubUser": [
@@ -91,7 +94,7 @@
             "display_name": "PassiveTotal"
         },
         "PaloAltoNetworks_PAN_OS_EDL_Management": {
-            "mandatory": true,
+            "mandatory": false,
             "display_name": "Palo Alto Networks PAN-OS EDL Management"
         },
         "Cisco-umbrella": {
@@ -105,10 +108,6 @@
         "ThreatConnect": {
             "mandatory": false,
             "display_name": "ThreatConnect"
-        },
-        "XFE": {
-            "mandatory": false,
-            "display_name": "IBM X-Force Exchange"
         },
         "NIST": {
             "mandatory": true,
@@ -221,14 +220,6 @@
         "RiskIQDigitalFootprint": {
             "mandatory": false,
             "display_name": "RiskIQ Digital Footprint"
-        },
-        "EWSMailSender": {
-            "mandatory": false,
-            "display_name": "EWS Mail Sender"
-        },
-        "EWS": {
-            "mandatory": false,
-            "display_name": "EWS"
         },
         "MicrosoftGraphListener": {
             "mandatory": false,
@@ -360,5 +351,9 @@
         "Spamcop",
         "Pulsedive",
         "PAN-OS"
+    ],
+    "marketplaces": [
+        "xsoar",
+        "marketplacev2"
     ]
 }

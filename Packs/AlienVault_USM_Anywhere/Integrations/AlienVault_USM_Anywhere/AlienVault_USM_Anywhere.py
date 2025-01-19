@@ -6,15 +6,16 @@ from CommonServerUserPython import *
 import json
 import requests
 import dateparser
-from typing import Dict
+import urllib3
+from datetime import datetime
 
 # Disable insecure warnings
-requests.packages.urllib3.disable_warnings()
+urllib3.disable_warnings()
 
 ''' GLOBALS/PARAMS '''
 
-CLIENT_ID = demisto.params().get('client_id')
-CLIENT_SECRET = demisto.params().get('client_secret')
+CLIENT_ID = demisto.params().get('client_id_creds', {}).get('identifier') or demisto.params().get('client_id')
+CLIENT_SECRET = demisto.params().get('client_id_creds', {}).get('password') or demisto.params().get('client_secret')
 # Remove trailing slash to prevent wrong URL path to service
 SERVER = demisto.params().get('url', '').strip('/')
 
@@ -75,7 +76,7 @@ def http_request(method, url_suffix, params=None, headers=None, data=None, **kwa
     if res.status_code == 401:
         raise Exception('UnauthorizedError: please validate your credentials.')
     if res.status_code not in {200}:
-        raise Exception('Error in API call to Example Integration [{}] - {}'.format(res.status_code, res.reason))
+        raise Exception(f'Error in API call to Example Integration [{res.status_code}] - {res.reason}')
 
     return res.json()
 
@@ -131,9 +132,32 @@ def get_time_range(time_frame=None, start_time=None, end_time=None):
     elif time_frame == 'Last 30 Days':
         start_time = end_time - timedelta(days=30)
     else:
-        raise ValueError('Could not parse time frame: {}'.format(time_frame))
+        raise ValueError(f'Could not parse time frame: {time_frame}')
 
     return date_to_timestamp(start_time), date_to_timestamp(end_time)
+
+
+def convert_timestamp_to_iso86(timestamp: str, timezone_letter: str = 'Z') -> str:
+    """ Convert timestamp from AlienVault to iso86 format
+
+    Args:
+        timestamp: The timestamp as received from AlienVault
+        timezone_letter: The timezone letter as received from AlienVault
+
+    Returns: The timestamp in iso86 format, similar to what AlienVault returns itself.
+
+    """
+    if not timestamp:
+        return ''
+    try:
+        datetime_from_timestamp = dateparser.parse(str(timestamp), settings={"TO_TIMEZONE": timezone_letter,
+                                                                             "RETURN_AS_TIMEZONE_AWARE": True})
+    except Exception as e:
+        demisto.error(f"Encountered issue parsing {timestamp}. err: {str(e)}")
+        return ''
+    assert datetime_from_timestamp is not None, f'{timestamp} could not be parsed'
+    time_in_iso86 = datetime_from_timestamp.strftime("%Y-%m-%dT%H:%M:%S.%f")
+    return time_in_iso86[:-3] + timezone_letter
 
 
 @logger
@@ -149,17 +173,37 @@ def parse_alarms(alarms_data):
             if 'message' in event:
                 event = event['message']
 
+            event_occured_time = event.get('timestamp_occured_iso8601')
+            if not event_occured_time:
+                event_occured_time = convert_timestamp_to_iso86(event.get('timestamp_occured', ''),
+                                                                event.get("time_offset", 'Z'))
+
+            event_recieved_time = event.get('timestamp_received_iso8601')
+            if not event_recieved_time:
+                event_recieved_time = convert_timestamp_to_iso86(event.get('timestamp_received', ''),
+                                                                 event.get("time_offset", 'Z'))
+
             events.append({
-                'ID': event['uuid'],
-                'OccurredTime': event['timestamp_occured_iso8601'],
-                'ReceivedTime': event['timestamp_received_iso8601'],
+                'ID': event.get('uuid'),
+                'OccurredTime': event_occured_time,
+                'ReceivedTime': event_recieved_time,
             })
 
+        alarm_occured_time = alarm.get('timestamp_occured_iso8601', '')
+        if not alarm_occured_time:
+            alarm_occured_time = convert_timestamp_to_iso86(alarm.get('timestamp_occured', ''),
+                                                            alarm.get("time_offset", 'Z'))
+
+        alarm_recieved_time = alarm.get('timestamp_received_iso8601', '')
+        if not alarm_recieved_time:
+            alarm_recieved_time = convert_timestamp_to_iso86(alarm.get('timestamp_received', ''),
+                                                             alarm.get("time_offset", 'Z'))
+
         alarms.append({
-            'ID': alarm['uuid'],
-            'Priority': alarm['priority_label'],
-            'OccurredTime': alarm['timestamp_occured_iso8601'],
-            'ReceivedTime': alarm['timestamp_received_iso8601'],
+            'ID': alarm.get('uuid'),
+            'Priority': alarm.get('priority_label'),
+            'OccurredTime': alarm_occured_time,
+            'ReceivedTime': alarm_recieved_time,
 
             'RuleAttackID': alarm.get('rule_attack_id'),
             'RuleAttackTactic': alarm.get('rule_attack_tactic'),
@@ -220,7 +264,7 @@ def parse_events(events_data):
     return events
 
 
-def dict_value_to_int(target_dict: Dict, key: str):
+def dict_value_to_int(target_dict: dict, key: str):
     """
     :param target_dict: A dictionary which has the key param
     :param key: The key that we need to convert it's value to integer
@@ -237,10 +281,15 @@ def dict_value_to_int(target_dict: Dict, key: str):
 
 
 def item_to_incident(item):
+    if not (occurred := item.get('timestamp_occured_iso8601')):
+        occurred = convert_timestamp_to_iso86(
+            item.get('timestamp_occured', ''),
+            item.get("time_offset", 'Z')
+        )
     incident = {
         'Type': 'AlienVault USM',
         'name': 'Alarm: ' + item.get('uuid'),
-        'occurred': item.get('timestamp_occured_iso8601'),
+        'occurred': occurred,
         'rawJSON': json.dumps(item),
     }
 
@@ -275,7 +324,7 @@ def get_alarm_command():
     # Parse response into context & content entries
     alarm_details = parse_alarms(response)
 
-    return_outputs(tableToMarkdown('Alarm {}'.format(alarm_id), alarm_details),
+    return_outputs(tableToMarkdown(f'Alarm {alarm_id}', alarm_details),
                    {'AlienVault.Alarm(val.ID && val.ID == obj.ID)': alarm_details},
                    response)
 
@@ -317,7 +366,7 @@ def search_alarms(start_time=None, end_time=None, status=None, priority=None, sh
     params = {
         'page': 0,
         'size': limit,
-        'sort': 'timestamp_occured,{}'.format(direction),
+        'sort': f'timestamp_occured,{direction}',
         'suppressed': show_suppressed
     }
 
@@ -371,7 +420,7 @@ def search_events(start_time=None, end_time=None, account_name=None, event_name=
     params = {
         'page': 1,
         'size': limit,
-        'sort': 'timestamp_occured,{}'.format(direction),
+        'sort': f'timestamp_occured,{direction}',
     }
 
     if account_name:
@@ -401,7 +450,7 @@ def get_events_by_alarm_command():
 
     events = parse_events(alarm['events'])
 
-    return_outputs(tableToMarkdown('Events of Alarm {}:'.format(alarm_id), events),
+    return_outputs(tableToMarkdown(f'Events of Alarm {alarm_id}:', events),
                    {'AlienVault.Event(val.ID && val.ID == obj.ID)': events},
                    alarm)
 
@@ -457,7 +506,7 @@ COMMANDS = {
 def main():
     global AUTH_TOKEN
     cmd = demisto.command()
-    LOG('Command being called is {}'.format(cmd))
+    LOG(f'Command being called is {cmd}')
 
     try:
         handle_proxy()
@@ -476,7 +525,7 @@ def main():
             LOG.print_log()
             raise
         else:
-            return_error('An error occurred: {}'.format(str(e)))
+            return_error(f'An error occurred: {str(e)}')
 
 
 # python2 uses __builtin__ python3 uses builtins

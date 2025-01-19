@@ -2,8 +2,7 @@ import demistomock as demisto
 from CommonServerPython import *
 
 import urllib3
-import traceback
-from typing import Any, Dict, Optional, Union
+from typing import Any
 import ntpath
 from dateparser import parse
 
@@ -35,7 +34,7 @@ class Client(BaseClient):
         params,
         verify=True,
         proxy=False,
-        ok_codes=tuple(),
+        ok_codes=(),
         headers=None,
         auth=None,
     ):
@@ -82,7 +81,7 @@ class Client(BaseClient):
         :param project_name: A project name to list its jobs
         :return: api response.
         """
-        request_params: Dict[str, Any] = {}
+        request_params: dict[str, Any] = {}
 
         if id_list:
             request_params["idlist"] = ",".join(id_list)
@@ -131,7 +130,7 @@ class Client(BaseClient):
         :param run_at_time_raw: select a time to run the job in iso 8061 time as string
         :return: api response
         """
-        request_body: Dict[str, Any] = {}
+        request_body: dict[str, Any] = {}
 
         if arg_string:
             request_body["argString"] = arg_string
@@ -176,7 +175,7 @@ class Client(BaseClient):
         :param options: add options for running a job
         :return: api response
         """
-        request_body: Dict[str, Any] = {}
+        request_body: dict[str, Any] = {}
 
         if arg_string:
             request_body["argString"] = arg_string
@@ -219,8 +218,8 @@ class Client(BaseClient):
         job_exact_filter: str,
         exclude_job_exact_filter: str,
         execution_type_filter: str,
-        max_results: Optional[int],
-        offset: Optional[int],
+        max_results: int | None,
+        offset: int | None,
         project_name: str,
     ):
         """
@@ -254,7 +253,7 @@ class Client(BaseClient):
         :return: api response
         """
 
-        request_params: Dict[str, Any] = {}
+        request_params: dict[str, Any] = {}
 
         if status_filter:
             request_params["statusFilter"] = status_filter
@@ -357,7 +356,7 @@ class Client(BaseClient):
         :param node_filter: node filter to add
         :return: api response
         """
-        request_params: Dict[str, Any] = {}
+        request_params: dict[str, Any] = {}
 
         if exec_command:
             request_params["exec"] = exec_command
@@ -410,7 +409,7 @@ class Client(BaseClient):
         :param arg_string: arguments to pass to the script when executed.
         :return: api response
         """
-        request_params: Dict[str, Any] = {}
+        request_params: dict[str, Any] = {}
 
         if node_thread_count:
             request_params["nodeThreadcount"] = node_thread_count
@@ -452,8 +451,9 @@ class Client(BaseClient):
         :return: api response
         """
 
+        request_params = ""
         if options:
-            request_params: str = options
+            request_params = options
         else:
             if free_json:
                 request_params = free_json
@@ -493,7 +493,7 @@ class Client(BaseClient):
         :return: api response
         """
 
-        request_params: Dict[str, str] = {}
+        request_params: dict[str, str] = {}
         if arg_string:
             request_params["argString"] = arg_string
         if node_thread_count:
@@ -544,8 +544,8 @@ class Client(BaseClient):
 
 
 def filter_results(
-    results: Union[list, dict], fields_to_remove: list, remove_signs: list
-) -> Union[list, dict]:
+    results: list | dict, fields_to_remove: list, remove_signs: list
+) -> list | dict:
     new_results = []
     if isinstance(results, dict):
         demisto.info("got results as dictionary")
@@ -592,7 +592,7 @@ def filter_results(
     return new_results
 
 
-def attribute_pairs_to_dict(attrs_str: Optional[str], delim_char: str = ","):
+def attribute_pairs_to_dict(attrs_str: str | None, delim_char: str = ","):
     """
     Transforms a string of multiple inputs to a dictionary list
 
@@ -624,7 +624,7 @@ def attribute_pairs_to_dict(attrs_str: Optional[str], delim_char: str = ","):
     return attrs
 
 
-def convert_str_to_int(val_to_convert: Optional[str], param_name: str):
+def convert_str_to_int(val_to_convert: str | None, param_name: str):
     """
     This function get a parameter from Demisto as string and try converting it to integer
     :param val_to_convert: the value to convert
@@ -641,6 +641,7 @@ def convert_str_to_int(val_to_convert: Optional[str], param_name: str):
             demisto.error(f"failed to convert {val_to_convert} to integer")
             raise
     demisto.info(f"finish converting {val_to_convert} to integer")
+    return None
 
 
 def calc_run_at_time(selected_time: str) -> str:
@@ -655,7 +656,9 @@ def calc_run_at_time(selected_time: str) -> str:
     selected_iso_time = ""
     if not selected_time:
         return selected_iso_time
-    iso_with_timezone = parse(f"in {selected_time} UTC").isoformat()
+    selected_time_date = parse(f"in {selected_time} UTC")
+    assert selected_time_date is not None, f'could not parse {selected_time} UTC'
+    iso_with_timezone = selected_time_date.isoformat()
     return iso_with_timezone
 
 
@@ -667,7 +670,7 @@ def collect_headers(entries_list: list) -> list:
     """
     headers = [""]
     for entry in entries_list:
-        for key, value in entry.items():
+        for key, _value in entry.items():
             if key == "log":
                 headers[0] = "log"
             headers.append(key.replace("_", " "))
@@ -810,7 +813,7 @@ def jobs_list_command(client: Client, args: dict):
     group_path_exact: str = args.get("group_path_exact", "")
     scheduled_filter: str = args.get("scheduled_filter", "")
     server_node_uuid_filter: str = args.get("server_node_uuid_filter", "")
-    max_results: Optional[int] = convert_str_to_int(
+    max_results: int | None = convert_str_to_int(
         args.get("max_results", ""), "max_results"
     )
     project_name: str = args.get("project_name", "")
@@ -862,7 +865,7 @@ def webhooks_list_command(client: Client, args: dict):
     :return: CommandResults object
     """
     project_name: str = args.get("project_name", "")
-    max_results: Optional[int] = convert_str_to_int(args.get('max_results', ''), 'max_results')
+    max_results: int | None = convert_str_to_int(args.get('max_results', ''), 'max_results')
     demisto.info("sending get webhooks list request")
     result = client.get_webhooks_list(project_name)
     demisto.info("finish sending get webhooks list request")
@@ -913,8 +916,8 @@ def job_execution_query_command(client: Client, args: dict):
     job_exact_filter: str = args.get("job_exact_filter", "")
     exclude_job_exact_filter: str = args.get("exclude_job_exact_filter", "")
     execution_type_filter: str = args.get("execution_type_filter", "")
-    max_results: Optional[int] = convert_str_to_int(args.get("max_results"), "max")
-    offset: Optional[int] = convert_str_to_int(args.get("offset"), "offset")
+    max_results: int | None = convert_str_to_int(args.get("max_results"), "max")
+    offset: int | None = convert_str_to_int(args.get("offset"), "offset")
     project_name: str = args.get("project_name", "")
     exclude_group_path: str = args.get("exclude_group_path", "")
     demisto.info("sending job execution query request")
@@ -983,11 +986,11 @@ def job_execution_output_command(client: Client, args: dict):
     :param args: command's arguments
     :return: CommandRusult object
     """
-    execution_id: Optional[int] = convert_str_to_int(
+    execution_id: int | None = convert_str_to_int(
         args.get("execution_id"), "execution_id"
     )
     return_full_output: bool = argToBoolean(args.get("return_full_output", False))
-    max_results: Optional[int] = convert_str_to_int(
+    max_results: int | None = convert_str_to_int(
         args.get("max_results", ""), "max_results"
     )
     aggregate_log: bool = argToBoolean(args.get("aggregate_log", False))
@@ -1039,7 +1042,7 @@ def job_execution_abort_command(client: Client, args: dict):
     :param args: command's arguments
     :return: CommandRusult object
     """
-    execution_id: Optional[int] = convert_str_to_int(
+    execution_id: int | None = convert_str_to_int(
         args.get("execution_id"), "execution_id"
     )
 
@@ -1228,7 +1231,7 @@ def webhook_event_send_command(client: Client, args: dict):
     )
 
 
-def test_module(client: Client, project_name: Optional[str]) -> str:
+def test_module(client: Client, project_name: str | None) -> str:
     try:
         projects_list = client.get_project_list()
     except DemistoException as e:
@@ -1259,7 +1262,7 @@ def main() -> None:
     :rtype:
     """
     params: dict = demisto.params()
-    token: str = params.get("token", "")
+    token: str = params.get('token_creds', {}).get('password') or params.get("token", "")
     project_name: str = params.get("project_name", "")
 
     # get the service API url
@@ -1270,7 +1273,7 @@ def main() -> None:
     # out of the box by it, just pass ``proxy`` to the Client constructor
     proxy = demisto.params().get("proxy", False)
 
-    args: Dict = demisto.args()
+    args: dict = demisto.args()
     demisto.debug(f"Command being called is {demisto.command()}")
     try:
         headers = {"Accept": "application/json", "Content-Type": "application/json"}
@@ -1326,7 +1329,6 @@ def main() -> None:
 
     # Log exceptions and return errors
     except Exception as e:
-        demisto.error(traceback.format_exc())  # print the traceback
         error_msg = str(e).replace("\\n", "\n")
         return_error(
             f"Failed to execute {demisto.command()} command.\n Error:\n {error_msg}"

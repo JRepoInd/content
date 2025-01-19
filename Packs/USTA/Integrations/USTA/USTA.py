@@ -5,9 +5,10 @@ from CommonServerPython import *  # noqa: F401
 import hashlib
 import json
 import traceback
+import urllib3
 
 # disable insecure warnings
-requests.packages.urllib3.disable_warnings()
+urllib3.disable_warnings()
 
 ''' GLOBAL VARIABLES'''
 VERIFY_SSL = not demisto.params().get('insecure', False)
@@ -564,7 +565,7 @@ def close_incident() -> CommandResults:
 def encodeData(identities: list) -> list:
     hashedList = []
     for identity in identities:
-        hashedIdentity = hashlib.sha256((hashlib.md5(identity.encode())).hexdigest().encode()).hexdigest()
+        hashedIdentity = hashlib.sha256((hashlib.md5(identity.encode())).hexdigest().encode()).hexdigest()  # nosec
         hashedList.append(hashedIdentity)
     return hashedList
 

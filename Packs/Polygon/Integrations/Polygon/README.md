@@ -1,13 +1,10 @@
-TDS Polygon is a Malware Detonation & Research platform designed for deep dynamic analysis and enhanced indicators extraction. TDS Polygon analyzes submitted files and urls and extracts deep IOCs that appear when malicious code is triggered and executed. Polygon could be used either for application-level tasks (like smtp-based mail filtering) and analytical purposes (files/urls analysis for verdict, report and indicators).
-This integration was integrated and tested with version 3.1 of Group-IB TDS Polygon
+THF Polygon is a Malware Detonation & Research platform designed for deep dynamic analysis and enhanced indicators extraction. THF Polygon analyzes submitted files and urls and extracts deep IOCs that appear when malicious code is triggered and executed. Polygon could be used either for application-level tasks (like smtp-based mail filtering) and analytical purposes (files/urls analysis for verdict, report and indicators).
+This integration was integrated and tested with version 3.1 of Group-IB THF Polygon
 
-## Configure Group-IB TDS Polygon on Cortex XSOAR
+## Configure Group-IB THF Polygon in Cortex
 
-1. Navigate to **Settings** > **Integrations** > **Servers & Services**.
-2. Search for Group-IB TDS Polygon.
-3. Click **Add instance** to create and configure a new integration instance.
 
-| **Parameter** | **Description** | **Required** |
+| **Parameter** | **Description** | **Required** |f
 | --- | --- | --- |
 | server | Server URL (e.g., `https://huntbox.group-ib.com`) | True |
 | api_key | API Key | True |
@@ -15,11 +12,14 @@ This integration was integrated and tested with version 3.1 of Group-IB TDS Poly
 | insecure | Trust any certificate \(insecure\) | False |
 | proxy | Use system proxy settings | False |
 
-4. Click **Test** to validate the URLs, token, and connection.
+
 ## Commands
-You can execute these commands from the Cortex XSOAR CLI, as part of an automation, or in a playbook.
+
+You can execute these commands from the CLI, as part of an automation, or in a playbook.
 After you successfully execute a command, a DBot message appears in the War Room with the command details.
+
 ### polygon-upload-file
+
 ***
 Upload file for analysis
 
@@ -27,6 +27,7 @@ Upload file for analysis
 #### Base Command
 
 `polygon-upload-file`
+
 #### Input
 
 | **Argument Name** | **Description** | **Required** |
@@ -39,16 +40,18 @@ Upload file for analysis
 
 | **Path** | **Type** | **Description** |
 | --- | --- | --- |
-| Polygon.Analysis.ID | string | Analysis ID in TDS | 
+| Polygon.Analysis.ID | string | Analysis ID in THF | 
 | Polygon.Analysis.EntryID | string | File id in Demisto | 
 | Polygon.Analysis.FileName | string | Original file name | 
 | Polygon.Analysis.Status | string | The analysis status | 
 
 
 #### Command Example
+
 !polygon-upload-file file_id=4@br password="123456"
 
 #### Context Example
+
 ```
 {
     "Polygon": {
@@ -63,17 +66,22 @@ Upload file for analysis
 ```
 
 #### Human Readable Output
+
 >File uploaded successfully. Analysis ID: F2136015
 
 
 ### polygon-upload-url
+
 ***
-Upload URL for analysis
+Upload URL for analysis.
+
+Notice: Submitting indicators using this command might make the indicator data publicly available. See the vendor’s documentation for more details.
 
 
 #### Base Command
 
 `polygon-upload-url`
+
 #### Input
 
 | **Argument Name** | **Description** | **Required** |
@@ -85,15 +93,17 @@ Upload URL for analysis
 
 | **Path** | **Type** | **Description** |
 | --- | --- | --- |
-| Polygon.Analysis.ID | string | Analysis ID in TDS | 
-| Polygon.Analysis.URL | string | URL analyzed | 
-| Polygon.Analysis.Status | string | Polygon analysis status | 
+| Polygon.Analysis.ID | string | Analysis ID in THF. | 
+| Polygon.Analysis.URL | string | URL analyzed. | 
+| Polygon.Analysis.Status | string | Polygon analysis status. | 
 
 
 #### Command Example
+
 ```!polygon-upload-url url=http://reqw.xyz/pik.zip```
 
 #### Context Example
+
 ```
 {
     "Polygon": {
@@ -111,18 +121,20 @@ Upload URL for analysis
 >Url uploaded successfully. Analysis ID: U2152031
 
 ### polygon-analysis-info
+
 ***
-Get TDS Polygon analysis info
+Get THF Polygon analysis info
 
 
 #### Base Command
 
 `polygon-analysis-info`
+
 #### Input
 
 | **Argument Name** | **Description** | **Required** |
 | --- | --- | --- |
-| tds_analysis_id | Analysis ID in TDS | Required | 
+| tds_analysis_id | Analysis ID in THF. | Required | 
 
 
 #### Context Output
@@ -130,59 +142,61 @@ Get TDS Polygon analysis info
 | **Path** | **Type** | **Description** |
 | --- | --- | --- |
 | File.Name | string | The full file name \(including file extension\). | 
-| File.MD5 | string | The MD5 hash of the file | 
-| File.SHA1 | string | The SHA1 hash of the file | 
-| File.SHA256 | string | The SHA256 hash of the file | 
-| File.Type | string | File type | 
-| File.Malicious.Vendor | string | The vendor that reported the file as malicious | 
-| File.Malicious.Description | string | A description explaining why the file was determined to be malicious | 
-| DBotScore.Indicator | string | The indicator that was tested | 
-| DBotScore.Type | string | The indicator type | 
-| DBotScore.Vendor | string | The vendor used to calculate the score | 
-| DBotScore.Score | number | The actual score | 
-| IP.Address | String | IP address | 
-| Domain.Name | String | The Domain name | 
+| File.MD5 | string | The MD5 hash of the file. | 
+| File.SHA1 | string | The SHA1 hash of the file. | 
+| File.SHA256 | string | The SHA256 hash of the file. | 
+| File.Type | string | File type. | 
+| File.Malicious.Vendor | string | The vendor that reported the file as malicious. | 
+| File.Malicious.Description | string | A description explaining why the file was determined to be malicious. | 
+| DBotScore.Indicator | string | The indicator that was tested. | 
+| DBotScore.Type | string | The indicator type. | 
+| DBotScore.Vendor | string | The vendor used to calculate the score. | 
+| DBotScore.Score | number | The actual score. | 
+| IP.Address | String | IP address. | 
+| Domain.Name | String | The Domain name. | 
 | Domain.DNS | String | A list of IP objects resolved by DNS. | 
-| URL.Data | String | The URL | 
-| URL.Malicious.Vendor | string | The vendor that reported the url as malicious | 
-| URL.Malicious.Description | string | A description explaining why the url was determined to be malicious | 
-| RegistryKey.Path | String | The path to the registry key | 
+| URL.Data | String | The URL. | 
+| URL.Malicious.Vendor | string | The vendor that reported the url as malicious. | 
+| URL.Malicious.Description | string | A description explaining why the url was determined to be malicious. | 
+| RegistryKey.Path | String | The path to the registry key. | 
 | RegistryKey.Value | String | The value at the given RegistryKey. | 
-| Process.Name | String | Process name | 
-| Process.PID | String | Process PID | 
-| Process.CommandLine | String | Process Command Line | 
-| Process.Path | String | Process path | 
-| Process.StartTime | date | Process start time | 
-| Process.EndTime | date | Process end time | 
-| Polygon.Analysis.ID | string | TDS File ID | 
-| Polygon.Analysis.Name | string | File Name | 
-| Polygon.Analysis.Size | number | File Size | 
-| Polygon.Analysis.Started | date | Analysis start timestamp | 
-| Polygon.Analysis.Analyzed | date | Analysis finish timestamp | 
-| Polygon.Analysis.MD5 | string | Analyzed file MD5 hash | 
-| Polygon.Analysis.SHA1 | string | Analyzed file SHA1 hash | 
-| Polygon.Analysis.SHA256 | string | Analyzed file SHA256 | 
-| Polygon.Analysis.Result | boolean | Analysis verdict | 
-| Polygon.Analysis.Status | string | Analysis status | 
-| Polygon.Analysis.Verdict | string | Analysis verdict | 
-| Polygon.Analysis.Probability | string | Verdict probability | 
-| Polygon.Analysis.Families | string | Malware families | 
+| Process.Name | String | Process name. | 
+| Process.PID | String | Process PID. | 
+| Process.CommandLine | String | Process Command Line. | 
+| Process.Path | String | Process path. | 
+| Process.StartTime | date | Process start time. | 
+| Process.EndTime | date | Process end time. | 
+| Polygon.Analysis.ID | string | THF File ID. | 
+| Polygon.Analysis.Name | string | File Name. | 
+| Polygon.Analysis.Size | number | File Size. | 
+| Polygon.Analysis.Started | date | Analysis start timestamp. | 
+| Polygon.Analysis.Analyzed | date | Analysis finish timestamp. | 
+| Polygon.Analysis.MD5 | string | Analyzed file MD5 hash. | 
+| Polygon.Analysis.SHA1 | string | Analyzed file SHA1 hash. | 
+| Polygon.Analysis.SHA256 | string | Analyzed file SHA256. | 
+| Polygon.Analysis.Result | boolean | Analysis verdict. | 
+| Polygon.Analysis.Status | string | Analysis status. | 
+| Polygon.Analysis.Verdict | string | Analysis verdict. | 
+| Polygon.Analysis.Probability | string | Verdict probability. | 
+| Polygon.Analysis.Families | string | Malware families. | 
 | Polygon.Analysis.Score | number | Polygon score | 
-| Polygon.Analysis.Internet-connection | string | Internet availability | 
-| Polygon.Analysis.Type | string | File type | 
-| Polygon.Analysis.DumpExists | boolean | Network activity dump exists | 
-| Polygon.Analysis.File | unknown | The information about files in analysis | 
-| Polygon.Analysis.URL | unknown | The information about URL indicators | 
-| Polygon.Analysis.IP | unknown | The information about IP indicators | 
-| Polygon.Analysis.Domain | unknown | The information about Domain indicators | 
-| Polygon.Analysis.RegistryKey | unknown | The information about registry keys which were modified during the analysis | 
-| Polygon.Analysis.Process | unknown | The information about processes started during the analysis | 
+| Polygon.Analysis.Internet-connection | string | Internet availability. | 
+| Polygon.Analysis.Type | string | File type. | 
+| Polygon.Analysis.DumpExists | boolean | Network activity dump exists. | 
+| Polygon.Analysis.File | unknown | The information about files in analysis. | 
+| Polygon.Analysis.URL | unknown | The information about URL indicators. | 
+| Polygon.Analysis.IP | unknown | The information about IP indicators. | 
+| Polygon.Analysis.Domain | unknown | The information about Domain indicators. | 
+| Polygon.Analysis.RegistryKey | unknown | The information about registry keys which were modified during the analysis. | 
+| Polygon.Analysis.Process | unknown | The information about processes started during the analysis. | 
 
 
 #### Command Example
+
 ```!polygon-analysis-info tds_analysis_id=F2118597```
 
 #### Context Example
+
 ```
 {
     "DBotScore": [
@@ -190,67 +204,67 @@ Get TDS Polygon analysis info
             "Indicator": "ba9fe2cb8ee2421ea24a55306ce9d923",
             "Score": 3,
             "Type": "file",
-            "Vendor": "Group-IB TDS Polygon"
+            "Vendor": "Group-IB THF Polygon"
         },
         {
             "Indicator": "44b3f79dfd7c5861501a19a3bac89f544c7ff815",
             "Score": 0,
             "Type": "file",
-            "Vendor": "Group-IB TDS Polygon"
+            "Vendor": "Group-IB THF Polygon"
         },
         {
             "Indicator": "eb57446af5846faa28a726a8b7d43ce5a7fcbd55",
             "Score": 0,
             "Type": "file",
-            "Vendor": "Group-IB TDS Polygon"
+            "Vendor": "Group-IB THF Polygon"
         },
         {
             "Indicator": "3a29353e30ddd1af92f07ee0f61a3a706ee09a64",
             "Score": 0,
             "Type": "file",
-            "Vendor": "Group-IB TDS Polygon"
+            "Vendor": "Group-IB THF Polygon"
         },
         {
             "Indicator": "c41542c7dd5a714adfeafec77022ae0a722ff3a8",
             "Score": 0,
             "Type": "file",
-            "Vendor": "Group-IB TDS Polygon"
+            "Vendor": "Group-IB THF Polygon"
         },
         {
             "Indicator": "svettenkirch.de",
             "Score": 0,
             "Type": "domain",
-            "Vendor": "Group-IB TDS Polygon"
+            "Vendor": "Group-IB THF Polygon"
         },
         {
             "Indicator": "super.esu.as",
             "Score": 0,
             "Type": "domain",
-            "Vendor": "Group-IB TDS Polygon"
+            "Vendor": "Group-IB THF Polygon"
         },
         {
             "Indicator": "8.8.8.8",
             "Score": 0,
             "Type": "ip",
-            "Vendor": "Group-IB TDS Polygon"
+            "Vendor": "Group-IB THF Polygon"
         },
         {
             "Indicator": "79.98.29.14",
             "Score": 0,
             "Type": "ip",
-            "Vendor": "Group-IB TDS Polygon"
+            "Vendor": "Group-IB THF Polygon"
         },
         {
             "Indicator": "217.114.216.252",
             "Score": 0,
             "Type": "ip",
-            "Vendor": "Group-IB TDS Polygon"
+            "Vendor": "Group-IB THF Polygon"
         },
         {
             "Indicator": "http://super.esu.as/wp-content/themes/twentyeleven/inc/images/msg.jpg",
             "Score": 0,
             "Type": "url",
-            "Vendor": "Group-IB TDS Polygon"
+            "Vendor": "Group-IB THF Polygon"
         }
     ],
     "Domain": [
@@ -268,7 +282,7 @@ Get TDS Polygon analysis info
             "MD5": "ba9fe2cb8ee2421ea24a55306ce9d923",
             "Malicious": {
                 "Description": "Verdict probability: 64.8%, iocs: JS:Trojan.Agent.DQBF",
-                "Vendor": "Group-IB TDS Polygon"
+                "Vendor": "Group-IB THF Polygon"
             },
             "Name": "link.pdf",
             "SHA1": "44b3f79dfd7c5861501a19a3bac89f544c7ff815",
@@ -821,41 +835,46 @@ Get TDS Polygon analysis info
 #### Human Readable Output
 
 >### Analysis F2118597
+
 >|Analyzed|DumpExists|ID|Internet-connection|MD5|Name|Probability|Result|SHA1|SHA256|Score|Size|Started|Status|Type|Verdict|
 >|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
 >| 2020-05-07 10:29:42 | true | F2118597 | Available | ba9fe2cb8ee2421ea24a55306ce9d923 | link.pdf | 64.80% | true | 44b3f79dfd7c5861501a19a3bac89f544c7ff815 | 0d1b77c84c68c50932e28c3462a1962916abbbebb456ce654751ab401aa37697 | 24.6 | 36375 | 2020-05-07 10:27:30 | Finished | PDF document, version 1.7 | Malicious |
 
 
 ### polygon-export-report
+
 ***
-Export an archive with TDS Polygon report to War Room
+Export an archive with THF Polygon report to War Room
 
 
 #### Base Command
 
 `polygon-export-report`
+
 #### Input
 
 | **Argument Name** | **Description** | **Required** |
 | --- | --- | --- |
-| tds_analysis_id | Analysis ID in TDS | Required | 
+| tds_analysis_id | Analysis ID in THF | Required | 
 
 
 #### Context Output
 
 | **Path** | **Type** | **Description** |
 | --- | --- | --- |
-| File.Name | string | The report file name | 
-| File.EntryID | string | Report file ID in Demisto | 
-| File.Size | number | The report size | 
-| File.Type | string | The report file type | 
-| File.Info | string | The report file info | 
+| File.Name | string | The report file name. | 
+| File.EntryID | string | Report file ID in Demisto. | 
+| File.Size | number | The report size. | 
+| File.Type | string | The report file type. | 
+| File.Info | string | The report file info. | 
 
 
 #### Command Example
+
 ```!polygon-export-report tds_analysis_id=F2118597```
 
 #### Context Example
+
 ```
 {
     "InfoFile": {
@@ -874,6 +893,7 @@ Export an archive with TDS Polygon report to War Room
 
 
 ### polygon-export-pcap
+
 ***
 Network activity dump export
 
@@ -881,28 +901,31 @@ Network activity dump export
 #### Base Command
 
 `polygon-export-pcap`
+
 #### Input
 
 | **Argument Name** | **Description** | **Required** |
 | --- | --- | --- |
-| tds_analysis_id | Analysis ID in TDS | Required | 
+| tds_analysis_id | Analysis ID in THF | Required | 
 
 
 #### Context Output
 
 | **Path** | **Type** | **Description** |
 | --- | --- | --- |
-| File.Name | string | The dump file name | 
-| File.EntryID | string | The dump file ID in Demisto | 
-| File.Size | number | The dump file size | 
-| File.Type | string | The dump file type | 
-| File.Info | unknown | The dump file info | 
+| File.Name | string | The dump file name. | 
+| File.EntryID | string | The dump file ID in Demisto. | 
+| File.Size | number | The dump file size. | 
+| File.Type | string | The dump file type. | 
+| File.Info | unknown | The dump file info. | 
 
 
 #### Command Example
+
 ```!polygon-export-pcap tds_analysis_id=F2118597```
 
 #### Context Example
+
 ```
 {
     "InfoFile": {
@@ -921,6 +944,7 @@ Network activity dump export
 
 
 ### polygon-export-video
+
 ***
 Screen activity video export
 
@@ -928,11 +952,12 @@ Screen activity video export
 #### Base Command
 
 `polygon-export-video`
+
 #### Input
 
 | **Argument Name** | **Description** | **Required** |
 | --- | --- | --- |
-| tds_analysis_id | Analysis ID in TDS | Required | 
+| tds_analysis_id | Analysis ID in THF | Required | 
 
 
 #### Context Output
@@ -947,9 +972,11 @@ Screen activity video export
 
 
 #### Command Example
+
 ```!polygon-export-video tds_analysis_id=F2118597```
 
 #### Context Example
+
 ```
 {
     "InfoFile": {
@@ -968,6 +995,7 @@ Screen activity video export
 
 
 ### file
+
 ***
 Check file reputation
 
@@ -975,6 +1003,7 @@ Check file reputation
 #### Base Command
 
 `file`
+
 #### Input
 
 | **Argument Name** | **Description** | **Required** |
@@ -986,28 +1015,30 @@ Check file reputation
 
 | **Path** | **Type** | **Description** |
 | --- | --- | --- |
-| File.MD5 | string | The MD5 hash of the file | 
-| File.SHA1 | string | The SHA1 hash of the file | 
-| File.SHA256 | string | The SHA256 hash of the file | 
-| File.Malicious.Vendor | string | The vendor that reported the file as malicious | 
-| File.Malicious.Description | string | A description explaining why the file was determined to be malicious | 
-| DBotScore.Indicator | string | The indicator that was tested | 
-| DBotScore.Type | string | The indicator type | 
-| DBotScore.Vendor | string | The vendor that reported the file as malicious | 
-| DBotScore.Score | number | Malicious score | 
-| Polygon.Analysis.Score | number | Malware score in Polygon | 
-| Polygon.Analysis.MD5 | string | The MD5 hash of the file | 
-| Polygon.Analysis.SHA1 | string | The SHA1 hash of the file | 
-| Polygon.Analysis.SHA256 | string | The SHA256 hash of the file | 
-| Polygon.Analysis.Found | bool | File was found in cloud or not | 
-| Polygon.Analysis.Verdict | bool | Polygon verdict for file | 
-| Polygon.Analysis.Malware-families | string | Malware families | 
+| File.MD5 | string | The MD5 hash of the file. | 
+| File.SHA1 | string | The SHA1 hash of the file. | 
+| File.SHA256 | string | The SHA256 hash of the file. | 
+| File.Malicious.Vendor | string | The vendor that reported the file as malicious. | 
+| File.Malicious.Description | string | A description explaining why the file was determined to be malicious. | 
+| DBotScore.Indicator | string | The indicator that was tested. | 
+| DBotScore.Type | string | The indicator type. | 
+| DBotScore.Vendor | string | The vendor used to calculate the score. | 
+| DBotScore.Score | number | The actual score. | 
+| Polygon.Analysis.Score | number | Malware score in Polygon. | 
+| Polygon.Analysis.MD5 | string | The MD5 hash of the file. | 
+| Polygon.Analysis.SHA1 | string | The SHA1 hash of the file. | 
+| Polygon.Analysis.SHA256 | string | The SHA256 hash of the file. | 
+| Polygon.Analysis.Found | bool | File was found in cloud or not. | 
+| Polygon.Analysis.Verdict | bool | Polygon verdict for file. | 
+| Polygon.Analysis.Malware-families | string | Malware families. | 
 
 
 #### Command Example
+
 ```!file file=eb57446af5846faa28a726a8b7d43ce5a7fcbd55```
 
 #### Context Example
+
 ```
 {
     "DBotScore": [
@@ -1015,13 +1046,13 @@ Check file reputation
             "Indicator": "eb57446af5846faa28a726a8b7d43ce5a7fcbd55",
             "Score": 3,
             "Type": "file",
-            "Vendor": "Group-IB TDS Polygon"
+            "Vendor": "Group-IB THF Polygon"
         }
     ],
     "File": {
         "Malicious": {
-            "Description": "TDS Polygon score: 24.0",
-            "Vendor": "Group-IB TDS Polygon"
+            "Description": "THF Polygon score: 24.0",
+            "Vendor": "Group-IB THF Polygon"
         },
         "SHA1": "eb57446af5846faa28a726a8b7d43ce5a7fcbd55"
     },
@@ -1040,6 +1071,7 @@ Check file reputation
 #### Human Readable Output
 
 >### Results
+
 >|Found|Malware-families|SHA1|Score|Verdict|
 >|---|---|---|---|---|
 >| true |  | eb57446af5846faa28a726a8b7d43ce5a7fcbd55 | 24.0 | true |

@@ -2,13 +2,21 @@
     "name": "Viper",
     "description": "Viper is a binary analysis and management framework. The integration provides the capabilities to search in the framework und to download samples.",
     "support": "community",
-    "currentVersion": "1.0.0",
+    "currentVersion": "1.0.5",
     "author": "DACHSER SE",
     "url": "",
     "email": "",
     "created": "2020-11-09T08:43:35Z",
-    "categories": [],
-    "tags": [],
+    "categories": [
+        "Forensics & Malware Analysis"
+    ],
+    "tags": [
+        "Forensics"
+    ],
     "useCases": [],
-    "keywords": []
+    "keywords": [],
+    "marketplaces": [
+        "xsoar",
+        "marketplacev2"
+    ]
 }

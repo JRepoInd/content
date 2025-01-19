@@ -1,13 +1,7 @@
 id: block_url_-_generic
 version: -1
 name: Block URL - Generic
-description: |-
-  This playbook blocks malicious URLs using all integrations that are enabled.
-
-  Supported integrations for this playbook:
-  * Palo Alto Networks Minemeld
-  * Palo Alto Networks PAN-OS
-  * Zscaler
+description: Deprecated. Use 'Block URL - Generic v2' instead.
 starttaskid: "0"
 tasks:
   "0":
@@ -506,7 +500,7 @@ inputs:
 - key: URLBlacklistMiner
   value: {}
   required: false
-  description: The name of the URL blacklist Miner in  Minemeld.
+  description: The name of the URL block list Miner in  Minemeld.
   playbookInputQuery:
 - key: URL
   value: {}
@@ -563,3 +557,7 @@ outputs: []
 fromversion: 5.0.0
 tests:
 - block_indicators_-_generic_-_test
+marketplaces:
+  - xsoar
+  - marketplacev2
+deprecated: true

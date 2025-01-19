@@ -1,6 +1,7 @@
 from CommonServerPython import *
 import pytest
 from datetime import datetime, timedelta
+from freezegun import freeze_time
 
 ''' MOCK DATA AND RESPONSES '''
 
@@ -451,14 +452,15 @@ def http_return_data(method, url_suffix, full_url, headers, json_data):
     return json_data
 
 
-def create_client():
+def create_client(timeout: int = 15):
     from MicrosoftManagementActivity import Client
     base_url = 'https://manage.office.com/api/v1.0/'
     verify_certificate = not demisto.params().get('insecure', False)
     proxy = demisto.params().get('proxy', False)
 
     client = Client(base_url, verify=verify_certificate, proxy=proxy, self_deployed=True, auth_and_token_url="test",
-                    refresh_token="test", enc_key="test", auth_code="test", tenant_id="test")
+                    refresh_token="test", enc_key="test", auth_code="test", tenant_id="test", redirect_uri="",
+                    timeout=timeout)
 
     return client
 
@@ -501,8 +503,10 @@ def test_content_records_to_incidents_records_creation():
     incidents, latest_creation_time = content_records_to_incidents(GET_BLOB_DATA_RESPONSE_FOR_AUDIT_GENERAL,
                                                                    TIME_6_HOURS_AGO_STRING, time_now_string)
     single_incident = incidents[0]
-    assert 'name' in single_incident and single_incident['name'] == 'Microsoft Management Activity: 1234'
-    assert 'occurred' in single_incident and single_incident['occurred'] == '2020-02-27T00:57:40Z'
+    assert 'name' in single_incident
+    assert single_incident['name'] == 'Microsoft Management Activity: 1234'
+    assert 'occurred' in single_incident
+    assert single_incident['occurred'] == '2020-02-27T00:57:40Z'
 
 
 @pytest.mark.parametrize('content_records, expected_last_run', TEST_LAST_RUN_UPDATE_DATA)
@@ -576,7 +580,7 @@ def test_get_all_content_type_records(requests_mock):
 
     content_records = get_all_content_type_records(client, "audit.general", TIME_24_HOURS_AGO, TIME_ONE_MINUTE_AGO_STRING)
     content_record_ids = [record['Id'] for record in content_records]
-    assert set(content_record_ids) == set(["1234", "567", "89"])
+    assert set(content_record_ids) == {"1234", "567", "89"}
 
 
 def mock_get_access_token(requests_mock, access_token_resp):
@@ -630,3 +634,134 @@ def set_requests_mock(client, requests_mock, access_token_resp=GET_ACCESS_TOKEN_
     mock_list_subscriptions(requests_mock, client, list_subscriptions_resp)
     mock_list_content(requests_mock)
     mock_get_blob_data(requests_mock)
+
+
+@pytest.mark.parametrize('args_timeout,param_timeout,expected_timeout', ((0, 0, 15),
+                                                                         (None, None, 15),
+                                                                         (1, None, 1),
+                                                                         (1, 0, 1),
+                                                                         (None, 2, 2),
+                                                                         (0, 2, 2),
+                                                                         (3, 0, 3),
+                                                                         (3, 4, 3)))
+def test_timeout(args_timeout, param_timeout, expected_timeout):
+    """
+    Given
+            args and params, both of which may contain `timeout`
+    When
+            running get_timeout
+    Then
+            validate the output of get_timeout matches the logic, based on availability:
+             use arg, then param, then default.
+             Validate the Client and its MSClient get the expected value
+    """
+    from MicrosoftManagementActivity import calculate_timeout_value
+    timeout = calculate_timeout_value(params={'timeout': param_timeout}, args={'timeout': args_timeout})
+    assert timeout == expected_timeout
+    client = create_client(timeout=timeout)
+    assert client.timeout == expected_timeout
+    assert client.ms_client.timeout == expected_timeout
+
+
+@pytest.mark.parametrize(argnames='client_id', argvalues=['test_client_id', None])
+def test_test_module_command_with_managed_identities(mocker, requests_mock, client_id):
+    """
+        Given:
+            - Managed Identities client id for authentication.
+        When:
+            - Calling test_module.
+        Then:
+            - Ensure the output are as expected.
+    """
+    from MicrosoftManagementActivity import main, MANAGED_IDENTITIES_TOKEN_URL, Resources, jwt
+    import MicrosoftManagementActivity
+    import demistomock as demisto
+
+    mock_token = {'access_token': 'test_token', 'expires_in': '86400'}
+    get_mock = requests_mock.get(MANAGED_IDENTITIES_TOKEN_URL, json=mock_token)
+    client = create_client()
+
+    params = {
+        'managed_identities_client_id': {'password': client_id},
+        'use_managed_identities': 'True',
+    }
+    mocker.patch.object(demisto, 'params', return_value=params)
+    mocker.patch.object(demisto, 'command', return_value='test-module')
+    mocker.patch.object(jwt, 'decode', return_value={'tid': 'test'})
+    mocker.patch.object(MicrosoftManagementActivity, 'return_results')
+    mocker.patch('MicrosoftApiModule.get_integration_context', return_value={})
+
+    list_subscriptions_endpoint = 'https://manage.office.com/api/v1.0/{}/activity/feed/subscriptions/list'.format(
+        client.tenant_id)
+    requests_mock.get(list_subscriptions_endpoint, json=LIST_SUBSCRIPTIONS_RESPONSE_NO_SUBSCRIPTIONS)
+
+    main()
+
+    assert 'ok' in MicrosoftManagementActivity.return_results.call_args[0][0]
+    qs = get_mock.last_request.qs
+    assert qs['resource'] == [Resources.manage_office]
+    assert client_id and qs['client_id'] == [client_id] or 'client_id' not in qs
+
+
+def test_generate_login_url(mocker):
+    """
+    Given:
+        - Self-deployed are true and auth code are the auth flow
+    When:
+        - Calling function ms-management-activity-generate-login-url
+    Then:
+        - Ensure the generated url are as expected.
+    """
+    # prepare
+    import demistomock as demisto
+    from MicrosoftManagementActivity import main
+    import MicrosoftManagementActivity
+
+    redirect_uri = 'redirect_uri'
+    tenant_id = 'tenant_id'
+    client_id = 'client_id'
+    mocked_params = {
+        'redirect_uri': redirect_uri,
+        'auth_type': 'Authorization Code',
+        'self_deployed': 'True',
+        'refresh_token': tenant_id,
+        'auth_id': client_id,
+        'enc_key': 'client_secret',
+    }
+    mocker.patch.object(demisto, 'params', return_value=mocked_params)
+    mocker.patch.object(demisto, 'command', return_value='ms-management-activity-generate-login-url')
+    mocker.patch.object(MicrosoftManagementActivity, 'return_results')
+
+    # call
+    main()
+
+    # assert
+    expected_url = f'[login URL](https://login.microsoftonline.com/{tenant_id}/oauth2/v2.0/authorize?' \
+                   'response_type=code&scope=offline_access%20https://management.azure.com/.default' \
+                   f'&client_id={client_id}&redirect_uri={redirect_uri})'
+    res = MicrosoftManagementActivity.return_results.call_args[0][0].readable_output
+    assert expected_url in res
+
+
+@freeze_time('2023-08-09')
+def test_fetch_start_time(mocker):
+    """
+    Given:
+        - frozen time set to '2023-08-09'.
+    When:
+        - calling 'get_fetch_start_and_end_time' with 'last_run' containing 'last_fetch' as '2023-04-02T14:22:49'
+         (more than 7 days ago)
+    Then:
+        - Ensure the 'fetch_start_time_str' is as expected - 7 days ago from the frozen time.
+    """
+    from MicrosoftManagementActivity import get_fetch_start_and_end_time
+
+    last_run = {'last_fetch': '2023-04-02T14:22:49'}
+
+    mocker.patch('dateparser.parse', return_value=datetime.strptime('2023-08-02T14:22:49', DATE_FORMAT))
+
+    first_fetch_datetime = None
+    fetch_start_time_str, fetch_end_time_str = get_fetch_start_and_end_time(last_run, first_fetch_datetime)
+
+    assert fetch_start_time_str == '2023-08-02T14:22:49'
+    assert fetch_end_time_str == '2023-08-02T14:32:49'

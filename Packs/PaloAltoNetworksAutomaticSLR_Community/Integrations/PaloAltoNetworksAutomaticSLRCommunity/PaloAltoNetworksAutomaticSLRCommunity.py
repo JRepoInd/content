@@ -1,3 +1,4 @@
+import urllib3
 import demistomock as demisto  # noqa: F401
 import xmltodict
 from CommonServerPython import *  # noqa: F401
@@ -79,8 +80,8 @@ class PanOSXMLAPI(BaseClient):
         status = result['response']['@status']
 
         if self.params['ngfw_verbose'] is True:
-            demisto.log('Got execution status back from API: ' + str(status))
-            demisto.log(str(response.text))
+            demisto.debug('Got execution status back from API: ' + str(status))
+            demisto.debug(str(response.text))
 
         if "success" in status:
             return True
@@ -166,7 +167,7 @@ class PanOSXMLAPI(BaseClient):
         output_file = str(system_name) + '-' + str(system_serial) + '-' + str(time_stamp) + '-stats_dump.tar.gz'
 
         if self.params['ngfw_verbose'] is True:
-            demisto.log('Constructed archive name as: [`' + output_file + '`]')
+            demisto.debug('Constructed archive name as: [`' + output_file + '`]')
 
         params = {
             'type': 'export',
@@ -304,10 +305,10 @@ class PanwCSP(BaseClient):
         }
 
         if self.params['csp_verbose'] is True:
-            demisto.log('Upload -> Parameters -> [' + str(payload) + ']')
-            demisto.log('Upload -> Files -> [' + str(file) + ']')
+            demisto.debug('Upload -> Parameters -> [' + str(payload) + ']')
+            demisto.debug('Upload -> Files -> [' + str(file) + ']')
 
-        demisto.log('Uploading ' + file_data['file_friendly_name'] + ' to Palo Alto Networks...')
+        demisto.debug('Uploading ' + file_data['file_friendly_name'] + ' to Palo Alto Networks...')
 
         response = self._http_request(
             'POST',
@@ -411,17 +412,17 @@ def ngfw_get_stats_dump_status(xmlapi, job_id):
     state = False
 
     while not state:
-        demisto.log('Checking status for job ID: `' + str(job_id) + '`')
+        demisto.debug('Checking status for job ID: `' + str(job_id) + '`')
 
         result = xmlapi.get_stats_job_id_status(job_id)
 
         if 'FIN' in result['status']:
             state = True
         elif 'ACT' in result['status']:
-            demisto.log(
+            demisto.debug(
                 'Job `' + str(job_id) + '` is currently executing, current progress: `' + result['progress'] + '%`')
         elif 'PEND' in result['status']:
-            demisto.log('Another job is currently executing, this job is currently in the queue')
+            demisto.debug('Another job is currently executing, this job is currently in the queue')
         else:
             raise Exception('Unexpected value returned from API, expected [`ACT/FIN/PEND`] got: `' + str(result) + '`')
 
@@ -457,7 +458,7 @@ def upload_stats_to_panw(csp, input_file):
         'file_actual_name': get_path.get('path')
     }
 
-    demisto.log(
+    demisto.debug(
         'Got file name [' + file_data['file_friendly_name'] + '] as path [' + file_data['file_actual_name'] + ']')
 
     result = csp.upload_to_panw(file_data)
@@ -508,7 +509,7 @@ def main():
     try:
 
         if ngfw_tls_verify is False or csp_tls_verify is False:
-            requests.packages.urllib3.disable_warnings()
+            urllib3.disable_warnings()
 
         # Establish PANOS XMLAPI Class Connector
         xmlapi = PanOSXMLAPI(ngfw_host, ngfw_port, ngfw_api_key, ngfw_tls_verify, ngfw_timeout, system_proxy,

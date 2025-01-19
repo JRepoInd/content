@@ -1,10 +1,7 @@
 Use the CyberArk Privileged Access Security (PAS) solution to manage users, safes, vaults, and accounts from Cortex XSOAR.
 
-## Configure CyberArkPAS on Cortex XSOAR
+## Configure CyberArkPAS in Cortex
 
-1. Navigate to **Settings** > **Integrations** > **Servers & Services**.
-2. Search for CyberArkPAS.
-3. Click **Add instance** to create and configure a new integration instance.
 
 | **Parameter** | **Description** | **Required** |
 | --- | --- | --- |
@@ -18,18 +15,22 @@ Use the CyberArk Privileged Access Security (PAS) solution to manage users, safe
 | insecure | Trust any certificate \(not secure\) | False |
 | proxy | Use system proxy settings | False |
 
-4. Click **Test** to validate the URLs, token, and connection.
 ## Commands
-You can execute these commands from the Cortex XSOAR CLI, as part of an automation, or in a playbook.
+You can execute these commands from the CLI, as part of an automation, or in a playbook.
 After you successfully execute a command, a DBot message appears in the War Room with the command details.
 ### cyberark-pas-user-add
 ***
 Add a new user to the vault.
 
+To run this command, you must have the following permissions:
+
+* *Add Users*
+* *Update Users*
 
 #### Base Command
 
 `cyberark-pas-user-add`
+
 #### Input
 
 | **Argument Name** | **Description** | **Required** |
@@ -151,10 +152,16 @@ Add a new user to the vault.
 ***
 Update an existing vault user.
 
+To run this command, you must have the following permissions:
+
+* *Add Users* or *Update Users*
+* In order to edit *change_password_on_the_next_logon*, you must have the *Reset Password* authorization
+
 
 #### Base Command
 
 `cyberark-pas-user-update`
+
 #### Input
 
 | **Argument Name** | **Description** | **Required** |
@@ -277,6 +284,8 @@ Update an existing vault user.
 ***
 Delete a specific user in the vault.
 
+To run this command, you must have *Add Users* or *Update Users* permissions.
+
 
 #### Base Command
 `cyberark-pas-user-delete`
@@ -321,10 +330,12 @@ Delete a specific user in the vault.
 ***
 Return a list of all existing users in the vault that meet the filter and search criteria.
 
+To run this command, you must have *Audit Users* permission.
 
 #### Base Command
 
 `cyberark-pas-users-list`
+
 #### Input
 
 | **Argument Name** | **Description** | **Required** |
@@ -422,6 +433,7 @@ Uses the V1 of the API and may change in the future.
 #### Base Command
 
 `cyberark-pas-user-activate`
+
 #### Input
 
 | **Argument Name** | **Description** | **Required** |
@@ -447,10 +459,12 @@ There is no context output for this command.
 ***
 Return information about all of the user’s safes in the vault.
 
+To run this command, you must be a member of the Safes in the Vault that are returned in the list.
 
 #### Base Command
 
 `cyberark-pas-safes-list`
+
 #### Input
 
 There are no input arguments for this command.
@@ -513,10 +527,10 @@ There are no input arguments for this command.
 ***
 Return information about a specific safe in the vault.
 
-
 #### Base Command
 
 `cyberark-pas-safe-get-by-name`
+
 #### Input
 
 | **Argument Name** | **Description** | **Required** |
@@ -571,10 +585,12 @@ Return information about a specific safe in the vault.
 ***
 Add a new safe to the vault.
 
+To run this command, you must have *Add Safes* permission in the Vault.
 
 #### Base Command
 
 `cyberark-pas-safe-add`
+
 #### Input
 
 | **Argument Name** | **Description** | **Required** |
@@ -635,10 +651,12 @@ Add a new safe to the vault.
 ***
 Update a single safe in the vault.
 
+To run this command, you must have *Manage Safes* permission in the Vault.
 
 #### Base Command
 
 `cyberark-pas-safe-update`
+
 #### Input
 
 | **Argument Name** | **Description** | **Required** |
@@ -700,10 +718,13 @@ Update a single safe in the vault.
 ***
 Delete a safe from the vault.
 
+To run this command, you must have *Manage Safes* permission in the Safe.
+
 
 #### Base Command
 
 `cyberark-pas-safe-delete`
+
 #### Input
 
 | **Argument Name** | **Description** | **Required** |
@@ -741,10 +762,12 @@ Delete a safe from the vault.
 ***
 Return a list of the members of the safe.
 
+To run this command, you must have *View Safe Members* permission in the Safe.
 
 #### Base Command
 
 `cyberark-pas-safe-members-list`
+
 #### Input
 
 | **Argument Name** | **Description** | **Required** |
@@ -853,9 +876,12 @@ Return a list of the members of the safe.
 Add an existing user as a safe member.
 Uses the V1 of the API and may change in the future.
 
+To run this command, you must have *Manage Safe Members* permission in the Vault.
+
 #### Base Command
 
 `cyberark-pas-safe-member-add`
+
 #### Input
 
 | **Argument Name** | **Description** | **Required** |
@@ -995,9 +1021,12 @@ Uses the V1 of the API and may change in the future.
 Update an existing safe member.
 Uses the V1 of the API and may change in the future.
 
+To run this command, you must have *Manage Safe Members* permission in the Vault.
+
 #### Base Command
 
 `cyberark-pas-safe-member-update`
+
 #### Input
 
 | **Argument Name** | **Description** | **Required** |
@@ -1135,9 +1164,12 @@ Uses the V1 of the API and may change in the future.
 Remove a specific member from a safe.
 Uses the V1 of the API and may change in the future.
 
+To run this command, you must have *Manage Safe Members* permission in the Safe.
+
 #### Base Command
 
 `cyberark-pas-safe-member-delete`
+
 #### Input
 
 | **Argument Name** | **Description** | **Required** |
@@ -1180,10 +1212,15 @@ Uses the V1 of the API and may change in the future.
 ***
 Add a new privileged account or SSH key to the vault.
 
+To run this command, you must have the following permissions in the Vault:
+
+* *Add Account*
+* *Update Password* or *Update Password Properties*
 
 #### Base Command
 
 `cyberark-pas-account-add`
+
 #### Input
 
 | **Argument Name** | **Description** | **Required** |
@@ -1256,10 +1293,12 @@ Add a new privileged account or SSH key to the vault.
 ***
 Delete a specific account in the vault.
 
+To run this command, you must have *Delete Accounts* permission in the Vault.
 
 #### Base Command
 
 `cyberark-pas-account-delete`
+
 #### Input
 
 | **Argument Name** | **Description** | **Required** |
@@ -1300,10 +1339,16 @@ Delete a specific account in the vault.
 ***
 Update the details of an existing account.
 
+To run this command, you must have the following permissions in the Safe:
+
+* For updating account properties: *Update Password Properties*.
+* For renaming accounts: *Rename Accounts*.
+* For moving accounts to a different folder: *Move Accounts* or *Move Folders*.
 
 #### Base Command
 
 `cyberark-pas-account-update`
+
 #### Input
 
 | **Argument Name** | **Description** | **Required** |
@@ -1373,10 +1418,12 @@ Update the details of an existing account.
 ***
 Return a list of all the accounts in the vault.
 
+To run this command, you must have *List Accounts* permission in the Safe.
 
 #### Base Command
 
 `cyberark-pas-accounts-list`
+
 #### Input
 
 | **Argument Name** | **Description** | **Required** |
@@ -1468,6 +1515,7 @@ Returns the activities of a specific account that is identified by its account I
 #### Base Command
 
 `cyberark-pas-account-get-list-activity`
+
 #### Input
 
 | **Argument Name** | **Description** | **Required** |
@@ -1535,10 +1583,12 @@ Returns the activities of a specific account that is identified by its account I
 ***
 Returns information for the specified account, identified by the account ID.
 
+To run this command, you must have *List Accounts* permission in the Safe.
 
 #### Base Command
 
 `cyberark-pas-account-get-details`
+
 #### Input
 
 | **Argument Name** | **Description** | **Required** |
@@ -1607,10 +1657,12 @@ Returns information for the specified account, identified by the account ID.
 ***
 Enable users to set account credentials and change them in the vault.
 
+To run this command, you must have *Update Password Value* credentials in the Safe where the privileged account is stored.
 
 #### Base Command
 
 `cyberark-pas-credentials-change-in-vault-only`
+
 #### Input
 
 | **Argument Name** | **Description** | **Required** |
@@ -1638,10 +1690,12 @@ There is no context output for this command.
 ***
 Mark an account for verification by the Central Policy Manager (CPM).
 
+To run this command, you must have *Initiate CPM password management operations* permission in the Safe where the privileged account is stored.
 
 #### Base Command
 
 `cyberark-pas-credentials-verify`
+
 #### Input
 
 | **Argument Name** | **Description** | **Required** |
@@ -1668,10 +1722,12 @@ There is no context output for this command.
 ***
 Mark an account for automatic reconciliation by the Central Policy Manager (CPM).
 
+To run this command, you must have *Initiate CPM password management operations* permission in the Safe where the privileged account is stored.
 
 #### Base Command
 
 `cyberark-pas-credentials-reconcile`
+
 #### Input
 
 | **Argument Name** | **Description** | **Required** |
@@ -1698,10 +1754,15 @@ There is no context output for this command.
 ***
 Mark an account for an immediate credentials change by the CPM to a new random value.
 
+To run this command, you must have the following permissions in the Safe where the privileged account is stored:
+
+* *Initiate CPM password management operations*
+* *Specify next password value*
 
 #### Base Command
 
 `cyberark-pas-credentials-change-random-password`
+
 #### Input
 
 | **Argument Name** | **Description** | **Required** |
@@ -1728,6 +1789,8 @@ There is no context output for this command.
 ### cyberark-pas-credentials-change-set-new-password
 ***
 Enable users to set the account's credentials to use for the next Central Policy Manager (CPM) change.
+
+To run this command, you must have *Update Password Value* credentials in the Safe where the privileged account is stored.
 
 
 #### Base Command
@@ -1765,6 +1828,7 @@ Return all Privileged Threat Analytics (PTA) security events.
 #### Base Command
 
 `cyberark-pas-security-events-get`
+
 #### Input
 
 | **Argument Name** | **Description** | **Required** |
@@ -1798,7 +1862,7 @@ Return all Privileged Threat Analytics (PTA) security events.
                 "additionalData": {
                     "reason": "ip",
                     "station": "1.1.1.1",
-                    "vault_user": "administrator"
+                    "vault_user": "administrator"                
                 },
                 "audits": [
                     {
@@ -1872,4 +1936,3 @@ Return all Privileged Threat Analytics (PTA) security events.
 >|---|---|---|---|---|---|---|---|
 >| station: 1.1.1.1<br/>reason: ip<br/>vault_user: administrator | {'id': '1', 'type': 'VAULT_LOGON', 'sensorType': 'VAULT', 'action': 'Logon', 'createTime': 1597864497000, 'vaultUser': 'Administrator', 'source': {'mOriginalAddress': '1.1.1.1', 'mResolvedAddress': {'mOriginalAddress': '1.1.1.1', 'mAddress': '1.1.1.1', 'mHostName': '1-2-3-4', 'mFqdn': '1-2-3-4'}}, 'cloudData': {}} | 1597864497000 | 1 | 1597864497000 | OPEN | 25.751749103263528 | VaultViaIrregularIp |
 >| station: 1.1.1.1<br/>reason: ip<br/>vault_user: administrator | {'id': '2', 'type': 'VAULT_LOGON', 'sensorType': 'VAULT', 'action': 'Logon', 'createTime': 1597864209000, 'vaultUser': 'Administrator', 'source': {'mOriginalAddress': '1.1.1.1', 'mResolvedAddress': {'mOriginalAddress': '1.1.1.1', 'mAddress': '1.1.1.1', 'mHostName': '1-2-3-4', 'mFqdn': '1-2-3-4'}}, 'cloudData': {}} | 1597864209000 | 2 | 1597864209000 | OPEN | 25.751749103263528 | VaultViaIrregularIp |
-

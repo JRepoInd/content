@@ -1,10 +1,8 @@
+import demistomock as demisto  # noqa: F401
+from CommonServerPython import *  # noqa: F401
 from typing import Tuple
 
-import demistomock as demisto
-from CommonServerPython import *
 from CommonServerUserPython import *
-
-import traceback
 
 BRAND = "XSOAR"
 PAGE_SIZE = 2000
@@ -24,18 +22,11 @@ def find_indicators_by_query(query: str) -> List[dict]:
     :rtype: ``list``
     """
     indicators: List[dict] = []
-    search_indicators = IndicatorsSearcher()
-
-    # last_found_len should be PAGE_SIZE (or PAGE_SIZE - 1, as observed for some users) for full pages
-    fetched_indicators = search_indicators.search_indicators_by_version(query=query, size=PAGE_SIZE).get('iocs')
-    while fetched_indicators:
-        # In case the result from searchIndicators includes the key `iocs` but it's value is None
-        fetched_indicators = fetched_indicators or []
-
-        # save only the value and type of each indicator
+    search_indicators = IndicatorsSearcher(query=query, size=PAGE_SIZE)
+    for ioc_res in search_indicators:
+        fetched_indicators = ioc_res.get('iocs') or []
         indicators.extend({'entity_b': ioc.get('value'), 'entity_b_type': ioc.get('indicator_type')}
                           for ioc in fetched_indicators)
-        fetched_indicators = search_indicators.search_indicators_by_version(query=query, size=PAGE_SIZE).get('iocs')
 
     return indicators
 
@@ -54,17 +45,18 @@ def remove_existing_entity_b_indicators(entity_b_list: list, entity_b_query: str
     :return: A list of entity_b's that do not exist in the system that we will need to add.
     :rtype: ``list``
     """
+    entity_b_list_to_remove = entity_b_list[:]
     if entity_b_query:
         return []
     else:
-        query = f'value:{entity_b_list[0]}'
-        for entity_b in entity_b_list[1:]:
-            query += f' or value:{entity_b}'
+        query = f'value:"{entity_b_list_to_remove[0]}"'
+        for entity_b in entity_b_list_to_remove[1:]:
+            query += f' or value:"{entity_b}"'
     result_indicators_by_query = find_indicators_by_query(query)
     for indicator in result_indicators_by_query:
-        if indicator.get('entity_b') in entity_b_list:
-            entity_b_list.remove(indicator.get('entity_b'))
-    return entity_b_list
+        if indicator.get('entity_b') in entity_b_list_to_remove:
+            entity_b_list_to_remove.remove(indicator.get('entity_b'))
+    return entity_b_list_to_remove
 
 
 def create_relation_command_using_query(args: dict) -> List[EntityRelationship]:
@@ -139,6 +131,10 @@ def validate_arguments(args: dict) -> Dict[str, str]:
         raise Exception("Missing entity_b in the create relationships")
     if args.get('entity_b') and not args.get('entity_b_type'):
         raise Exception("Missing entity_b_type in the create relationships")
+
+    args['entity_a_type'] = FeedIndicatorType.indicator_type_by_server_version(args.get('entity_a_type'))
+    if entity_b_type := args.get('entity_b_type'):
+        args['entity_b_type'] = FeedIndicatorType.indicator_type_by_server_version(entity_b_type)
     return args
 
 
@@ -210,7 +206,6 @@ def main():
         relationships, human_readable = create_relationships(args)
         return_results(CommandResults(readable_output=human_readable, relationships=relationships))
     except Exception as e:
-        demisto.error(traceback.format_exc())
         return_error(f'Failed to execute CreateIndicatorRelationships automation. Error: {str(e)}')
 
 

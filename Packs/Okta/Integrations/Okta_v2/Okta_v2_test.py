@@ -1,10 +1,14 @@
+from unittest.mock import MagicMock, patch
 from Okta_v2 import Client, get_user_command, get_group_members_command, create_user_command, \
     verify_push_factor_command, get_groups_for_user_command, get_user_factors_command, get_logs_command, \
-    get_zone_command, list_zones_command, update_zone_command
+    get_zone_command, list_zones_command, update_zone_command, list_users_command, create_zone_command, \
+    create_group_command, assign_group_to_app_command, get_after_tag, delete_limit_param, set_password_command
 import pytest
+import json
+import requests_mock
 
 
-client = Client(base_url="demisto.com")
+client = Client(base_url="demisto.com", api_token="XXX")
 
 user_data = {
     "id": "TestID",
@@ -26,7 +30,9 @@ user_data = {
         "displayName": "test1",
         "secondEmail": "test@this.com",
         "login": "test@this.com",
-        "email": "test@this.com"
+        "email": "test@this.com",
+        "manager": "manager",
+        "managerEmail": "manager@test.com"
     },
     "credentials": {
         "provider": {
@@ -187,6 +193,49 @@ create_user_response = {
         },
         "self": {
             "href": "https://test.com/api/v1/users/TestID"
+        }
+    }
+}
+create_group_response = {
+    "id": "00g3q8tjdyoOw6fJE1d7",
+    "created": "2022-05-20T14:59:29.000Z",
+    "lastUpdated": "2022-05-20T14:59:29.000Z",
+    "lastMembershipUpdated": "2022-05-20T14:59:29.000Z",
+    "objectClass": ["okta:user_group"],
+    "type": "OKTA_GROUP",
+    "profile": {
+        "name": "TestGroup",
+        "description": "Test Group Description"
+    },
+    "_links": {
+        "logo": [{
+            "name": "medium",
+            "href": "https://op3static.oktacdn.com/assets/img/logos/groups/odyssey/okta-medium.png",
+            "type": "image/png"
+        },
+            {
+                "name": "large",
+                "href": "https://op3static.oktacdn.com/assets/img/logos/groups/odyssey/okta-large.png",
+                "type": "image/png"
+        }],
+        "users": {"href": "https://test.com/api/v1/groups/00g3q8tjdyoOw6fJE1d7/users"},
+        "apps": {"href": "https://test.com/api/v1/groups/00g3q8tjdyoOw6fJE1d7/apps"}
+    }
+}
+assign_group_to_app_response = {
+    "id": "00g3q8tjdyoOw6fJE1d7",
+    "lastUpdated": "2022-05-20T16:01:16.000Z",
+    "priority": 5,
+    "profile": {},
+    "_links": {
+        "app": {
+            "href": "https://test.com/api/v1/apps/0oa3ik9908vngPiMB1d7"
+        },
+        "self": {
+            "href": "https://test.com/api/v1/apps/0oa3ik9908vngPiMB1d7/groups/00g3q8tjdyoOw6fJE1d7"
+        },
+        "group": {
+            "href": "https://test.com/api/v1/groups/00g3q8tjdyoOw6fJE1d7"
         }
     }
 }
@@ -553,6 +602,20 @@ okta_zone = {
     "type": "IP"
 }
 
+LOGS = [
+    {'mock_log1': 'mock_value1'},
+    {'mock_log2': 'mock_value2'},
+    {'mock_log3': 'mock_value3'}
+]
+
+
+def util_load_json(path: str):
+    """
+    Utility to load json data from a local folder.
+    """
+    with open(path, encoding='utf-8') as file:
+        return json.loads(file.read())
+
 
 @pytest.mark.parametrize(
     # Write and define the expected
@@ -563,13 +626,15 @@ okta_zone = {
           'Status': 'PROVISIONED', 'Type': 'Okta', 'Created': "2020-02-19T08:18:20.000Z",
           'Activated': "2020-02-20T11:44:43.000Z",
           'StatusChanged': "2020-02-20T11:45:24.000Z",
-          'PasswordChanged': "2020-02-19T08:18:21.000Z"}, 'test@this.com'),
+          'PasswordChanged': "2020-02-19T08:18:21.000Z", "Manager": "manager", "ManagerEmail": "manager@test.com"},
+         'test@this.com'),
         ({"userId": "", "username": "test@this.com", "verbose": 'true'},
          {'ID': 'TestID', 'Username': 'test@this.com', 'DisplayName': 'test this', 'Email': 'test@this.com',
           'Status': 'PROVISIONED', 'Type': 'Okta', 'Created': "2020-02-19T08:18:20.000Z",
           'Activated': "2020-02-20T11:44:43.000Z",
           'StatusChanged': "2020-02-20T11:45:24.000Z",
-          'PasswordChanged': "2020-02-19T08:18:21.000Z"}, 'Additional Data'),
+          'PasswordChanged': "2020-02-19T08:18:21.000Z", "Manager": "manager", "ManagerEmail": "manager@test.com"},
+         'Additional Data'),
     ]
 )
 def test_get_user_command(mocker, args, expected_context, expected_readable):
@@ -577,6 +642,102 @@ def test_get_user_command(mocker, args, expected_context, expected_readable):
     readable, outputs, _ = get_user_command(client, args)
     assert outputs.get('Account(val.ID && val.ID === obj.ID)')[0] == expected_context
     assert expected_readable in readable
+
+
+def test_get_user_command_not_found_user(mocker):
+    """
+        Given:
+       - Username.
+
+       When:
+       - running get_user_command.
+
+       Then:
+       - Ensure that no exception was raised, and assert the readable output.
+    """
+    args = {"username": "test@this.com"}
+    mocker.patch.object(client, 'get_user', side_effect=Exception('Error in API call [404] - Not found'))
+    readable, _, _ = get_user_command(client, args)
+    assert 'User test@this.com was not found.' in readable
+
+
+@pytest.mark.parametrize(
+    # Write and define the expected
+    "args ,expected_context, expected_readable",
+    [
+        ({"userId": "TestID", "username": "", "verbose": 'false'},
+         {'ID': 'TestID', 'Username': 'test@this.com', 'DisplayName': 'test this', 'Email': 'test@this.com',
+          'Status': 'PROVISIONED', 'Type': 'Okta', 'Created': "2020-02-19T08:18:20.000Z",
+          'Activated': "2020-02-20T11:44:43.000Z",
+          'StatusChanged': "2020-02-20T11:45:24.000Z",
+          'PasswordChanged': "2020-02-19T08:18:21.000Z", "Manager": "manager", "ManagerEmail": "manager@test.com"},
+         'test@this.com'),
+        ({"userId": "", "username": "test@this.com", "verbose": 'true'},
+         {'ID': 'TestID', 'Username': 'test@this.com', 'DisplayName': 'test this', 'Email': 'test@this.com',
+          'Status': 'PROVISIONED', 'Type': 'Okta', 'Created': "2020-02-19T08:18:20.000Z",
+          'Activated': "2020-02-20T11:44:43.000Z",
+          'StatusChanged': "2020-02-20T11:45:24.000Z",
+          'PasswordChanged': "2020-02-19T08:18:21.000Z", "Manager": "manager", "ManagerEmail": "manager@test.com"},
+         'Additional Data'),
+    ]
+)
+def test_list_user_command(mocker, args, expected_context, expected_readable):
+    mocker.patch.object(client, 'list_users', return_value=(user_data, "123dasu23c"))
+    readable, outputs, _ = list_users_command(client, args)
+    assert outputs.get('Account(val.ID && val.ID == obj.ID)')[0] == expected_context
+    assert expected_readable in readable
+    assert "tag: 123dasu23c" in readable
+
+
+@pytest.mark.parametrize("args", [({"userId": "TestID", "username": "", "verbose": 'false'})])
+def test_after_key_list_user_command(mocker, args):
+    """
+    Given
+    - args.
+
+    When
+    - Running list_users command.
+
+    Then
+    - Validate that since there's no more results to show, there's no tag key in the readable output.
+    """
+    mocker.patch.object(client, 'list_users', return_value=(user_data, None))
+    readable, _, _ = list_users_command(client, args)
+    assert "tag:" not in readable
+
+
+@pytest.mark.parametrize("url, expected_after_tag",
+                         [("https://dev-725178.oktapreview.com/api/v1/users?limit=10&after=qazwsx123",
+                           "qazwsx123")])
+def test_get_after_tag_function(url, expected_after_tag):
+    """
+    Given
+    - url.
+    When
+    - Running get_after_tag function.
+
+    Then
+    - Validate that tag was extracted correctly.
+    """
+    after_tag = get_after_tag(url)
+    assert expected_after_tag == after_tag
+
+
+@pytest.mark.parametrize("url, expected_url",
+                         [("https://dev-725178.oktapreview.com/api/v1/users?limit=10&after=qazwsx123",
+                           "https://dev-725178.oktapreview.com/api/v1/users?after=qazwsx123")])
+def test_delete_limit_param_function(url, expected_url):
+    """
+    Given
+    - url.
+    When
+    - Running delete_limit_param function.
+
+    Then
+    - Ensure that the limit param was deleted.
+    """
+    modified_url = delete_limit_param(url)
+    assert expected_url == modified_url
 
 
 @pytest.mark.parametrize(
@@ -611,7 +772,7 @@ def test_get_groups_for_user_command(mocker, args):
     mocker.patch.object(client, 'get_groups_for_user', return_value=group_data)
     _, outputs, _ = get_groups_for_user_command(client, args)
     assert outputs.get('Account(val.ID && val.ID === obj.ID)').get('Group')[0] == expected_context
-    assert 'TestID' == outputs.get('Account(val.ID && val.ID === obj.ID)').get('ID')
+    assert outputs.get('Account(val.ID && val.ID === obj.ID)').get('ID') == 'TestID'
 
 
 @pytest.mark.parametrize(
@@ -638,6 +799,28 @@ def test_create_user_command(mocker, args):
     readable, outputs, _ = create_user_command(client, args)
     assert 'STAGED' in readable
     assert outputs.get('Account(val.ID && val.ID === obj.ID)')[0].get('Status') == 'STAGED'
+
+
+@pytest.mark.parametrize(
+    "args",
+    [({'name': 'TestGroup',
+       'description': 'Test Group Description'})])
+def test_create_group_command(mocker, args):
+    mocker.patch.object(client, 'create_group', return_value=create_group_response)
+    readable, outputs, _ = create_group_command(client, args)
+    assert outputs.get('OktaGroup(val.ID && val.ID === obj.ID)')[0].get('Type') == 'OKTA_GROUP'
+
+
+@pytest.mark.parametrize(
+    "args",
+    [({'groupName': 'TestGroup',
+       'appName': 'TestApp'})])
+def test_assign_group_to_app_command(mocker, args):
+    mocker.patch.object(client, 'get_group_id', return_value='00g3q8tjdyoOw6fJE1d7')
+    mocker.patch.object(client, 'get_app_id', return_value='a456appid654')
+    mocker.patch.object(client, 'assign_group_to_app', return_value=assign_group_to_app_response)
+    readable, outputs, _ = assign_group_to_app_command(client, args)
+    assert _.get('id') == '00g3q8tjdyoOw6fJE1d7'
 
 
 @pytest.mark.parametrize(
@@ -671,14 +854,14 @@ def test_get_zone_command(mocker, args):
     mocker.patch.object(client, 'get_zone', return_value=okta_zone)
     readable, outputs, _ = get_zone_command(client, args)
     assert 'Test Zone' in readable
-    assert 'nzoqsmcx1qWYJ6wYF7q0' == outputs.get('Okta.Zone(val.id && val.id === obj.id)').get('id', '')
+    assert outputs.get('Okta.Zone(val.id && val.id === obj.id)').get('id', '') == 'nzoqsmcx1qWYJ6wYF7q0'
 
 
 def test_list_zones_command(mocker):
     mocker.patch.object(client, 'list_zones', return_value=okta_zone)
     readable, outputs, _ = list_zones_command(client, {})
     assert 'Test Zone' in readable
-    assert 'nzoqsmcx1qWYJ6wYF7q0' == outputs.get('Okta.Zone(val.id && val.id === obj.id)').get('id', '')
+    assert outputs.get('Okta.Zone(val.id && val.id === obj.id)').get('id', '') == 'nzoqsmcx1qWYJ6wYF7q0'
 
 
 @pytest.mark.parametrize(
@@ -692,21 +875,285 @@ def test_update_zone_command(mocker, args):
     mocker.patch.object(client, 'get_zone', return_value=okta_zone)
     mocker.patch.object(client, 'update_zone', return_value=my_okta_zone)
     readable, outputs, _ = update_zone_command(client, args)
-    assert 'NewZoneName' == outputs.get('Okta.Zone(val.id && val.id === obj.id)').get('name', '')
+    assert outputs.get('Okta.Zone(val.id && val.id === obj.id)').get('name', '') == 'NewZoneName'
 
 
-# #
-# #
+@pytest.mark.parametrize(
+    "args",
+    [
+        ({'gateway_ips': '8.8.8.8', 'name': 'NewZoneName'})
+    ])
+def test_create_zone_command(mocker, args):
+    my_okta_zone = okta_zone
+    my_okta_zone['name'] = 'NewZoneName'
+    mocker.patch.object(client, 'create_zone', return_value=okta_zone)
+    readable, outputs, _ = create_zone_command(client, args)
+    assert outputs.get('Okta.Zone(val.id && val.id === obj.id)').get('name', '') == 'NewZoneName'
 
 
-# def test_say_hello_over_http(requests_mock):
-#     mock_response = {'result': 'Hello Dbot'}
-#     requests_mock.get('https://test.com/hello/Dbot', json=mock_response)
-# #
-#     client = Client(base_url='https://test.com', verify=False, auth=('test', 'test'))
-#     args = {
-#         'name': 'Dbot'
-#     }
-#     _, outputs, _ = say_hello_over_http_command(client, args)
-#
-#     assert outputs['hello'] == 'Hello Dbot'
+EXPEXTED_LOGS_RESULT = \
+    [
+        {
+            "Actor": "dummy name (User)",
+            "ActorAlternaneId": "example",
+            "EventInfo": "Remove user from group membership",
+            "EventOutcome": "SUCCESS",
+            "EventSeverity": "INFO",
+            "Client": "Unknown browser on Unknown OS Unknown device",
+            "RequestIP": "8.8.8.8",
+            "ChainIP": [
+                "8.8.8.8"
+            ],
+            "Targets": "test this (User)\ntest1 (UserGroup)\n",
+            "Time": "12/13/2021, 01:47:08"
+        },
+        {
+            "Actor": "dummy name (User)",
+            "ActorAlternaneId": "example",
+            "EventInfo": "Remove user from group membership",
+            "EventOutcome": "SUCCESS",
+            "EventSeverity": "INFO",
+            "Client": "Unknown browser on Unknown OS Unknown device",
+            "RequestIP": "8.8.8.8",
+            "ChainIP": [],
+            "Targets": "test this (User)\ntest1 (UserGroup)\n",
+            "Time": "12/13/2021, 01:47:08"
+        }
+    ]
+
+
+def test_get_readable_logs():
+    logs_raw_response = util_load_json('test_data/get_logs_response.json')
+    result = client.get_readable_logs(logs_raw_response)
+    assert len(result) == 2
+    assert result == EXPEXTED_LOGS_RESULT
+
+
+def test_set_password_command():
+    client = Client(base_url='https://demisto.com', api_token="XXX")
+    with requests_mock.Mocker() as m:
+        m.get('https://demisto.com/api/v1/users?filter=profile.login eq "test"', json=[{'id': '1234'}])
+        mock_request = m.post('https://demisto.com/api/v1/users/1234', json={'passwordChanged': '2020-03-26T13:57:13.000Z'})
+
+        result = set_password_command(client, {'username': 'test', 'password': 'a1b2c3'})
+
+    assert result[0] == 'test password was last changed on 2020-03-26T13:57:13.000Z'
+    assert mock_request.last_request.text == '{"credentials": {"password": {"value": "a1b2c3"}}}'
+
+
+def test_set_temp_password_command():
+    client = Client(base_url='https://demisto.com', api_token="XXX")
+    with requests_mock.Mocker() as m:
+        m.get('https://demisto.com/api/v1/users?filter=profile.login eq "test"', json=[{'id': '1234'}])
+        m.post('https://demisto.com/api/v1/users/1234', json={'passwordChanged': '2023-03-22T10:15:26.000Z'})
+        m.post('https://demisto.com/api/v1/users/1234/lifecycle/expire_password?tempPassword=true',
+               json={"tempPassword": "cAn5N3gx"})
+
+        result = set_password_command(client, {'username': 'test', 'password': 'a1b2c3', 'temporary_password': 'true'})
+    expected_results = "test password was last changed on 2023-03-22T10:15:26.000Z\n" \
+                       "### Okta Temporary Password\n|tempPassword|\n|---|\n| cAn5N3gx |\n"
+    assert result[0] == expected_results
+
+
+def mock_get_paged_results(url_suffix='', query_params=None, max_limit=None):
+    if max_limit:
+        return LOGS[:max_limit]
+    else:
+        return LOGS
+
+
+LOGS_WITH_LIMIT = [
+    (None, 3),
+    (1, 1),
+    (3, 3),
+    (1001, 3)
+]
+
+
+@pytest.mark.parametrize('limit, logs_amount', LOGS_WITH_LIMIT)
+def test_get_logs_command_with_limit(mocker, requests_mock, limit, logs_amount):
+    """
+    Given:
+        - An Okta IAM client object.
+    When:
+        - Calling function okta-get-logs
+        - Events should come in two batches of two events in the first batch, and one event in the second batch.
+    Then:
+        - Ensure three events are returned in incident the correct format.
+    """
+    from Okta_v2 import get_logs_command
+
+    client = Client(base_url='https://demisto.com', api_token="XXX")
+    mocker.patch.object(Client, 'get_paged_results', side_effect=mock_get_paged_results)
+    mocker.patch.object(Client, 'get_readable_logs', side_effect=mock_get_paged_results)
+    requests_mock.get(f"https://demisto.com/api/v1/logs?limit={limit}", json=LOGS[:limit])
+    args = {'limit': limit}
+    readable, outputs, raw_response = get_logs_command(client=client, args=args)
+    assert len(outputs.get('Okta.Logs.Events(val.uuid && val.uuid === obj.uuid)')) == logs_amount
+
+
+def test_expire_password_with_revoke_session():
+    """
+    Given:
+        - A client object with mocked methods for getting user ID, revoking a session, and formatting the user context.
+        - Arguments for expire_password_command with username, hide_password set to False, and revoke_session set to True.
+    When:
+        - Calling expire_password_command with revoke_session set to True.
+    Then:
+        - Ensure the revoke_session method is called.
+        - Ensure the response includes the correct tempPassword and user context.
+        - Ensure the readable output is formatted as expected.
+    """
+    from Okta_v2 import expire_password_command
+    client = MagicMock()
+    args = {
+        'username': 'test_user',
+        'hide_password': 'False',
+        'revoke_session': 'True'
+    }
+
+    client.get_user_id.return_value = 'user123'
+    client.revoke_session.return_value = {'tempPassword': 'test_password'}
+    client.get_users_context.return_value = {'ID': 'user123'}
+
+    readable_output, outputs, raw_response = expire_password_command(client, args)
+
+    client.revoke_session.assert_called_once_with('user123')
+    assert 'Account(val.ID && val.ID === obj.ID)' in outputs
+    assert outputs['Account(val.ID && val.ID === obj.ID)']['ID'] == 'user123'
+    assert 'test_password' in raw_response['tempPassword']
+    assert readable_output == '### Okta Expired Password\n|tempPassword|\n|---|\n| test_password |\n'
+
+
+def test_expire_password_without_revoke_session():
+    """
+    Given:
+        - Arguments for expire_password_command with username, hide_password set to False, and revoke_session set to False.
+    When:
+        - Calling expire_password_command.
+    Then:
+        - Ensure the expire_password method is called.
+        - Ensure the response includes the correct tempPassword and user context.
+        - Ensure the readable output is formatted as expected.
+    """
+    from Okta_v2 import expire_password_command
+    client = MagicMock()
+    args = {
+        'username': 'test_user',
+        'hide_password': 'False',
+        'revoke_session': 'False'
+    }
+
+    client.get_user_id.return_value = 'user123'
+    client.expire_password.return_value = {'tempPassword': 'test_password'}
+    client.get_users_context.return_value = {'ID': 'user123'}
+
+    readable_output, outputs, raw_response = expire_password_command(client, args)
+
+    client.expire_password.assert_called_once_with('user123', args)
+    assert 'Account(val.ID && val.ID === obj.ID)' in outputs
+    assert outputs['Account(val.ID && val.ID === obj.ID)']['ID'] == 'user123'
+    assert 'test_password' in raw_response['tempPassword']
+    assert readable_output == '### Okta Expired Password\n|tempPassword|\n|---|\n| test_password |\n'
+
+
+def test_hide_password():
+    """
+    Given:
+        - Arguments for expire_password_command with username, hide_password set to True, and revoke_session set to False.
+    When:
+        - Calling expire_password_command.
+    Then:
+        - Ensure the tempPassword in the response is hidden.
+        - Ensure the readable output is formatted to indicate the password is hidden.
+    """
+    from Okta_v2 import expire_password_command
+    client = MagicMock()
+    args = {
+        'username': 'test_user',
+        'hide_password': 'True',
+        'revoke_session': 'False'
+    }
+
+    client.get_user_id.return_value = 'user123'
+    client.expire_password.return_value = {'tempPassword': 'test_password'}
+    client.get_users_context.return_value = {'ID': 'user123'}
+
+    readable_output, outputs, raw_response = expire_password_command(client, args)
+
+    assert raw_response['tempPassword'] == 'Output removed by user. hide_password argument set to True'
+    assert readable_output == ('### Okta Expired Password\n|tempPassword|\n|---|\n| Output removed by user. '
+                               'hide_password argument set to True |\n')
+
+
+def test_show_password():
+    """
+    Given:
+        - Arguments for expire_password_command with username, hide_password set to False, and revoke_session set to False.
+    When:
+        - Calling expire_password_command.
+    Then:
+        - Ensure the tempPassword in the response is shown.
+        - Ensure the readable output displays the tempPassword.
+    """
+    from Okta_v2 import expire_password_command
+    client = MagicMock()
+    args = {
+        'username': 'test_user',
+        'hide_password': 'False',
+        'revoke_session': 'False'
+    }
+
+    client.get_user_id.return_value = 'user123'
+    client.expire_password.return_value = {'tempPassword': 'test_password'}
+    client.get_users_context.return_value = {'ID': 'user123'}
+
+    readable_output, outputs, raw_response = expire_password_command(client, args)
+
+    assert raw_response['tempPassword'] == 'test_password'
+    assert readable_output == '### Okta Expired Password\n|tempPassword|\n|---|\n| test_password |\n'
+
+
+def test_missing_username_and_user_id():
+    """
+    Given:
+        - Arguments for expire_password_command with hide_password and revoke_session but no username or user ID.
+    When:
+        - Calling expire_password_command without providing a username or user ID.
+    Then:
+        - Ensure an exception is raised indicating that either a username or user ID must be provided.
+    """
+    from Okta_v2 import expire_password_command
+    client = MagicMock()
+    args = {
+        'hide_password': 'False',
+        'revoke_session': 'False'
+    }
+
+    client.get_user_id.return_value = None
+
+    try:
+        expire_password_command(client, args)
+    except Exception as e:
+        assert "You must supply either 'Username' or 'userId" in str(e)
+
+
+@patch.object(Client, 'http_request')
+def test_revoke_session(mock_http_request):
+    """
+    Given:
+        - A valid user ID.
+    When:
+        - Calling revoke_session with a user ID.
+    Then:
+        - Ensure http_request is called with the correct method, URL, and parameters.
+    """
+    user_id = "12345"
+    expected_uri = f'/api/v1/users/{user_id}/lifecycle/expire_password_with_temp_password'
+    expected_params = {"revokeSessions": 'true'}
+    client.revoke_session(user_id)
+    mock_http_request.assert_called_once_with(
+        method="POST",
+        url_suffix=expected_uri,
+        params=expected_params
+    )

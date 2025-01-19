@@ -101,7 +101,7 @@
     "Bigfix": {
         "Site": [
             {
-                "Resource": "https://content.demisto.works:20021/api/site/master/ActionSite", 
+                "Resource": "https://xsoar-example:20021/api/site/master/ActionSite", 
                 "Description": null, 
                 "GatherURL": "http://WIN-CQD6UQJIA7J:52311/cgi-bin/bfgather.exe/actionsite", 
                 "GlobalReadPermission": "false", 
@@ -112,7 +112,7 @@
                 }
             }, 
             {
-                "Resource": "https://content.demisto.works:20021/api/site/external/BES Support", 
+                "Resource": "https://xsoar-example:20021/api/site/external/BES Support", 
                 "Description": null, 
                 "GatherURL": "http://sync.bigfix.com/cgi-bin/bfgather/bessupport", 
                 "GlobalReadPermission": "true", 
@@ -123,7 +123,7 @@
                 }
             }, 
             {
-                "Resource": "https://content.demisto.works:20021/api/site/external/BES Inventory and License", 
+                "Resource": "https://xsoar-example:20021/api/site/external/BES Inventory and License", 
                 "Description": null, 
                 "GatherURL": "http://sync.bigfix.com/cgi-bin/bfgather/besinventory", 
                 "GlobalReadPermission": "false", 
@@ -134,7 +134,7 @@
                 }
             }, 
             {
-                "Resource": "https://content.demisto.works:20021/api/site/external/BES Asset Discovery", 
+                "Resource": "https://xsoar-example:20021/api/site/external/BES Asset Discovery", 
                 "Description": null, 
                 "GatherURL": "http://sync.bigfix.com/cgi-bin/bfgather/assetdiscovery", 
                 "GlobalReadPermission": "false", 
@@ -147,7 +147,7 @@
             {
                 "GatherURL": "http://WIN-CQD6UQJIA7J:52311/cgi-bin/bfgather.exe/actionsite", 
                 "Type": "operator", 
-                "Resource": "https://content.demisto.works:20021/api/site/operator/admin", 
+                "Resource": "https://xsoar-example:20021/api/site/operator/admin", 
                 "Name": "admin"
             }
         ]
@@ -155,7 +155,7 @@
 }
 </code></pre>
 <h5>Human Readable Output</h5>
-<p><a href="https://user-images.githubusercontent.com/7270217/47254258-ab465280-d468-11e8-9704-04bfb8f7d653.png" target="_blank" rel="noopener noreferrer"><img src="https://user-images.githubusercontent.com/7270217/47254258-ab465280-d468-11e8-9704-04bfb8f7d653.png" alt="image" width="749" height="261"></a></p>
+<p><a href="../../doc_files/47254258-ab465280-d468-11e8-9704-04bfb8f7d653.png" target="_blank" rel="noopener noreferrer"><img src="../../doc_files/47254258-ab465280-d468-11e8-9704-04bfb8f7d653.png" alt="image" width="749" height="261"></a></p>
 <h3 id="h_8123010261041540901803930">2. Get a single site</h3>
 <hr>
 <p>Retrieves a single site by name and type.</p>
@@ -244,7 +244,7 @@
 <pre><code>{
     "Bigfix": {
         "Site": {
-            "Resource": "https://content.demisto.works:20021/api/site/master/None", 
+            "Resource": "https://xsoar-example:20021/api/site/master/None", 
             "Description": null, 
             "GatherURL": "http://WIN-CQD6UQJIA7J:52311/cgi-bin/bfgather.exe/actionsite", 
             "GlobalReadPermission": "false", 
@@ -258,7 +258,7 @@
 }
 </code></pre>
 <h5>Human Readable Output</h5>
-<p><a href="https://user-images.githubusercontent.com/7270217/47254275-f2ccde80-d468-11e8-80a0-92c666923ece.png" target="_blank" rel="noopener noreferrer"><img src="https://user-images.githubusercontent.com/7270217/47254275-f2ccde80-d468-11e8-80a0-92c666923ece.png" alt="image" width="752" height="243"></a></p>
+<p><a href="../../doc_files/47254275-f2ccde80-d468-11e8-80a0-92c666923ece.png" target="_blank" rel="noopener noreferrer"><img src="../../doc_files/47254275-f2ccde80-d468-11e8-80a0-92c666923ece.png" alt="image" width="752" height="243"></a></p>
 <h3 id="h_1621334852051540901856934">3. Get all patches for a site</h3>
 <hr>
 <p>Retrieves all the patches (fixlets) of site.</p>
@@ -378,7 +378,7 @@
         "Patch": [
             {
                 "Category": null, 
-                "Resource": "https://content.demisto.works:20021/api/fixlet/master/38", 
+                "Resource": "https://xsoar-example:20021/api/fixlet/master/38", 
                 "Description": "This is a description of foo patch", 
                 "DownloadSize": null, 
                 "SourceID": null, 
@@ -397,7 +397,7 @@
             }, 
             {
                 "Category": null, 
-                "Resource": "https://content.demisto.works:20021/api/fixlet/master/39", 
+                "Resource": "https://xsoar-example:20021/api/fixlet/master/39", 
                 "Description": "Test Fixlet", 
                 "DownloadSize": null, 
                 "SourceID": null, 
@@ -419,7 +419,7 @@
 }
 </code></pre>
 <h5>Human Readable Output</h5>
-<p><a href="https://user-images.githubusercontent.com/7270217/47254399-9cf93600-d46a-11e8-83a6-f120afec4208.png" target="_blank" rel="noopener noreferrer"><img src="https://user-images.githubusercontent.com/7270217/47254399-9cf93600-d46a-11e8-83a6-f120afec4208.png" alt="image" width="755" height="183"></a></p>
+<p><a href="../../doc_files/47254399-9cf93600-d46a-11e8-83a6-f120afec4208.png" target="_blank" rel="noopener noreferrer"><img src="../../doc_files/47254399-9cf93600-d46a-11e8-83a6-f120afec4208.png" alt="image" width="755" height="183"></a></p>
 <h3 id="h_7616200173051540902077626">4. Get all endpoints</h3>
 <hr>
 <p>Retrieves all endpoints (computers).</p>
@@ -618,7 +618,7 @@
                 "TotalSizeofSystemDrive": "101896 MB", 
                 "AgentType": "Native", 
                 "DNSName": "WIN-CQD6UQJIA7J", 
-                "Resource": "https://content.demisto.works:20021/api/computer/2696130", 
+                "Resource": "https://xsoar-example:20021/api/computer/2696130", 
                 "CPU": "2200 MHz Xeon Gold 5120", 
                 "LicenseType": "Windows Server", 
                 "Relay": "BES Root Server", 
@@ -684,7 +684,7 @@
                 "TotalSizeofSystemDrive": "101896 MB", 
                 "AgentType": "Native", 
                 "DNSName": "WIN-CQD6UQJIA7J", 
-                "Resource": "https://content.demisto.works:20021/api/computer/3385267", 
+                "Resource": "https://xsoar-example:20021/api/computer/3385267", 
                 "CPU": "2200 MHz Xeon", 
                 "LicenseType": "Windows Server", 
                 "Relay": "BES Root Server", 
@@ -746,7 +746,7 @@
 }
 </code></pre>
 <h5>Human Readable Output</h5>
-<p><a href="https://user-images.githubusercontent.com/7270217/47254373-4855bb00-d46a-11e8-9f89-e4e4fa758d65.png" target="_blank" rel="noopener noreferrer"><img src="https://user-images.githubusercontent.com/7270217/47254373-4855bb00-d46a-11e8-9f89-e4e4fa758d65.png" alt="image" width="750" height="399"></a></p>
+<p><a href="../../doc_files/47254373-4855bb00-d46a-11e8-9f89-e4e4fa758d65.png" target="_blank" rel="noopener noreferrer"><img src="../../doc_files/47254373-4855bb00-d46a-11e8-9f89-e4e4fa758d65.png" alt="image" width="750" height="399"></a></p>
 <h3 id="h_9228939254021540902117120">5. Get the details of an endpoint</h3>
 <hr>
 <p>Retrieves the details of an endpoint (computer).</p>
@@ -944,7 +944,7 @@
             "TotalSizeofSystemDrive": "101896 MB", 
             "AgentType": "Native", 
             "DNSName": "WIN-CQD6UQJIA7J", 
-            "Resource": "https://content.demisto.works:20021/api/computer/3385267", 
+            "Resource": "https://xsoar-example:20021/api/computer/3385267", 
             "CPU": "2200 MHz Xeon", 
             "LicenseType": "Windows Server", 
             "Relay": "BES Root Server", 
@@ -1005,7 +1005,7 @@
 }
 </code></pre>
 <h5>Human Readable Output</h5>
-<p><a href="https://user-images.githubusercontent.com/7270217/47254373-4855bb00-d46a-11e8-9f89-e4e4fa758d65.png" target="_blank" rel="noopener noreferrer"><img src="https://user-images.githubusercontent.com/7270217/47254373-4855bb00-d46a-11e8-9f89-e4e4fa758d65.png" alt="image" width="750" height="399"></a></p>
+<p><a href="../../doc_files/47254373-4855bb00-d46a-11e8-9f89-e4e4fa758d65.png" target="_blank" rel="noopener noreferrer"><img src="../../doc_files/47254373-4855bb00-d46a-11e8-9f89-e4e4fa758d65.png" alt="image" width="750" height="399"></a></p>
 <h3 id="h_3195022465001540902236656">6. Create an action to run on target computers</h3>
 <hr>
 <p>Create an action on BigFix that will run the given action from the given fixlet on target computers. The computerID parameter takes a comma-separated list of BigFix computer IDs. If no computers are specified, the action will be run on the default computers configured on BigFix. If the action should run on all computers set the computerID parameter to all.</p>
@@ -1091,7 +1091,7 @@
 <pre>!bigfix-deploy-patch site_name="BES Support" computer_ids="3385267" fixlet_id="1759" action_id="Action2"</pre>
 <h5>Context Example</h5>
 <h5>Human Readable Output</h5>
-<p><a href="https://user-images.githubusercontent.com/7270217/47254533-6c1a0080-d46c-11e8-9c50-bbe3287f4230.png" target="_blank" rel="noopener noreferrer"><img src="https://user-images.githubusercontent.com/7270217/47254533-6c1a0080-d46c-11e8-9c50-bbe3287f4230.png" alt="image" width="748" height="219"></a></p>
+<p><a href="../../doc_files/47254533-6c1a0080-d46c-11e8-9c50-bbe3287f4230.png" target="_blank" rel="noopener noreferrer"><img src="../../doc_files/47254533-6c1a0080-d46c-11e8-9c50-bbe3287f4230.png" alt="image" width="748" height="219"></a></p>
 <h3 id="h_6492125645971540902329729">7. Get a patch by fixlet ID</h3>
 <hr>
 <p>Retrieves a patch (fixlet) by ID.</p>
@@ -1210,7 +1210,7 @@
     "Bigfix": {
         "Patch": {
             "Category": null, 
-            "Resource": "https://content.demisto.works:20021/api/fixlet/master/38", 
+            "Resource": "https://xsoar-example:20021/api/fixlet/master/38", 
             "Description": "This is a description of foo patch", 
             "DownloadSize": null, 
             "SourceID": null, 
@@ -1230,10 +1230,10 @@
 }
 </code></pre>
 <h5>Human Readable Output</h5>
-<p><a href="https://user-images.githubusercontent.com/7270217/47683576-a7d56880-dbd8-11e8-9541-ce40ec3b0bd4.png" target="_blank" rel="noopener noreferrer"><img src="https://user-images.githubusercontent.com/7270217/47683576-a7d56880-dbd8-11e8-9541-ce40ec3b0bd4.png" alt="image" width="751" height="589"></a></p>
+<p><a href="../../doc_files/47683576-a7d56880-dbd8-11e8-9541-ce40ec3b0bd4.png" target="_blank" rel="noopener noreferrer"><img src="../../doc_files/47683576-a7d56880-dbd8-11e8-9541-ce40ec3b0bd4.png" alt="image" width="751" height="589"></a></p>
 <h3 id="h_7402382876931540902368673">8. Delete an action</h3>
 <hr>
-<p>Stops and deletes the specified action. Note: You cannot delete actions that are members of a Multiple Action Group. This note applies to IBM BigFix V9.2 and later.</p>
+<p>Stops and deletes the specified action. Note: You cannot delete actions that are members of a Multiple Action Group. This note applies to HCL BigFix V9.2 and later.</p>
 <h5>Base Command</h5>
 <pre><code>bigfix-action-delete</code></pre>
 <h5>Input</h5>
@@ -1259,7 +1259,7 @@
 <h5>Command Example</h5>
 <pre>!bigfix-action-delete action_id</pre>
 <h5>Human Readable Output</h5>
-<p><a href="https://user-images.githubusercontent.com/7270217/47684624-2da6e300-dbdc-11e8-837c-a03944aaa7cd.png" target="_blank" rel="noopener noreferrer"><img src="https://user-images.githubusercontent.com/7270217/47684624-2da6e300-dbdc-11e8-837c-a03944aaa7cd.png" alt="image" width="750" height="155"></a></p>
+<p><a href="../../doc_files/47684624-2da6e300-dbdc-11e8-837c-a03944aaa7cd.png" target="_blank" rel="noopener noreferrer"><img src="../../doc_files/47684624-2da6e300-dbdc-11e8-837c-a03944aaa7cd.png" alt="image" width="750" height="155"></a></p>
 <h3 id="h_9949485537861540902463288">9. Get the status of an action</h3>
 <hr>
 <p>Gets the status of an action against its targets.</p>
@@ -1319,7 +1319,7 @@
 }
 </code></pre>
 <h5>Human Readable Output</h5>
-<p><a href="https://user-images.githubusercontent.com/7270217/47684527-df91df80-dbdb-11e8-8b95-3b4ef944e40b.png" target="_blank" rel="noopener noreferrer"><img src="https://user-images.githubusercontent.com/7270217/47684527-df91df80-dbdb-11e8-8b95-3b4ef944e40b.png" alt="image" width="751" height="156"></a></p>
+<p><a href="../../doc_files/47684527-df91df80-dbdb-11e8-8b95-3b4ef944e40b.png" target="_blank" rel="noopener noreferrer"><img src="../../doc_files/47684527-df91df80-dbdb-11e8-8b95-3b4ef944e40b.png" alt="image" width="751" height="156"></a></p>
 <h3 id="h_6364690108801540902492473">10. Stop an action</h3>
 <hr>
 <p>Stops the specified action.</p>
@@ -1348,7 +1348,7 @@
 <h5>Command Example</h5>
 <pre>!bigfix-action-stop action_id</pre>
 <h5>Human Readable Output</h5>
-<p><a href="https://user-images.githubusercontent.com/7270217/47684576-06501600-dbdc-11e8-991f-7acbb506b795.png" target="_blank" rel="noopener noreferrer"><img src="https://user-images.githubusercontent.com/7270217/47684576-06501600-dbdc-11e8-991f-7acbb506b795.png" alt="image" width="750" height="162"></a></p>
+<p><a href="../../doc_files/47684576-06501600-dbdc-11e8-991f-7acbb506b795.png" target="_blank" rel="noopener noreferrer"><img src="../../doc_files/47684576-06501600-dbdc-11e8-991f-7acbb506b795.png" alt="image" width="750" height="162"></a></p>
 <h3 id="h_11901861510551540902590354">11. Evaluate an expression and get the result</h3>
 <hr>
 <p>Evaluates an expression and gets the result. The request is processed through the server to WebReports.</p>
@@ -1404,4 +1404,4 @@
 }
 </code></pre>
 <h5>Human Readable Output</h5>
-<p><a href="https://user-images.githubusercontent.com/7270217/47684400-74480d80-dbdb-11e8-951a-fa05307f269f.png" target="_blank" rel="noopener noreferrer"><img src="https://user-images.githubusercontent.com/7270217/47684400-74480d80-dbdb-11e8-951a-fa05307f269f.png" alt="image" width="749" height="313"></a></p>
+<p><a href="../../doc_files/47684400-74480d80-dbdb-11e8-951a-fa05307f269f.png" target="_blank" rel="noopener noreferrer"><img src="../../doc_files/47684400-74480d80-dbdb-11e8-951a-fa05307f269f.png" alt="image" width="749" height="313"></a></p>

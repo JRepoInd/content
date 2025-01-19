@@ -8,7 +8,6 @@ import urllib3  # type: ignore
 import traceback
 import requests
 import copy
-from typing import Tuple
 from greynoise import GreyNoise, util  # type: ignore
 from greynoise.exceptions import RequestFailure, RateLimitError  # type: ignore
 
@@ -155,7 +154,7 @@ def get_ip_context_data(responses: list) -> list:
     return ip_context_responses
 
 
-def get_ip_reputation_score(classification: str) -> Tuple[int, str]:
+def get_ip_reputation_score(classification: str) -> tuple[int, str]:
     """Get DBot score and human readable of score.
 
     :type classification: ``str``
@@ -197,7 +196,7 @@ def test_module(client: Client) -> str:
 
 @exception_handler
 @logger
-def ip_reputation_command(client: Client, args: dict) -> List[CommandResults]:
+def ip_reputation_command(client: Client, args: dict, reliability: str) -> List[CommandResults]:
     """Get information about a given IP address. Returns classification (benign, malicious or unknown),
         IP metadata (network owner, ASN, reverse DNS pointer, country), associated actors, activity tags,
         and raw port scan and web request information.
@@ -211,6 +210,9 @@ def ip_reputation_command(client: Client, args: dict) -> List[CommandResults]:
     :return: A list of ``CommandResults`` object that is then passed to ``return_results``,
         that contains the IP information.
     :rtype: ``List[CommandResults]``
+
+    :type reliability: ``String``
+    :param reliability: string
     """
     ips = argToList(args.get("ip"), ",")
     command_results = []
@@ -255,6 +257,7 @@ def ip_reputation_command(client: Client, args: dict) -> List[CommandResults]:
             score=dbot_score_int,
             integration_name="GreyNoise Community",
             malicious_description=malicious_description,
+            reliability=reliability
         )
 
         ip_standard_context = Common.IP(
@@ -280,15 +283,37 @@ def ip_reputation_command(client: Client, args: dict) -> List[CommandResults]:
 """ MAIN FUNCTION """
 
 
-def main() -> None:
+def main() -> None:  # pragma: no cover
     """main function, parses params and runs command functions
 
     :return:
     :rtype:
     """
 
+    # get pack version
+    if is_demisto_version_ge("6.1.0"):
+        response = demisto.internalHttpRequest("GET", "/contentpacks/metadata/installed")
+        packs = json.loads(response["body"])
+    else:
+        packs = []
+
+    pack_version = "1.4.0"
+    if isinstance(packs, list):
+        for pack in packs:
+            if pack["name"] == "GreyNoise":
+                pack_version = pack["currentVersion"]
+    else:  # packs is a dict
+        if packs.get("name") == "GreyNoise":
+            pack_version = packs.get("currentVersion")
+
     api_key = demisto.params().get("api_key")
     proxy = demisto.params().get("proxy", False)
+    reliability = demisto.params().get("integrationReliability", "B - Usually reliable")
+    reliability = reliability if reliability else DBotScoreReliability.B
+    if DBotScoreReliability.is_valid_type(reliability):
+        reliability = DBotScoreReliability.get_dbot_score_reliability_from_str(reliability)
+    else:
+        Exception("Please provide a valid value for the Integration Reliability parameter.")
 
     demisto.debug(f"Command being called is {demisto.command()}")
     try:
@@ -296,7 +321,7 @@ def main() -> None:
             api_key=api_key,
             proxy=handle_proxy("proxy", proxy).get("https", ""),
             use_cache=False,
-            integration_name="xsoar-community-integration-v1.0.2",
+            integration_name=f"xsoar-community-integration-v{pack_version}",
             offering="community",
         )
 
@@ -306,7 +331,7 @@ def main() -> None:
             return_results(result)
 
         elif demisto.command() == "ip":
-            result = ip_reputation_command(client, demisto.args())
+            result = ip_reputation_command(client, demisto.args(), reliability)
             return_results(result)
 
     # Log exceptions and return errors

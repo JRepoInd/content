@@ -2,29 +2,31 @@ Freeing the analyst with autonomous decisions.
 This integration was integrated and tested with version 6.1.0 of SumoLogicSEC.
 
 ## Prerequisites
-Only use this integration if your Cloud SIEM portal url ends with `.sumologic.net` - this can be verified via the url in your browser when logged into Cloud SIEM.
+Only use this integration if your Cloud SIEM portal url ends with `.sumologic.com` - this can be verified via the url in your browser when logged into Cloud SIEM.
 
 You'll need an access key in order to complete the instance setup. Instructions on how to generate access keys can be found [here](https://help.sumologic.com/Manage/Security/Access-Keys).
 
-## Configure SumoLogicSEC on Cortex XSOAR
+## Configure SumoLogicSEC in Cortex
 
-1. Navigate to **Settings** > **Integrations** > **Servers & Services**.
-2. Search for SumoLogicSEC.
-3. Click **Add instance** to create and configure a new integration instance.
 
-    | **Parameter** | **Description** | **Required** |
-    | --- | --- | --- |
-    | Sumo Logic API Endpoint | https://api.&amp;lt;deployment&amp;gt;.sumologic.com/api/ | True |
-    | Fetch incidents |  | False |
-    | Incident type |  | False |
-    | Access ID |  | True |
-    | Access Key |  | True |
-    | Incidents Fetch Interval |  | False |
-    | Fetch Limit | Fetch limit must not be greater than 20 | False |
-    | Override default fetch query | Default fetch query is status:in\("new", "inprogress"\) | False |
-    | First fetch time |  | False |
+| **Parameter** | **Description** | **Required** |
+| --- | --- | --- |
+| Sumo Logic API Endpoint | https://api.&amp;lt;deployment&amp;gt;.sumologic.com/api/ | True |
+| Sumo Logic Instance Endpoint | For the incident field sumoURL link to work, e.g: https://&amp;lt;yoursubdomain&amp;gt;.&amp;lt;deployment&amp;gt;.sumologic.com | False |
+| Fetch incidents |  | False |
+| Incident type |  | False |
+| Access ID |  | True |
+| Access Key |  | True |
+| Incidents Fetch Interval |  | False |
+| Fetch Limit | Fetch limit of Sumo Logic insights | False |
+| Override default fetch query | Default fetch query is status:in\("new", "inprogress"\) | False |
+| First fetch time |  | False |
+| Pull associated Sumo Logic signals | Whether to pull the Sumo Logic Signals associated with the Insights as Cortex XSOAR incidents | False |
+| Incident Mirroring Direction | Choose the direction to mirror the incident: Incoming \(from Sumo Logic SIEM to Cortex XSOAR\), Outgoing \(from Cortex XSOAR to Sumo Logic SIEM\), or Incoming and Outgoing \(from/to Cortex XSOAR and Sumo Logic SIEM\). | False |
+| Close Mirrored Cortex XSOAR Incident (Incoming Mirroring) | When selected, closing the Sumo Logic Insight with a "Closed" status will close the Cortex XSOAR incident. | False |
+| Close Mirrored Sumo Logic Insight (Outgoing Mirroring) | When selected, closing the Cortex XSOAR incident will close the Sumo Logic Insight in SIEM. | False |
+| Override Record Summary Fields | Record Summary Fields included when fetching Insights (override default) | False |
 
-4. Click **Test** to validate the URLs, token, and connection.
 
 ## API documentation and query examples
 
@@ -80,7 +82,7 @@ The table below shows differences between this integration and the legacy JASK i
 | jask-get-insight-comments | sumologic-sec-insight-get-comments | |
 | jask-get-signal-details | sumologic-sec-signal-get-details | |
 | jask-get-entity-details | sumologic-sec-entity-get-details | |
-| ~~jask-get-related-entities~~ | | Depreacted |
+| ~~jask-get-related-entities~~ | | Deprecated |
 | ~~jask-get-whitelisted-entities~~ | | Deprecated - use command `sumologic-sec-entity-search` with filter `whitelisted:"true"` |
 | jask-search-insights | sumologic-sec-insight-search | |
 | jask-search-entities | sumologic-sec-entity-search | |
@@ -97,7 +99,7 @@ The table below shows differences between this integration and the legacy JASK i
 
 
 ## Commands
-You can execute these commands from the Cortex XSOAR CLI, as part of an automation, or in a playbook.
+You can execute these commands from the CLI, as part of an automation, or in a playbook.
 After you successfully execute a command, a DBot message appears in the War Room with the command details.
 ### sumologic-sec-insight-get-details
 ***
@@ -112,6 +114,7 @@ Get Insight details for a specific Insight ID.
 | **Argument Name** | **Description** | **Required** |
 | --- | --- | --- |
 | insight_id | The insight to retrieve details for. | Required | 
+| record_summary_fields | Record Summary Fields to include in the output (override default fields). | Optional | 
 
 
 #### Context Output
@@ -129,6 +132,7 @@ Get Insight details for a specific Insight ID.
 | SumoLogicSec.Insight.LastUpdatedBy | string | The last user to update the Insight | 
 | SumoLogicSec.Insight.Name | String | The name of the Insight | 
 | SumoLogicSec.Insight.ReadableId | String | The ID of the Insight in readable form | 
+| SumoLogicSec.InsightList.RecordSummaryFields | Array | Record Summary Fields associated with the Insight | 
 | SumoLogicSec.Insight.Resolution | String | Resolution for closed Insight | 
 | SumoLogicSec.Insight.Severity | String | The severity of the Insight | 
 | SumoLogicSec.Insight.Signals.contentType | String | Type of content that triggered the Signal | 
@@ -156,6 +160,44 @@ Insight Details:
 |Id|Readable Id|Name|Action|Status|Assignee|Description|Last Updated|Last Updated By|Severity|Closed|Closed By|Timestamp|Entity|Resolution|
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
 | c6c97d84-983d-303e-a03b-86f53d657fc8 | INSIGHT-116 | Lateral Movement with Discovery and Credential Access |  | Closed |  | Initial Access, Lateral Movement, Discovery, Initial Access, Credential Access | 2021-05-10T23:48:10.016204 |  | HIGH | 2021-05-10T23:48:09.961023 | obfuscated@email.com | 2021-02-18T22:04:08.330000 | 1.2.3.4 | No Action |
+
+
+
+### sumologic-sec-insight-get-comments
+***
+Get comments for a specific Insight ID. (Users can post and update comments on the Sumo Logic Cloud SIEM portal for any Insight ID.)
+
+
+#### Base Command
+
+`sumologic-sec-insight-add-comment`
+#### Input
+
+| **Argument Name** | **Description** | **Required** |
+| --- | --- | --- |
+| insight_id | The insight ID for which to add a comment. | Required |
+| comment | The comment to be added. | Required |
+
+
+#### Context Output
+
+| **Path** | **Type** | **Description** |
+| --- | --- | --- |
+| SumoLogicSec.InsightComments.Id | String | ID of comment |
+| SumoLogicSec.InsightComments.Body | String | Comment contents |
+| SumoLogicSec.InsightComments.Author | String | User that created the comment |
+| SumoLogicSec.InsightComments.Timestamp | Date | Comment created timestamp |
+| SumoLogicSec.InsightComments.InsightId | String | The ID of the Insight |
+
+
+#### Command Example
+`!sumologic-sec-insight-add-comment insight-id=INSIGHT-116 comment="This is an example comment"`
+
+#### Human Readable Output
+Insight Comment:
+|Id|Insight Id|Author|Body|Last Updated|Timestamp|
+|---|---|---|---|---|---|
+| 2 | INSIGHT-116 | obfuscated@email.com | This is an example comment |  | 2021-04-23T00:38:43.977543 |
 
 
 
@@ -262,7 +304,7 @@ Get entity details for a specific entity ID
 | SumoLogicSec.Entity.FirstSeen | Date | When the Entity was first seen | 
 | SumoLogicSec.Entity.Hostname | String | Entity hostname | 
 | SumoLogicSec.Entity.Id | String | Entity ID | 
-| SumoLogicSec.Entity.IsWhitelisted | Boolean | Whether or not the Entity is whitelisted | 
+| SumoLogicSec.Entity.IsWhitelisted | Boolean | Whether or not the Entity is on allow list | 
 | SumoLogicSec.Entity.LastSeen | Date | When the Entity was last seen | 
 | SumoLogicSec.Entity.Name | String | The Entity name | 
 | SumoLogicSec.Entity.OperatingSystem | String | Entity Operating System \(observed or from inventory\) | 
@@ -298,6 +340,7 @@ Search insights using available filters
 | asignee | User assigned to Insights. | Optional | 
 | offset | The number of items to skip before starting to collect the result set. Default is 0. | Optional | 
 | limit | The maximum number of items to return. Default is 10. | Optional | 
+| record_summary_fields | Record Summary Fields to include in the output (override default fields). | Optional | 
 
 
 #### Context Output
@@ -315,6 +358,7 @@ Search insights using available filters
 | SumoLogicSec.InsightList.LastUpdatedBy | String | The last user to update the Insight | 
 | SumoLogicSec.InsightList.Name | String | The name of the Insight | 
 | SumoLogicSec.InsightList.ReadableId | String | The ID of the Insight in readable form | 
+| SumoLogicSec.InsightList.RecordSummaryFields | Array | Record Summary Fields associated with the Insight | 
 | SumoLogicSec.InsightList.Resolution | String | Resolution for closed Insight | 
 | SumoLogicSec.InsightList.Severity | String | The severity of the Insight | 
 | SumoLogicSec.InsightList.Signals.contentType | String | Type of content that triggered the Signal | 
@@ -425,7 +469,7 @@ Search entities using the available filters
 | SumoLogicSec.EntityList.FirstSeen | Date | When the Entity was first seen | 
 | SumoLogicSec.EntityList.Id | String | Entity ID | 
 | SumoLogicSec.EntityList.IpHostname | String | Hostname associated with IP Entity | 
-| SumoLogicSec.EntityList.IsWhitelisted | Boolean | Whether or not the Entity is whitelisted | 
+| SumoLogicSec.EntityList.IsWhitelisted | Boolean | Whether or not the Entity is on allow list | 
 | SumoLogicSec.EntityList.LastSeen | Date | When the Entity was last seen | 
 | SumoLogicSec.EntityList.Name | String | The Entity name | 
 | SumoLogicSec.EntityList.OperatingSystem | String | Entity Operating System \(observed or from inventory\) | 
@@ -461,6 +505,7 @@ Change status of Insight
 | insight_id | The insight to change status for. | Required | 
 | status | The desired Insight status. Possible values are: new, inprogress, closed. Default is in-progress. | Optional | 
 | resolution | Resolution for closing Insight. Valid values are: "Resolved", "False Positive", "No Action", "Duplicate". Possible values are: Resolved, False Positive, No Action, Duplicate. Default is Resolved. | Optional | 
+| sub_resolution | Custom sub resolution for closing Insight. If populated, it will override the resolution field. Please make sure the resolution matches exactly your Sumo Resolutions | Optional | 
 
 
 #### Context Output

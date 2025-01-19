@@ -1,0 +1,1008 @@
+id: IPv6 extraction test
+version: -1
+name: IPv6 extraction test
+description: Test the flow of IPv6 extraction in XSOAR.
+starttaskid: "0"
+tasks:
+  "0":
+    id: "0"
+    taskid: 2156b8d3-82ba-4c2e-835e-766238e62366
+    type: start
+    task:
+      id: 2156b8d3-82ba-4c2e-835e-766238e62366
+      version: -1
+      name: ""
+      iscommand: false
+      brand: ""
+      description: ''
+    nexttasks:
+      '#none#':
+      - "9"
+    separatecontext: false
+    continueonerrortype: ""
+    view: |-
+      {
+        "position": {
+          "x": 1770,
+          "y": 50
+        }
+      }
+    note: false
+    timertriggers: []
+    ignoreworker: false
+    skipunavailable: false
+    quietmode: 0
+    isoversize: false
+    isautoswitchedtoquietmode: false
+  "9":
+    id: "9"
+    taskid: df39c0da-9a4a-46dd-86c4-86cdaf6d66ba
+    type: regular
+    task:
+      id: df39c0da-9a4a-46dd-86c4-86cdaf6d66ba
+      version: -1
+      name: DeleteContext
+      description: Delete field from context
+      scriptName: DeleteContext
+      type: regular
+      iscommand: false
+      brand: ""
+    nexttasks:
+      '#none#':
+      - "49"
+    scriptarguments:
+      all:
+        simple: "yes"
+    separatecontext: false
+    continueonerrortype: ""
+    view: |-
+      {
+        "position": {
+          "x": 1770,
+          "y": 195
+        }
+      }
+    note: false
+    timertriggers: []
+    ignoreworker: false
+    skipunavailable: false
+    quietmode: 0
+    isoversize: false
+    isautoswitchedtoquietmode: false
+  "49":
+    id: "49"
+    taskid: fe913f29-c515-4092-8c4b-cb7c06a5b5f4
+    type: title
+    task:
+      id: fe913f29-c515-4092-8c4b-cb7c06a5b5f4
+      version: -1
+      name: IPv6
+      type: title
+      iscommand: false
+      brand: ""
+      description: ''
+    nexttasks:
+      '#none#':
+      - "73"
+    separatecontext: false
+    continueonerrortype: ""
+    view: |-
+      {
+        "position": {
+          "x": 1770,
+          "y": 370
+        }
+      }
+    note: false
+    timertriggers: []
+    ignoreworker: false
+    skipunavailable: false
+    quietmode: 0
+    isoversize: false
+    isautoswitchedtoquietmode: false
+  "51":
+    id: "51"
+    taskid: 059ed22d-567e-4cb0-8b40-f0f2b595aadd
+    type: regular
+    task:
+      id: 059ed22d-567e-4cb0-8b40-f0f2b595aadd
+      version: -1
+      name: Print valid IPv6s
+      description: Prints text to war room (Markdown supported)
+      scriptName: Print
+      type: regular
+      iscommand: false
+      brand: ""
+    nexttasks:
+      '#none#':
+      - "88"
+      - "89"
+      - "90"
+      - "87"
+      - "86"
+      - "85"
+      - "84"
+      - "91"
+      - "92"
+    scriptarguments:
+      value:
+        simple: ${valid_ipv6s}
+    reputationcalc: 2
+    separatecontext: false
+    continueonerrortype: ""
+    view: |-
+      {
+        "position": {
+          "x": 1770,
+          "y": 690
+        }
+      }
+    note: false
+    timertriggers: []
+    ignoreworker: false
+    skipunavailable: false
+    quietmode: 0
+    isoversize: false
+    isautoswitchedtoquietmode: false
+  "53":
+    id: "53"
+    taskid: fe235c83-0846-4744-8cf0-1a18f4ed3cc7
+    type: regular
+    task:
+      id: fe235c83-0846-4744-8cf0-1a18f4ed3cc7
+      version: -1
+      name: Set invalid IPv6s
+      description: Sets a value into the context with the given context key
+      scriptName: Set
+      type: regular
+      iscommand: false
+      brand: ""
+    nexttasks:
+      '#none#':
+      - "54"
+    scriptarguments:
+      key:
+        simple: invalid_ipv6s
+      value:
+        simple: '"2001:db8:::1","fe80::123::5678","2001::db8::1","::fffff:192.0.2.1","2001:db8:::1%eth0","fe80::1%eth0%vlan0","Event::Endpoint::Denc::Encrypt"'
+    separatecontext: false
+    continueonerrortype: ""
+    view: |-
+      {
+        "position": {
+          "x": 1770,
+          "y": 1040
+        }
+      }
+    note: false
+    timertriggers: []
+    ignoreworker: false
+    skipunavailable: false
+    quietmode: 0
+    isoversize: false
+    isautoswitchedtoquietmode: false
+  "54":
+    id: "54"
+    taskid: a34570bc-879a-454c-8f46-1e8099825eab
+    type: regular
+    task:
+      id: a34570bc-879a-454c-8f46-1e8099825eab
+      version: -1
+      name: Print invalid IPv6s
+      description: Prints text to war room (Markdown supported)
+      scriptName: Print
+      type: regular
+      iscommand: false
+      brand: ""
+    nexttasks:
+      '#none#':
+      - "55"
+      - "81"
+      - "93"
+      - "94"
+      - "95"
+      - "96"
+      - "97"
+      - "98"
+    scriptarguments:
+      value:
+        simple: ${invalid_ipv6s}
+    reputationcalc: 2
+    separatecontext: false
+    continueonerrortype: ""
+    view: |-
+      {
+        "position": {
+          "x": 1770,
+          "y": 1215
+        }
+      }
+    note: false
+    timertriggers: []
+    ignoreworker: false
+    skipunavailable: false
+    quietmode: 0
+    isoversize: false
+    isautoswitchedtoquietmode: false
+  "55":
+    id: "55"
+    taskid: 06ac2615-9f2a-4f1a-8959-4a91ac3b6290
+    type: condition
+    task:
+      id: 06ac2615-9f2a-4f1a-8959-4a91ac3b6290
+      version: -1
+      name: 2001:db8:::1 - Double colons in the middle
+      type: condition
+      iscommand: false
+      brand: ""
+    nexttasks:
+      "yes":
+      - "80"
+    separatecontext: false
+    conditions:
+    - label: "yes"
+      condition:
+      - - operator: notContainsGeneral
+          left:
+            value:
+              simple: IPv6.Address
+            iscontext: true
+          right:
+            value:
+              simple: 2001:db8:::1
+    continueonerrortype: ""
+    view: |-
+      {
+        "position": {
+          "x": 480,
+          "y": 1390
+        }
+      }
+    note: false
+    timertriggers: []
+    ignoreworker: false
+    skipunavailable: false
+    quietmode: 0
+    isoversize: false
+    isautoswitchedtoquietmode: false
+  "73":
+    id: "73"
+    taskid: 24631531-2e39-476f-8ba3-99ad7a897d46
+    type: regular
+    task:
+      id: 24631531-2e39-476f-8ba3-99ad7a897d46
+      version: -1
+      name: Set valid IPv6s
+      description: Sets a value into the context with the given context key
+      scriptName: Set
+      type: regular
+      iscommand: false
+      brand: ""
+    nexttasks:
+      '#none#':
+      - "51"
+    scriptarguments:
+      key:
+        simple: valid_ipv6s
+      value:
+        simple: '"fe80::1","::1","2001:0db8:0000:0000:0000:0000:0000:0001","2001:db8:1:0:0:0:0:1","::ffff:192.0.2.1","ff02::1:ff00:1","ff02:1::ff00:1","ff02:1:ff00::1","fe80::7:8%eth0"'
+    separatecontext: false
+    continueonerrortype: ""
+    view: |-
+      {
+        "position": {
+          "x": 1770,
+          "y": 515
+        }
+      }
+    note: false
+    timertriggers: []
+    ignoreworker: false
+    skipunavailable: false
+    quietmode: 0
+    isoversize: false
+    isautoswitchedtoquietmode: false
+  "80":
+    id: "80"
+    taskid: 82471283-39e7-4911-8e5b-f6b07e36a3fa
+    type: regular
+    task:
+      id: 82471283-39e7-4911-8e5b-f6b07e36a3fa
+      version: -1
+      name: DeleteContext
+      description: Delete field from context
+      scriptName: DeleteContext
+      type: regular
+      iscommand: false
+      brand: ""
+    scriptarguments:
+      all:
+        simple: "yes"
+    separatecontext: false
+    continueonerrortype: ""
+    view: |-
+      {
+        "position": {
+          "x": 1770,
+          "y": 1565
+        }
+      }
+    note: false
+    timertriggers: []
+    ignoreworker: false
+    skipunavailable: false
+    quietmode: 0
+    isoversize: false
+    isautoswitchedtoquietmode: false
+  "81":
+    id: "81"
+    taskid: 0cf20ef1-5c52-4078-86fa-98e38f16df8b
+    type: condition
+    task:
+      id: 0cf20ef1-5c52-4078-86fa-98e38f16df8b
+      version: -1
+      name: fe80::123::5678 - Multiple consecutive colons
+      type: condition
+      iscommand: false
+      brand: ""
+    nexttasks:
+      "yes":
+      - "80"
+    separatecontext: false
+    conditions:
+    - label: "yes"
+      condition:
+      - - operator: notContainsGeneral
+          left:
+            value:
+              simple: IPv6.Address
+            iscontext: true
+          right:
+            value:
+              simple: 'fe80::123::5678'
+    continueonerrortype: ""
+    view: |-
+      {
+        "position": {
+          "x": 910,
+          "y": 1390
+        }
+      }
+    note: false
+    timertriggers: []
+    ignoreworker: false
+    skipunavailable: false
+    quietmode: 0
+    isoversize: false
+    isautoswitchedtoquietmode: false
+  "84":
+    id: "84"
+    taskid: 42efe980-0d4d-422e-8bb4-46c0082183e7
+    type: condition
+    task:
+      id: 42efe980-0d4d-422e-8bb4-46c0082183e7
+      version: -1
+      name: Collapsed address - ff02::1:ff00:1
+      type: condition
+      iscommand: false
+      brand: ""
+    nexttasks:
+      "yes":
+      - "53"
+    separatecontext: false
+    conditions:
+    - label: "yes"
+      condition:
+      - - operator: containsGeneral
+          left:
+            value:
+              simple: IPv6.Address
+            iscontext: true
+          right:
+            value:
+              simple: ff02::1:ff00:1
+    continueonerrortype: ""
+    view: |-
+      {
+        "position": {
+          "x": 50,
+          "y": 865
+        }
+      }
+    note: false
+    timertriggers: []
+    ignoreworker: false
+    skipunavailable: false
+    quietmode: 0
+    isoversize: false
+    isautoswitchedtoquietmode: false
+  "85":
+    id: "85"
+    taskid: 70325c9b-121a-45e1-8334-e7044946f672
+    type: condition
+    task:
+      id: 70325c9b-121a-45e1-8334-e7044946f672
+      version: -1
+      name: local IPv6 with zone identifier - fe80::7:8%eth0
+      type: condition
+      iscommand: false
+      brand: ""
+    nexttasks:
+      "yes":
+      - "53"
+    separatecontext: false
+    conditions:
+    - label: "yes"
+      condition:
+      - - operator: containsGeneral
+          left:
+            value:
+              simple: IPv6.Address
+            iscontext: true
+          right:
+            value:
+              simple: fe80::7:8%eth0
+    continueonerrortype: ""
+    view: |-
+      {
+        "position": {
+          "x": 480,
+          "y": 865
+        }
+      }
+    note: false
+    timertriggers: []
+    ignoreworker: false
+    skipunavailable: false
+    quietmode: 0
+    isoversize: false
+    isautoswitchedtoquietmode: false
+  "86":
+    id: "86"
+    taskid: 7943746b-af8d-4123-8ab9-90dfcf759036
+    type: condition
+    task:
+      id: 7943746b-af8d-4123-8ab9-90dfcf759036
+      version: -1
+      name: IPv4-compatible IPv6 address - ::ffff:192.0.2.1
+      type: condition
+      iscommand: false
+      brand: ""
+    nexttasks:
+      "yes":
+      - "53"
+    separatecontext: false
+    conditions:
+    - label: "yes"
+      condition:
+      - - operator: containsGeneral
+          left:
+            value:
+              simple: IPv6.Address
+            iscontext: true
+          right:
+            value:
+              simple: ::ffff:192.0.2.1
+    continueonerrortype: ""
+    view: |-
+      {
+        "position": {
+          "x": 910,
+          "y": 865
+        }
+      }
+    note: false
+    timertriggers: []
+    ignoreworker: false
+    skipunavailable: false
+    quietmode: 0
+    isoversize: false
+    isautoswitchedtoquietmode: false
+  "87":
+    id: "87"
+    taskid: 7e7f9ae4-d8a8-4657-88c9-a3ec82ac4ef4
+    type: condition
+    task:
+      id: 7e7f9ae4-d8a8-4657-88c9-a3ec82ac4ef4
+      version: -1
+      name: Local Address - fe80::1
+      type: condition
+      iscommand: false
+      brand: ""
+    nexttasks:
+      "yes":
+      - "53"
+    separatecontext: false
+    conditions:
+    - label: "yes"
+      condition:
+      - - operator: containsGeneral
+          left:
+            value:
+              simple: IPv6.Address
+            iscontext: true
+          right:
+            value:
+              simple: fe80::1
+    continueonerrortype: ""
+    view: |-
+      {
+        "position": {
+          "x": 1340,
+          "y": 865
+        }
+      }
+    note: false
+    timertriggers: []
+    ignoreworker: false
+    skipunavailable: false
+    quietmode: 0
+    isoversize: false
+    isautoswitchedtoquietmode: false
+  "88":
+    id: "88"
+    taskid: bcadde02-28cd-4a28-8715-4d7ed08cc32c
+    type: condition
+    task:
+      id: bcadde02-28cd-4a28-8715-4d7ed08cc32c
+      version: -1
+      name: Collapsed zeros - 2001:db8:1:0:0:0:0:1
+      type: condition
+      iscommand: false
+      brand: ""
+    nexttasks:
+      "yes":
+      - "53"
+    separatecontext: false
+    conditions:
+    - label: "yes"
+      condition:
+      - - operator: containsGeneral
+          left:
+            value:
+              simple: IPv6.Address
+            iscontext: true
+          right:
+            value:
+              simple: 2001:db8:1:0:0:0:0:1
+    continueonerrortype: ""
+    view: |-
+      {
+        "position": {
+          "x": 1770,
+          "y": 865
+        }
+      }
+    note: false
+    timertriggers: []
+    ignoreworker: false
+    skipunavailable: false
+    quietmode: 0
+    isoversize: false
+    isautoswitchedtoquietmode: false
+  "89":
+    id: "89"
+    taskid: a317ea7b-7123-47cd-849c-4832157392b2
+    type: condition
+    task:
+      id: a317ea7b-7123-47cd-849c-4832157392b2
+      version: -1
+      name: Leading zeros - 2001:0db8:0000:0000:0000:0000:0000:0001
+      type: condition
+      iscommand: false
+      brand: ""
+    nexttasks:
+      "yes":
+      - "53"
+    separatecontext: false
+    conditions:
+    - label: "yes"
+      condition:
+      - - operator: containsGeneral
+          left:
+            value:
+              simple: IPv6.Address
+            iscontext: true
+          right:
+            value:
+              simple: 2001:0db8:0000:0000:0000:0000:0000:0001
+    continueonerrortype: ""
+    view: |-
+      {
+        "position": {
+          "x": 2200,
+          "y": 865
+        }
+      }
+    note: false
+    timertriggers: []
+    ignoreworker: false
+    skipunavailable: false
+    quietmode: 0
+    isoversize: false
+    isautoswitchedtoquietmode: false
+  "90":
+    id: "90"
+    taskid: 1be167b6-ab37-423b-8905-26dfdc7d5f62
+    type: condition
+    task:
+      id: 1be167b6-ab37-423b-8905-26dfdc7d5f62
+      version: -1
+      name: Loopback - ::1
+      type: condition
+      iscommand: false
+      brand: ""
+    nexttasks:
+      "yes":
+      - "53"
+    separatecontext: false
+    conditions:
+    - label: "yes"
+      condition:
+      - - operator: containsGeneral
+          left:
+            value:
+              simple: IPv6.Address
+            iscontext: true
+          right:
+            value:
+              simple: ::1
+    continueonerrortype: ""
+    view: |-
+      {
+        "position": {
+          "x": 2630,
+          "y": 865
+        }
+      }
+    note: false
+    timertriggers: []
+    ignoreworker: false
+    skipunavailable: false
+    quietmode: 0
+    isoversize: false
+    isautoswitchedtoquietmode: false
+  "91":
+    id: "91"
+    taskid: d5b94802-7b18-424c-8b92-1fefe85b2112
+    type: condition
+    task:
+      id: d5b94802-7b18-424c-8b92-1fefe85b2112
+      version: -1
+      name: Collapsed address mid - ff02:1::ff00:1
+      type: condition
+      iscommand: false
+      brand: ""
+    nexttasks:
+      "yes":
+      - "53"
+    separatecontext: false
+    conditions:
+    - label: "yes"
+      condition:
+      - - operator: containsGeneral
+          left:
+            value:
+              simple: IPv6.Address
+            iscontext: true
+          right:
+            value:
+              simple: ff02:1::ff00:1
+    continueonerrortype: ""
+    view: |-
+      {
+        "position": {
+          "x": 3060,
+          "y": 865
+        }
+      }
+    note: false
+    timertriggers: []
+    ignoreworker: false
+    skipunavailable: false
+    quietmode: 0
+    isoversize: false
+    isautoswitchedtoquietmode: false
+  "92":
+    id: "92"
+    taskid: a8f026df-0874-4fec-8410-ef1edae1dc50
+    type: condition
+    task:
+      id: a8f026df-0874-4fec-8410-ef1edae1dc50
+      version: -1
+      name: Collapsed address mid - ff02:1:ff00::1
+      type: condition
+      iscommand: false
+      brand: ""
+    nexttasks:
+      "yes":
+      - "53"
+    separatecontext: false
+    conditions:
+    - label: "yes"
+      condition:
+      - - operator: containsGeneral
+          left:
+            value:
+              simple: IPv6.Address
+            iscontext: true
+          right:
+            value:
+              simple: ff02:1:ff00::1
+    continueonerrortype: ""
+    view: |-
+      {
+        "position": {
+          "x": 3490,
+          "y": 865
+        }
+      }
+    note: false
+    timertriggers: []
+    ignoreworker: false
+    skipunavailable: false
+    quietmode: 0
+    isoversize: false
+    isautoswitchedtoquietmode: false
+  "93":
+    id: "93"
+    taskid: 67fa7fdc-1648-410a-8b49-61b8cfc78597
+    type: condition
+    task:
+      id: 67fa7fdc-1648-410a-8b49-61b8cfc78597
+      version: -1
+      name: 2001::db8::1 - Double colons not at the start or end
+      type: condition
+      iscommand: false
+      brand: ""
+    nexttasks:
+      "yes":
+      - "80"
+    separatecontext: false
+    conditions:
+    - label: "yes"
+      condition:
+      - - operator: notContainsGeneral
+          left:
+            value:
+              simple: IPv6.Address
+            iscontext: true
+          right:
+            value:
+              simple: 2001::db8::1
+    continueonerrortype: ""
+    view: |-
+      {
+        "position": {
+          "x": 1340,
+          "y": 1390
+        }
+      }
+    note: false
+    timertriggers: []
+    ignoreworker: false
+    skipunavailable: false
+    quietmode: 0
+    isoversize: false
+    isautoswitchedtoquietmode: false
+  "94":
+    id: "94"
+    taskid: 05e30fc9-c3cd-4e75-8e9f-1b83f3ce214d
+    type: condition
+    task:
+      id: 05e30fc9-c3cd-4e75-8e9f-1b83f3ce214d
+      version: -1
+      name: ::fffff:192.0.2.1 - Too many hexadecimal digits in one group
+      type: condition
+      iscommand: false
+      brand: ""
+    nexttasks:
+      "yes":
+      - "80"
+    separatecontext: false
+    conditions:
+    - label: "yes"
+      condition:
+      - - operator: notContainsGeneral
+          left:
+            value:
+              simple: IPv6.Address
+            iscontext: true
+          right:
+            value:
+              simple: ::fffff:192.0.2.1
+    continueonerrortype: ""
+    view: |-
+      {
+        "position": {
+          "x": 1770,
+          "y": 1390
+        }
+      }
+    note: false
+    timertriggers: []
+    ignoreworker: false
+    skipunavailable: false
+    quietmode: 0
+    isoversize: false
+    isautoswitchedtoquietmode: false
+  "95":
+    id: "95"
+    taskid: a6c27f45-947b-4a56-8ce9-b46b5dcc24a4
+    type: condition
+    task:
+      id: a6c27f45-947b-4a56-8ce9-b46b5dcc24a4
+      version: -1
+      name: 2001:db8:::1%eth0 - Double colons with zone identifier
+      type: condition
+      iscommand: false
+      brand: ""
+    nexttasks:
+      "yes":
+      - "80"
+    separatecontext: false
+    conditions:
+    - label: "yes"
+      condition:
+      - - operator: notContainsGeneral
+          left:
+            value:
+              simple: IPv6.Address
+            iscontext: true
+          right:
+            value:
+              simple: 2001:db8:::1%eth0
+    continueonerrortype: ""
+    view: |-
+      {
+        "position": {
+          "x": 2200,
+          "y": 1390
+        }
+      }
+    note: false
+    timertriggers: []
+    ignoreworker: false
+    skipunavailable: false
+    quietmode: 0
+    isoversize: false
+    isautoswitchedtoquietmode: false
+  "96":
+    id: "96"
+    taskid: 45fc9842-24f6-47e8-8f9a-e6b5ebda5b0e
+    type: condition
+    task:
+      id: 45fc9842-24f6-47e8-8f9a-e6b5ebda5b0e
+      version: -1
+      name: fe80::1%eth0%vlan0 - Multiple zone identifiers
+      type: condition
+      iscommand: false
+      brand: ""
+    nexttasks:
+      "yes":
+      - "80"
+    separatecontext: false
+    conditions:
+    - label: "yes"
+      condition:
+      - - operator: notContainsGeneral
+          left:
+            value:
+              simple: IPv6.Address
+            iscontext: true
+          right:
+            value:
+              simple: fe80::1%eth0%vlan0
+    continueonerrortype: ""
+    view: |-
+      {
+        "position": {
+          "x": 2630,
+          "y": 1390
+        }
+      }
+    note: false
+    timertriggers: []
+    ignoreworker: false
+    skipunavailable: false
+    quietmode: 0
+    isoversize: false
+    isautoswitchedtoquietmode: false
+  "97":
+    id: "97"
+    taskid: 7f26cb6f-4bd8-4ee1-8f25-62b2ab3a07ff
+    type: condition
+    task:
+      id: 7f26cb6f-4bd8-4ee1-8f25-62b2ab3a07ff
+      version: -1
+      name: 00:1A:2B:3C:4D:5E - MAC Address
+      type: condition
+      iscommand: false
+      brand: ""
+    nexttasks:
+      "yes":
+      - "80"
+    separatecontext: false
+    conditions:
+    - label: "yes"
+      condition:
+      - - operator: notContainsGeneral
+          left:
+            value:
+              simple: IPv6.Address
+            iscontext: true
+          right:
+            value:
+              simple: 00:1A:2B:3C:4D:5E
+    continueonerrortype: ""
+    view: |-
+      {
+        "position": {
+          "x": 3060,
+          "y": 1390
+        }
+      }
+    note: false
+    timertriggers: []
+    ignoreworker: false
+    skipunavailable: false
+    quietmode: 0
+    isoversize: false
+    isautoswitchedtoquietmode: false
+  "98":
+    id: "98"
+    taskid: f7c5985a-764f-4052-8879-9be0e62e5430
+    type: condition
+    task:
+      id: f7c5985a-764f-4052-8879-9be0e62e5430
+      version: -1
+      name: Event::Endpoint::Denc::Encrypt - Event
+      type: condition
+      iscommand: false
+      brand: ""
+    nexttasks:
+      "yes":
+      - "80"
+    separatecontext: false
+    conditions:
+    - label: "yes"
+      condition:
+      - - operator: notContainsGeneral
+          left:
+            value:
+              simple: IPv6.Address
+            iscontext: true
+          right:
+            value:
+              simple: c::E
+    continueonerrortype: ""
+    view: |-
+      {
+        "position": {
+          "x": 3510,
+          "y": 1390
+        }
+      }
+    note: false
+    timertriggers: []
+    ignoreworker: false
+    skipunavailable: false
+    quietmode: 0
+    isoversize: false
+    isautoswitchedtoquietmode: false
+view: |-
+  {
+    "linkLabelsPosition": {},
+    "paper": {
+      "dimensions": {
+        "height": 1610,
+        "width": 3840,
+        "x": 50,
+        "y": 50
+      }
+    }
+  }
+inputs: []
+outputs: []
+sourceplaybookid: Indicators reputation-.json Test
+fromversion: 6.5.0

@@ -16,10 +16,13 @@ ANY.RUN is a cloud-based sanbox with interactive access.
     | --- | --- |
     | Server URL | True |
     | Username | True |
+    | Password | True |
     | Trust any certificate (not secure) | False |
     | Use system proxy settings | False |
 
-4. Click **Test** to validate the URLs, token, and connection.
+4. If using API Key authentication method, insert the text `_token` into the **Username** parameter and the API key you have into the **Password**.
+
+5. Click **Test** to validate the URLs, token, and connection.
 
 ## Commands
 You can execute these commands from the Cortex XSOAR CLI, as part of an automation, or in a playbook.
@@ -159,7 +162,10 @@ Get analysis history.
 
 ### anyrun-get-report
 ***
-Gets the report of a task created for a submitted file or URL.
+Gets the report of a task created for a submitted file or URL. 
+
+*Note: This command can only get reports for files or URLs deployed by the integration account. It cannot pull reports on public submissions.*
+
 
 
 #### Base Command
@@ -339,6 +345,8 @@ Submit a file or url for analysis.
 | opt_network_connect | Network connection state. Possible values are: true, false. Default is true. | Optional | 
 | opt_kernel_heavyevasion | Heavy evasion option. Possible values are: true, false. Default is false. | Optional | 
 | opt_privacy_type | Privacy settings for generated task. Possible values are: owner, bylink, public. Default is owner. | Optional | 
+| obj_ext_browser | Browser name, used only for "url" type. Possible values are: Internet Explorer, Google Chrome, Mozilla Firefox, Opera, Microsoft Edge. | Optional |
+| obj_ext_cmd | Command line, used only if 'obj_type' command argument is 'file' or 'download'. Permitted size is 2-256 characters long. | Optional |
 
 
 #### Context Output

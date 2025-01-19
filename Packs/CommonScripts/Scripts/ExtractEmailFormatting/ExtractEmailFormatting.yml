@@ -15,8 +15,7 @@ args:
   isArray: true
 scripttarget: 0
 subtype: python3
-runonce: false
-dockerimage: demisto/python3:3.9.5.20070
+dockerimage: demisto/python3:3.11.10.115186
 fromversion: 5.5.0
 tests:
-  - ExtractEmailV2-Test
+- ExtractEmailV2-Test

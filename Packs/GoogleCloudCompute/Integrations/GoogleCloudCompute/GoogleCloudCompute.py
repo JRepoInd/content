@@ -1,13 +1,13 @@
-import demistomock as demisto
-from CommonServerPython import *
-from CommonServerUserPython import *
+import demistomock as demisto  # noqa: F401
+from CommonServerPython import *  # noqa: F401
 
 """ IMPORTS """
 
-from googleapiclient import discovery
-from google.oauth2 import service_account
 import json
 import time
+
+from google.oauth2 import service_account
+from googleapiclient import discovery
 
 # disable weak-typing warnings by pylint.
 # See: https://github.com/GoogleCloudPlatform/python-docs-samples/blob/master/iam/api-client/quickstart.py#L36
@@ -16,14 +16,17 @@ import time
 """ GLOBALS/PARAMS """
 
 # Params for assembling object of the Service Account Credentials File Contents
-SERVICE_ACCOUNT_FILE = demisto.params().get('service')
+SERVICE_ACCOUNT_FILE = demisto.params().get('credentials_service_account_json',
+                                            {}).get('password') or demisto.params().get('service')
 SERVICE_ACT_PROJECT_ID = None
 
 # Params for constructing googleapiclient service object
 API_VERSION = 'v1'
 GSERVICE = 'compute'
+ASSET_SERVICE = 'cloudasset'
 SCOPE = ['https://www.googleapis.com/auth/cloud-platform']
 COMPUTE = None  # variable set by build_and_authenticate() function
+ASSET = None  # variable set by build_and_authenticate() function
 
 """
 HELPER FUNCTIONS
@@ -37,6 +40,15 @@ def get_compute():
     if not COMPUTE:
         return build_and_authenticate(GSERVICE)
     return COMPUTE
+
+
+def get_asset():
+    """
+    Gets an initialized instance of ASSET
+    """
+    if not ASSET:
+        return build_and_authenticate(ASSET_SERVICE)
+    return ASSET
 
 
 def parse_resource_ids(resource_id):
@@ -142,15 +154,20 @@ def build_and_authenticate(googleservice):
         integration will make API calls
     """
 
-    global SERVICE_ACT_PROJECT_ID, COMPUTE
+    global SERVICE_ACT_PROJECT_ID, COMPUTE, ASSET
     auth_json_string = str(SERVICE_ACCOUNT_FILE).replace("\'", "\"").replace("\\\\", "\\")
     service_account_info = json.loads(auth_json_string)
     SERVICE_ACT_PROJECT_ID = service_account_info.get('project_id')
     service_credentials = service_account.Credentials.from_service_account_info(
         service_account_info, scopes=SCOPE
     )
-    COMPUTE = discovery.build(googleservice, API_VERSION, credentials=service_credentials)
-    return COMPUTE
+    if googleservice == 'compute':
+        COMPUTE = discovery.build(googleservice, API_VERSION, credentials=service_credentials)
+        return COMPUTE
+    elif googleservice == 'cloudasset':
+        ASSET = discovery.build(googleservice, API_VERSION, credentials=service_credentials)
+        return ASSET
+    return None
 
 
 def wait_for_zone_operation(args):
@@ -358,7 +375,7 @@ def create_instance(args):
         config['tags'][0].update({'items': parse_resource_ids(tags)})
 
     if args.get('canIpForward'):
-        can_ip_forward = True if args.get('canIpForward') == 'true' else False
+        can_ip_forward = args.get('canIpForward') == 'true'
         config.update({'canIpForward': can_ip_forward})
 
     if args.get('tagsFingerprint'):
@@ -401,7 +418,7 @@ def create_instance(args):
 
     if args.get('externalInternetAccess'):
         external_network = (
-            True if args.get('externalInternetAccess') == 'true' else False
+            args.get('externalInternetAccess') == 'true'
         )
         if external_network:
             if 'networkInterfaces' not in config.keys():
@@ -422,7 +439,7 @@ def create_instance(args):
         config['networkInterfaces'][0]['accessConfigs'][0].update({'natIP': nat_ip})
 
     if args.get('setPublicPtr'):
-        set_public_ptr = True if args.get('setPublicPtr') == 'true' else False
+        set_public_ptr = args.get('setPublicPtr') == 'true'
         if 'networkInterfaces' not in config.keys():
             config.update({'networkInterfaces': [{}]})
         if 'accessConfigs' not in config['networkInterfaces'][0].keys():
@@ -501,7 +518,7 @@ def create_instance(args):
         config['disks'][0].update({'deviceName': disk_device_name})
 
     if args.get('diskBoot') is not None:
-        disk_boot = True if args.get('diskBoot') == 'true' else False
+        disk_boot = args.get('diskBoot') == 'true'
         if 'disks' not in config.keys():
             config.update({'disks': [{}]})
         config['disks'][0].update({'boot': disk_boot})
@@ -603,7 +620,7 @@ def create_instance(args):
         )
 
     if args.get('diskAutodelete'):
-        disk_auto_delete = True if args.get('diskAutodelete') == 'true' else False
+        disk_auto_delete = args.get('diskAutodelete') == 'true'
         if 'disks' not in config.keys():
             config.update({'disks': [{}]})
         config['disks'][0].update({'autoDelete': disk_auto_delete})
@@ -673,7 +690,7 @@ def create_instance(args):
 
     if args.get('schedulingAutomaticRestart'):
         scheduling_automatic_restart = (
-            True if args.get('schedulingAutomaticRestart') == 'true' else False
+            args.get('schedulingAutomaticRestart') == 'true'
         )
         if 'scheduling' not in config.keys():
             config.update({'scheduling': {}})
@@ -681,7 +698,7 @@ def create_instance(args):
 
     if args.get('schedulingPreemptible'):
         scheduling_preemptible = (
-            True if args.get('schedulingPreemptible') == 'true' else False
+            args.get('schedulingPreemptible') == 'true'
         )
         if 'scheduling' not in config.keys():
             config.update({'scheduling': {}})
@@ -721,7 +738,7 @@ def create_instance(args):
 
     if args.get('deletionProtection'):
         deletion_protection = (
-            True if args.get('deletionProtection') == 'true' else False
+            args.get('deletionProtection') == 'true'
         )
         config.update({'deletionProtection': deletion_protection})
 
@@ -784,7 +801,7 @@ def list_instances(args):
     data_res = []
     while request:
         response = request.execute()
-        if 'items' in response.keys():
+        if 'items' in response:
             for instance in response['items']:
                 output.append(instance)
                 data_res_item = {
@@ -838,8 +855,8 @@ def aggregated_list_instances(args):
     )
     while request:
         response = request.execute()
-        if 'items' in response.keys():
-            for name, instances_scoped_list in response['items'].items():
+        if 'items' in response:
+            for _name, instances_scoped_list in response['items'].items():
                 if 'warning' not in instances_scoped_list.keys():
                     for inst in instances_scoped_list.get('instances', []):
                         output.append(inst)
@@ -913,7 +930,10 @@ def get_instance(args):
     parameter: (string) instance
         Name of the instance scoping this request.
     """
-    project = SERVICE_ACT_PROJECT_ID
+    project = args.get('project_id')
+    if not project:
+        project = SERVICE_ACT_PROJECT_ID
+
     instance = args.get('instance')
     zone = args.get('zone')
 
@@ -1251,7 +1271,7 @@ def list_images(args):
     )
     while request:
         response = request.execute()
-        if 'items' in response.keys():
+        if 'items' in response:
             for image in response['items']:
                 output.append(image)
                 data_res_item = {'id': image.get('id'), 'name': image.get('name')}
@@ -1350,7 +1370,7 @@ def insert_image(args):
 
     force_create = False
     if args.get('forceCreate'):
-        force_create = True if args.get('forceCreate') == 'true' else False
+        force_create = args.get('forceCreate') == 'true'
 
     if args.get('description'):
         description = args.get('description')
@@ -1536,7 +1556,7 @@ def networks_add_peering(args):
         config.update({'peerNetwork': peer_network})
 
     if args.get('autoCreateRoutes'):
-        auto_create_routes = True if args.get('autoCreateRoutes') == 'true' else False
+        auto_create_routes = args.get('autoCreateRoutes') == 'true'
         config.update({'autoCreateRoutes': auto_create_routes})
 
     if args.get('networkPeeringName'):
@@ -1552,7 +1572,7 @@ def networks_add_peering(args):
 
     if args.get('networkPeeringExchangeSubnetRoutes'):
         network_peering_exchange_subnet_routes = (
-            True if args.get('networkPeeringExchangeSubnetRoutes') == 'True' else False
+            args.get('networkPeeringExchangeSubnetRoutes') == 'True'
         )
         if 'networkPeering' not in config.keys():
             config.update({'networkPeering': {}})
@@ -1654,7 +1674,7 @@ def insert_network(args):
 
     if args.get('autoCreateSubnetworks'):
         auto_create_sub_networks = (
-            True if args.get('autoCreateSubnetworks') == 'true' else False
+            args.get('autoCreateSubnetworks') == 'true'
         )
         config.update({'autoCreateSubnetworks': auto_create_sub_networks})
 
@@ -1712,7 +1732,7 @@ def list_networks(args):
     )
     while request:
         response = request.execute()
-        if 'items' in response.keys():
+        if 'items' in response:
             for item in response['items']:
                 output.append(item)
                 data_res_item = {'name': item.get('name'), 'id': item.get('id')}
@@ -1902,7 +1922,7 @@ def list_zone_operation(args):
     )
     while request:
         response = request.execute()
-        if 'items' in response.keys():
+        if 'items' in response:
             for operation in response['items']:
                 output.append(operation)
                 data_res_item = {
@@ -1983,7 +2003,7 @@ def list_region_operation(args):
     )
     while request:
         response = request.execute()
-        if 'items' in response.keys():
+        if 'items' in response:
             for operation in response['items']:
                 output.append(operation)
                 data_res_item = {
@@ -2060,7 +2080,7 @@ def list_global_operation(args):
     )
     while request:
         response = request.execute()
-        if 'items' in response.keys():
+        if 'items' in response:
             for operation in response['items']:
                 output.append(operation)
                 data_res_item = {
@@ -2126,8 +2146,8 @@ def aggregated_list_addresses(args):
     )
     while request:
         response = request.execute()
-        if 'items' in response.keys():
-            for name, instances_scoped_list in response['items'].items():
+        if 'items' in response:
+            for _name, instances_scoped_list in response['items'].items():
                 if 'warning' not in instances_scoped_list.keys():
                     for addr in instances_scoped_list.get('addresses'):
                         output.append(addr)
@@ -2315,7 +2335,7 @@ def list_addresses(args):
     )
     while request:
         response = request.execute()
-        if 'items' in response.keys():
+        if 'items' in response:
             for address in response['items']:
                 output.append(address)
                 data_res_item = {
@@ -2490,7 +2510,7 @@ def list_global_addresses(args):
     )
     while request:
         response = request.execute()
-        if 'items' in response.keys():
+        if 'items' in response:
             for address in response['items']:
                 output.append(address)
                 data_res_item = {
@@ -2543,8 +2563,8 @@ def aggregated_list_disks(args):
     )
     while request:
         response = request.execute()
-        if 'items' in response.keys():
-            for name, instances_scoped_list in response['items'].items():
+        if 'items' in response:
+            for _name, instances_scoped_list in response['items'].items():
                 if 'warning' not in instances_scoped_list.keys():
                     for disk in instances_scoped_list.get('disks', []):
                         output.append(disk)
@@ -2728,6 +2748,9 @@ def insert_disk(args):
 
     if args.get('zone'):
         zone = args.get('zone')
+    else:
+        zone = None
+        demisto.debug(f"{args.get('zone')=}")
 
     if args.get('disktype'):
         disk_type = args.get('disktype')
@@ -2881,7 +2904,7 @@ def list_disks(args):
     )
     while request:
         response = request.execute()
-        if 'items' in response.keys():
+        if 'items' in response:
             for disk in response['items']:
                 output.append(disk)
                 data_res_item = {
@@ -2967,14 +2990,14 @@ def set_disk_labels(args):
     disk = args.get('disk')
     zone = args.get('zone')
     labels = args.get('labels')
-    if args.get('labelFingerprint'):
-        label_fingerprint = args.get('labelFingerprint')
 
     labels = parse_labels(labels)
     body = {'labels': labels}
 
-    if args.get('labelFingerprint') is not None:
-        body.update({'labelFingerprint': label_fingerprint})
+    if args.get('labelFingerprint'):
+        label_fingerprint = args.get('labelFingerprint')
+        if label_fingerprint is not None:
+            body.update({'labelFingerprint': label_fingerprint})
 
     request = get_compute().disks().setLabels(
         project=project, zone=zone, resource=disk, body=body
@@ -3029,8 +3052,8 @@ def aggregated_list_disk_types(args):
     )
     while request:
         response = request.execute()
-        if 'items' in response.keys():
-            for name, instances_scoped_list in response['items'].items():
+        if 'items' in response:
+            for _name, instances_scoped_list in response['items'].items():
                 if 'warning' not in instances_scoped_list.keys():
                     for disktype in instances_scoped_list.get('diskTypes', []):
                         output.append(disktype)
@@ -3111,7 +3134,7 @@ def list_disks_types(args):
     )
     while request:
         response = request.execute()
-        if 'items' in response.keys():
+        if 'items' in response:
             for disktype in response['items']:
                 output.append(disktype)
                 data_res_item = {
@@ -3211,8 +3234,8 @@ def aggregated_list_instance_groups(args):
     )
     while request:
         response = request.execute()
-        if 'items' in response.keys():
-            for name, instances_scoped_list in response['items'].items():
+        if 'items' in response:
+            for _name, instances_scoped_list in response['items'].items():
                 if 'warning' not in instances_scoped_list.keys():
                     for item in instances_scoped_list.get('instanceGroups', []):
                         output.append(item)
@@ -3398,7 +3421,7 @@ def list_instance_groups(args):
     )
     while request:
         response = request.execute()
-        if 'items' in response.keys():
+        if 'items' in response:
             for item in response['items']:
                 output.append(item)
 
@@ -3458,7 +3481,7 @@ def list_instance_groups_instances(args):
     )
     while request:
         response = request.execute()
-        if 'items' in response.keys():
+        if 'items' in response:
             for item in response['items']:
                 output.append(item)
                 data_res_item = {
@@ -3635,7 +3658,7 @@ def list_regions(args):
     )
     while request:
         response = request.execute()
-        if 'items' in response.keys():
+        if 'items' in response:
             for item in response['items']:
                 output.append(item)
                 data_res_item = {
@@ -3718,7 +3741,7 @@ def list_zones(args):
     )
     while request:
         response = request.execute()
-        if 'items' in response.keys():
+        if 'items' in response:
             for item in response['items']:
                 output.append(item)
                 data_res_item = {
@@ -3772,8 +3795,8 @@ def aggregated_list_machine_types(args):
         pageToken=page_token
     )
     response = request.execute()
-    if 'items' in response.keys():
-        for name, instances_scoped_list in response['items'].items():
+    if 'items' in response:
+        for _name, instances_scoped_list in response['items'].items():
             if 'warning' not in instances_scoped_list.keys():
                 for item in instances_scoped_list.get('machineTypes', []):
                     output.append(item)
@@ -3867,7 +3890,7 @@ def list_machine_types(args):
     )
     while request:
         response = request.execute()
-        if 'items' in response.keys():
+        if 'items' in response:
             for item in response['items']:
                 output.append(item)
                 data_res_item = {
@@ -3896,7 +3919,9 @@ def insert_firewall(args):
     """
     Creates a firewall rule in the specified project using the data included in the request.
     """
-    project = SERVICE_ACT_PROJECT_ID
+    project = args.get('project_id')
+    if not project:
+        project = SERVICE_ACT_PROJECT_ID
 
     config = {}
     if args.get('name'):
@@ -3953,7 +3978,7 @@ def insert_firewall(args):
         config.update({'direction': args.get('direction')})
 
     if args.get('logConfigEnable'):
-        log_config_enable = True if args.get('logConfigEnable') == 'true' else False
+        log_config_enable = args.get('logConfigEnable') == 'true'
         config.update({'logConfig': {'enable': log_config_enable}})
 
     if args.get('disabled'):
@@ -3990,6 +4015,9 @@ def patch_firewall(args):
     if args.get('name'):
         name = args.get('name')
         config.update({'name': args.get('name')})
+    else:
+        name = None
+        demisto.debug(f"{args.get('name')=} -> {name=}")
 
     if args.get('description'):
         config.update({'description': args.get('description')})
@@ -4042,11 +4070,11 @@ def patch_firewall(args):
         config.update({'direction': args.get('direction')})
 
     if args.get('logConfigEnable'):
-        log_config_enable = True if args.get('logConfigEnable') == 'true' else False
+        log_config_enable = args.get('logConfigEnable') == 'true'
         config.update({'logConfig': {'enable': log_config_enable}})
 
     if args.get('disabled'):
-        disabled = True if args.get('disabled') == 'true' else False
+        disabled = args.get('disabled') == 'true'
         config.update({'disabled': disabled})
 
     request = get_compute().firewalls().patch(project=project, firewall=name, body=config)
@@ -4082,8 +4110,9 @@ def list_firewalls(args):
         By default, results are returned in alphanumerical order based on the resource name
 
     """
-
-    project = SERVICE_ACT_PROJECT_ID
+    project = args.get('project_id')
+    if not project:
+        project = SERVICE_ACT_PROJECT_ID
 
     max_results = int(args.get('maxResults'))
     filters = args.get('filters')
@@ -4101,7 +4130,7 @@ def list_firewalls(args):
     )
     while request:
         response = request.execute()
-        if 'items' in response.keys():
+        if 'items' in response:
             for item in response['items']:
                 output.append(item)
                 data_res_item = {
@@ -4264,7 +4293,7 @@ def list_snapshots(args):
     )
     while request:
         response = request.execute()
-        if 'items' in response.keys():
+        if 'items' in response:
             for item in response['items']:
                 output.append(item)
                 data_res_item = {
@@ -4357,12 +4386,147 @@ def add_project_info_metadata(metadata):
     )
 
 
+def aggregated_list_instances_ip(args: Dict[str, Any]) -> CommandResults:
+    """
+    gcp-compute-aggregated-list-instances-by-ip: Retrieves instance information based on public IP in your project
+    across all regions and zones.
+
+    Args:
+        args (dict): all command arguments, usually passed from ``demisto.args()``.
+            ``args['ip']`` IP Address to search on.
+
+    Returns:
+        CommandResults: A ``CommandResults`` object that is then passed to ``return_results``, that contains instance
+        details.
+    """
+    ip = args.get('ip')
+    default_search_scope = demisto.params().get('default_search_scope')
+    # 'default_search_scope' param was set use it for scope, else use the project in the service account.
+    # 'compute.googleapis.com/Instance' asset-type needed to find static and ephemeral public IPs.
+    if default_search_scope:
+        request_asset = get_asset().v1().searchAllResources(
+            scope=default_search_scope,
+            assetTypes='compute.googleapis.com/Instance',
+            query=f"additionalAttributes.externalIPs={ip}"
+        )
+
+    else:
+        request_asset = get_asset().v1().searchAllResources(
+            scope=f"projects/{SERVICE_ACT_PROJECT_ID}",
+            assetTypes='compute.googleapis.com/Instance',
+            query=f"additionalAttributes.externalIPs={ip}"
+        )
+    response_asset = request_asset.execute()
+    if response_asset:
+        raw = response_asset.get('results')[0].get('parentFullResourceName')
+        if raw:
+            project = raw.split('/')[-1]
+        else:
+            raise ValueError("Unable to find project of the asset")
+
+        output = []
+        data_res = []
+
+        request_comp = get_compute().instances().aggregatedList(
+            project=project,
+        )
+        while request_comp:
+            response_comp = request_comp.execute()
+            if 'items' in response_comp:
+                for _, instances_scoped_list in response_comp['items'].items():
+                    if 'warning' not in instances_scoped_list.keys():
+                        for inst in instances_scoped_list.get('instances', []):
+                            for interface in inst.get('networkInterfaces', []):
+                                for config in interface.get('accessConfigs', []):
+                                    # only add if 'natIP' (public IP) matches.
+                                    if config.get('natIP') == ip:
+                                        output.append(inst)
+                                        data_res_item = {
+                                            'id': inst.get('id'),
+                                            'name': inst.get('name'),
+                                            'machineType': inst.get('machineType'),
+                                            'zone': inst.get('zone'),
+                                        }
+                                        data_res.append(data_res_item)
+
+            request_comp = get_compute().instances().aggregatedList_next(
+                previous_request=request_comp, previous_response=response_comp
+            )
+
+        return CommandResults(
+            readable_output=tableToMarkdown('Google Cloud Compute Instances', data_res, removeNull=True),
+            raw_response=response_comp,
+            outputs_prefix='GoogleCloudCompute.Instances',
+            outputs_key_field='id',
+            outputs=output
+        )
+    else:
+        return CommandResults(
+            readable_output='Unable to find asset with IP address.  If you are using an organization service account,'
+            'please make sure the default_search_scope integration parameter is set.')
+
+
+def add_networks_tag(args: Dict[str, Any]) -> CommandResults:
+    """
+    gcp-compute-add-network-tag: Add network tag for the specified instance.
+
+    Args:
+        args (dict): all command arguments, usually passed from ``demisto.args()``.
+            ``args['instance']`` Name of the instance scoping this request.
+            ``args['zone']`` The name of the zone for this request.
+            ``args['tag']`` Network tag to add.  Tag must be unique, 1-63 characters long, and comply with RFC1035.
+
+    Returns:
+        CommandResults: A ``CommandResults`` object that is then passed to ``return_results``, that contains Compute
+        action details.
+    """
+    project = args.get('project_id')
+    if not project:
+        project = SERVICE_ACT_PROJECT_ID
+    instance = args.get('instance')
+    zone = args.get('zone')
+    tag = args.get('tag')
+
+    # first request is to get info on instance (fingerprint and current tags)
+    inst_obj = get_compute().instances().get(project=project, zone=zone, instance=instance)
+    inst_resp = inst_obj.execute()
+    finger = inst_resp.get('tags').get('fingerprint')
+    all_tags = inst_resp.get('tags').get('items', [])
+    all_tags.append(tag)
+
+    if finger:
+        body = {"fingerprint": finger, "items": all_tags}
+        request = get_compute().instances().setTags(project=project, zone=zone, instance=instance, body=body)
+        response = request.execute()
+    else:
+        raise ValueError("Unable to find tag fingerprint")
+
+    data_res = {
+        'status': response.get('status'),
+        'kind': response.get('kind'),
+        'name': response.get('name'),
+        'id': response.get('id'),
+        'progress': response.get('progress'),
+        'operationType': response.get('operationType'),
+    }
+
+    return CommandResults(
+        readable_output=tableToMarkdown('Google Cloud Compute Operations', data_res, removeNull=True),
+        raw_response=response,
+        outputs_prefix='GoogleCloudCompute.Operations',
+        outputs_key_field='id',
+        outputs=response
+    )
+
+
 """
 EXECUTION CODE
 """
 
 
 def main():
+    if not SERVICE_ACCOUNT_FILE:
+        raise DemistoException('Service Account Private Key file contents must be provided.')
     try:
         build_and_authenticate(GSERVICE)
         command = demisto.command()
@@ -4613,6 +4777,12 @@ def main():
         elif command == 'gcp-compute-project-info-add-metadata':
             add_project_info_metadata(**demisto.args())
 
+        elif command == 'gcp-compute-add-network-tag':
+            return_results(add_networks_tag(demisto.args()))
+
+        elif command == 'gcp-compute-aggregated-list-instances-by-ip':
+            return_results(aggregated_list_instances_ip(demisto.args()))
+
     except Exception as e:
         LOG(e)
         try:
@@ -4620,10 +4790,10 @@ def main():
             response = response['error']
             status_code = response.get('code')
             err_message = response.get('message')
-            full_err_msg = 'error code: {}\n{}'.format(status_code, err_message)
+            full_err_msg = f'error code: {status_code}\n{err_message}'
             return_error(full_err_msg)
         except AttributeError:
-            return_error(e.message)
+            return_error(str(e))
 
 
 if __name__ in ('__main__', '__builtin__', 'builtins'):

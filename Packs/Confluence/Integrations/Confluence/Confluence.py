@@ -5,8 +5,8 @@ from CommonServerUserPython import *
 '''IMPORTS'''
 import requests
 import json
-
-requests.packages.urllib3.disable_warnings()
+import urllib3
+urllib3.disable_warnings()
 
 """
 GLOBAL VARIABLES
@@ -29,7 +29,7 @@ Helper Functions
 """
 
 
-def http_request(method, full_url, data=None, params=None, is_test=False):
+def http_request(method, full_url, data=None, params=None, is_test=False):  # pragma: no cover
     try:
         res = requests.request(
             method,
@@ -440,13 +440,13 @@ def delete_content_command():
     })
 
 
-def test():
+def test():  # pragma: no cover
     full_url = BASE_URL + '/user/current'
     res = http_request('GET', full_url, is_test=True)
 
     if not res:
         return_error('Test failed. \nCheck URL and Username/Password.\nURL: {}, Status Code: {}, Response: {}'.format(
-            full_url, res.status_code, res.text))
+            full_url, res.status_code, res.text.encode('utf8')))
 
     demisto.results('ok')
 

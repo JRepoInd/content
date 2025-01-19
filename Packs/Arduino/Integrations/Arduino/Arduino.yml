@@ -9,7 +9,7 @@ configuration:
   required: true
   type: 0
 - additionalinfo: Port number
-  defaultvalue: "9090"
+  defaultvalue: '9090'
   display: Port number
   name: port
   required: true
@@ -123,8 +123,7 @@ script:
     - contextPath: Arduino.DataSend.Received
       description: The data received
       type: string
-  dockerimage: demisto/python3:3.9.1.14969
-  runonce: false
+  dockerimage: demisto/python3:3.11.10.115186
   script: ''
   subtype: python3
   type: python

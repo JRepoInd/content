@@ -5,7 +5,7 @@ from gevent.pywsgi import WSGIServer
 from urllib.parse import urlparse, ParseResult
 from tempfile import NamedTemporaryFile
 from base64 import b64decode
-from typing import Callable, List, Generator
+from collections.abc import Callable, Generator
 from ssl import SSLContext, SSLError, PROTOCOL_TLSv1_2
 from multiprocessing import Process
 from werkzeug.datastructures import Headers
@@ -293,10 +293,11 @@ class TAXIIServer:
         """
         Args:
             request_headers: The request headers
-
         Returns:
             The service URL according to the protocol.
         """
+        prefix = ''
+        xsoar_path = ''
         if self.service_address:
             return self.service_address
         if request_headers and '/instance/execute' in request_headers.get('X-Request-URI', ''):
@@ -306,9 +307,14 @@ class TAXIIServer:
             calling_context = get_calling_context()
             instance_name = calling_context.get('IntegrationInstance', '')
             endpoint = requote_uri(os.path.join('/instance', 'execute', instance_name))
+
+            if is_xsiam_or_xsoar_saas():
+                prefix = 'ext-'
+                xsoar_path = '/xsoar'
         else:
             endpoint = f':{self.port}'
-        return f'{self.url_scheme}://{self.host}{endpoint}'
+
+        return f'{self.url_scheme}://{prefix}{self.host}{xsoar_path}{endpoint}'
 
 
 SERVER: TAXIIServer
@@ -317,7 +323,7 @@ DEMISTO_LOGGER: Handler = Handler()
 ''' STIX MAPPING '''
 
 
-def create_stix_ip_observable(namespace: str, indicator: dict) -> List[Observable]:
+def create_stix_ip_observable(namespace: str, indicator: dict) -> list[Observable]:
     """
     Create STIX IP observable.
     Args:
@@ -366,7 +372,7 @@ def create_stix_ip_observable(namespace: str, indicator: dict) -> List[Observabl
     return observables
 
 
-def create_stix_email_observable(namespace: str, indicator: dict) -> List[Observable]:
+def create_stix_email_observable(namespace: str, indicator: dict) -> list[Observable]:
     """
     Create STIX Email observable.
     Args:
@@ -464,7 +470,7 @@ def create_stix_hash_observable(namespace, indicator):
     type_ = indicator.get('indicator_type', '')
 
     file_object = cybox.objects.file_object.File()
-    file_object.add_hash(indicator)
+    file_object.add_hash(value)
 
     observable = Observable(
         title=f'{value}: {type_}',
@@ -574,7 +580,7 @@ def get_stix_indicator(indicator: dict) -> stix.core.STIXPackage:
         id_ = f'{NAMESPACE}:indicator-{uuid.uuid4()}'
 
         if type_ == 'URL':
-            indicator_value = werkzeug.urls.iri_to_uri(value, safe_conversion=True)
+            indicator_value = werkzeug.urls.iri_to_uri(value)
         else:
             indicator_value = value
 
@@ -640,7 +646,7 @@ def validate_credentials(f: Callable) -> Callable:
     @functools.wraps(f)
     def validate(*args, **kwargs):
         headers = request.headers
-
+        global SERVER
         if SERVER.auth:
             credentials: str = headers.get('Authorization', '')
             if not credentials or 'Basic ' not in credentials:
@@ -695,15 +701,12 @@ def get_port(params: dict = demisto.params()) -> int:
     """
     Gets port from the integration parameters.
     """
-    port_mapping: str = params.get('longRunningPort', '')
-    port: int
-    if port_mapping:
-        if ':' in port_mapping:
-            port = int(port_mapping.split(':')[1])
-        else:
-            port = int(port_mapping)
-    else:
-        raise ValueError('Please provide a Listen Port.')
+    if not params.get('longRunningPort'):
+        params['longRunningPort'] = '1111'
+    try:
+        port = int(params.get('longRunningPort', ''))
+    except ValueError as e:
+        raise ValueError(f'Invalid listen port - {e}')
 
     return port
 
@@ -761,16 +764,12 @@ def find_indicators_loop(indicator_query: str):
     Returns:
         Indicator query results from Demisto.
     """
-    iocs: List[dict] = []
-    total_fetched = 0
-    last_found_len = PAGE_SIZE
-    search_indicators = IndicatorsSearcher()
-
-    while last_found_len == PAGE_SIZE:
-        fetched_iocs = search_indicators.search_indicators_by_version(query=indicator_query, size=PAGE_SIZE).get('iocs')
+    iocs: list[dict] = []
+    search_indicators = IndicatorsSearcher(query=indicator_query, size=PAGE_SIZE)
+    for ioc_res in search_indicators:
+        fetched_iocs = ioc_res.get('iocs') or []
         iocs.extend(fetched_iocs)
-        last_found_len = len(fetched_iocs)
-        total_fetched += last_found_len
+
     return iocs
 
 
@@ -859,7 +858,7 @@ def taxii_poll_service() -> Response:
 
 def test_module(taxii_server: TAXIIServer):
     run_server(taxii_server, is_test=True)
-    return 'ok', {}, {}
+    return 'ok'
 
 
 def run_server(taxii_server: TAXIIServer, is_test=False):
@@ -867,11 +866,12 @@ def run_server(taxii_server: TAXIIServer, is_test=False):
     Start the taxii server.
     """
 
-    certificate_path = str()
-    private_key_path = str()
-    ssl_args = dict()
+    certificate_path = ''
+    private_key_path = ''
+    ssl_args = {}
 
     try:
+
         if taxii_server.certificate and taxii_server.private_key and not taxii_server.http_server:
             certificate_file = NamedTemporaryFile(delete=False)
             certificate_path = certificate_file.name
@@ -896,6 +896,7 @@ def run_server(taxii_server: TAXIIServer, is_test=False):
             time.sleep(5)
             server_process.terminate()
         else:
+            demisto.updateModuleHealth('')
             wsgi_server.serve_forever()
     except SSLError as e:
         ssl_err_message = f'Failed to validate certificate and/or private key: {str(e)}'
@@ -917,10 +918,6 @@ def main():
     """
     params = demisto.params()
     command = demisto.command()
-    port = get_port(params)
-    collections = get_collections(params)
-    server_links = demisto.demistoUrls()
-    server_link_parts: ParseResult = urlparse(server_links.get('server'))
 
     certificate: str = params.get('certificate', '')
     private_key: str = params.get('key', '')
@@ -931,23 +928,26 @@ def main():
     elif certificate and private_key:
         http_server = False
 
-    global SERVER
-    scheme = 'http'
-    host_name = server_link_parts.hostname
-    if not http_server:
-        scheme = 'https'
-
-    service_address = params.get('service_address')
-    SERVER = TAXIIServer(scheme, str(host_name), port, collections,
-                         certificate, private_key, http_server, credentials, service_address)
-
     demisto.debug(f'Command being called is {command}')
-    commands = {
-        'test-module': test_module
-    }
-
+    commands: dict = {}
     try:
-        if command == 'long-running-execution':
+        port = get_port(params)
+        collections = get_collections(params)
+        server_links = demisto.demistoUrls()
+        server_link_parts: ParseResult = urlparse(server_links.get('server'))
+
+        global SERVER
+        scheme = 'http'
+        host_name = server_link_parts.hostname
+        if not http_server:
+            scheme = 'https'
+
+        service_address = params.get('service_address')
+        SERVER = TAXIIServer(scheme, str(host_name), port, collections,
+                             certificate, private_key, http_server, credentials, service_address)
+        if command == 'test-module':
+            return_results(test_module(SERVER))
+        elif command == 'long-running-execution':
             run_server(SERVER)
         else:
             readable_output, outputs, raw_response = commands[command](SERVER)

@@ -2,7 +2,7 @@
     "name": "Plain Text Feed",
     "description": "Fetches indicators from a plain text feed.",
     "support": "xsoar",
-    "currentVersion": "1.1.2",
+    "currentVersion": "1.1.30",
     "author": "Cortex XSOAR",
     "url": "https://www.paloaltonetworks.com/cortex",
     "email": "",
@@ -10,7 +10,14 @@
     "categories": [
         "Data Enrichment & Threat Intelligence"
     ],
-    "tags": [],
+    "tags": [
+        "Threat Intelligence Management",
+        "Generic Feed"
+    ],
     "useCases": [],
-    "keywords": []
+    "keywords": [],
+    "marketplaces": [
+        "xsoar",
+        "marketplacev2"
+    ]
 }

@@ -1,17 +1,16 @@
-from typing import Any, Dict, Union
+import demistomock as demisto  # noqa: F401
+from CommonServerPython import *  # noqa: F401
+from typing import Any
 
 import urllib3
 from dateparser import parse
 from requests import Response
 
-import demistomock as demisto
-from CommonServerPython import *
-
 urllib3.disable_warnings()
 
 
 class Client(BaseClient):
-    def health_check(self) -> Dict[str, str]:
+    def health_check(self) -> dict[str, str]:
         return self._http_request(method='GET', url_suffix='/pss/health')
 
     @logger
@@ -30,7 +29,7 @@ class Client(BaseClient):
                              guid: Optional[str] = None,
                              hdr_mid: Optional[str] = None,
                              count: Optional[int] = 100,
-                             ) -> Dict[str, Union[str, List]]:
+                             ) -> dict[str, str | List]:
         return self._http_request(
             method='GET',
             url_suffix='/pss/filter',
@@ -60,7 +59,7 @@ class Client(BaseClient):
                                           enddate: Optional[str] = None,
                                           subject: Optional[str] = None,
                                           folder: Optional[str] = None,
-                                          ) -> Dict[str, Union[str, List]]:
+                                          ) -> dict[str, str | List]:
         return self._http_request(
             method='GET',
             url_suffix='/quarantine',
@@ -93,7 +92,7 @@ class Client(BaseClient):
                                   to: Optional[str] = None,
                                   comment: Optional[str] = None,
                                   resp_type: str = 'json',
-                                  ) -> Dict[str, str]:
+                                  ) -> dict[str, str]:
         return self._http_request(
             method='POST',
             url_suffix='/quarantine',
@@ -130,14 +129,49 @@ class Client(BaseClient):
             ok_codes=(200, 404),
         )
 
+    @logger
+    def get_user(self, email_or_uid: str) -> Response:
+        return self._http_request(
+            method='GET',
+            url_suffix=f'/enduser/{email_or_uid}'
+        )
+
+    @logger
+    def create_user(self, email: str, fields: dict, attributes: dict) -> Response:
+        json_data = {'attributes': attributes}
+        json_data.update(fields)
+        return self._http_request(
+            method='POST',
+            url_suffix=f'/enduser/{email}',
+            json_data=json_data,
+            ok_codes=(200, 400)
+        )
+
+    @logger
+    def modify_user(self, email_or_uid: str, fields: dict, attributes: dict) -> Response:
+        json_data = {'attributes': attributes}
+        json_data.update(fields)
+        return self._http_request(
+            method='PUT',
+            url_suffix=f'/enduser/{email_or_uid}',
+            json_data=json_data
+        )
+
+    @logger
+    def delete_user(self, email_or_uid: str) -> Response:
+        return self._http_request(
+            method='DELETE',
+            url_suffix=f'/enduser/{email_or_uid}',
+            ok_codes=(200, 404)
+        )
+
 
 def test_module(client: Client) -> str:
-    client.health_check()  # test pss managed module
     client.list_quarantined_messages_request(subject='Test')  # test Quarantine managed module
     return 'ok'
 
 
-def smart_search(client: Client, args: Dict[str, Any]) -> CommandResults:
+def smart_search(client: Client, args: dict[str, Any]) -> CommandResults:
     assert (start_time := parse(args.get('start_time', '24 hours'), settings={'RETURN_AS_TIMEZONE_AWARE': True})), \
         f"Failed parsing start time: {args.get('start_time')}"
     if end_time := args.get('end_time'):
@@ -178,7 +212,7 @@ def smart_search(client: Client, args: Dict[str, Any]) -> CommandResults:
     return CommandResults(**command_results_args)
 
 
-def list_quarantined_messages(client: Client, args: Dict[str, Any]) -> CommandResults:
+def list_quarantined_messages(client: Client, args: dict[str, Any]) -> CommandResults:
     sender = args.get('sender')
     recipient = args.get('recipient')
     subject = args.get('subject')
@@ -213,7 +247,7 @@ def list_quarantined_messages(client: Client, args: Dict[str, Any]) -> CommandRe
     return CommandResults(**command_results_args)
 
 
-def release_message(client: Client, args: Dict[str, Any]) -> CommandResults:
+def release_message(client: Client, args: dict[str, Any]) -> CommandResults:
     result = str(client.quarantine_action_request(
         action='release',
         folder=args.get('folder_name'),
@@ -227,7 +261,7 @@ def release_message(client: Client, args: Dict[str, Any]) -> CommandResults:
     return CommandResults(readable_output=result)
 
 
-def resubmit_message(client: Client, args: Dict[str, Any]) -> CommandResults:
+def resubmit_message(client: Client, args: dict[str, Any]) -> CommandResults:
     result = str(client.quarantine_action_request(
         action='resubmit',
         folder=args.get('folder_name'),
@@ -237,7 +271,7 @@ def resubmit_message(client: Client, args: Dict[str, Any]) -> CommandResults:
     return CommandResults(readable_output=result)
 
 
-def forward_message(client: Client, args: Dict[str, Any]) -> CommandResults:
+def forward_message(client: Client, args: dict[str, Any]) -> CommandResults:
     result = str(client.quarantine_action_request(
         action='forward',
         folder=args.get('folder_name'),
@@ -254,7 +288,7 @@ def forward_message(client: Client, args: Dict[str, Any]) -> CommandResults:
     return CommandResults(readable_output=result)
 
 
-def move_message(client: Client, args: Dict[str, Any]) -> CommandResults:
+def move_message(client: Client, args: dict[str, Any]) -> CommandResults:
     local_guid = args.get('local_guid')
     result = client.quarantine_action_request(
         action='move',
@@ -267,7 +301,7 @@ def move_message(client: Client, args: Dict[str, Any]) -> CommandResults:
     raise RuntimeError(f'Message move action failed.\n{result}')
 
 
-def delete_message(client: Client, args: Dict[str, Any]) -> CommandResults:
+def delete_message(client: Client, args: dict[str, Any]) -> CommandResults:
     local_guid = args.get('local_guid')
     result = client.quarantine_action_request(
         action='delete',
@@ -280,12 +314,124 @@ def delete_message(client: Client, args: Dict[str, Any]) -> CommandResults:
     raise RuntimeError(f'Message delete action failed.\n{result}')
 
 
-def download_message(client: Client, args: Dict[str, Any]) -> Union[CommandResults, Dict]:
+def download_message(client: Client, args: dict[str, Any]) -> CommandResults | dict:
     guid = args.get('guid', '')
     result = client.download_message_request(guid)
     if result.status_code == 404:
         return CommandResults(readable_output='No message found.')
     return fileResult(guid + '.eml', result.content)
+
+
+def get_user(client: Client, args: dict[str, Any]) -> CommandResults:
+    email = args.get('email')
+    uid = args.get('uid')
+    if email or uid:
+        result = client.get_user(email or uid)
+        if isinstance(result, dict):
+            command_results_args = {
+                'readable_output': tableToMarkdown(
+                    'Proofpoint Protection Server Users',
+                    result,
+                    ['uid', 'email', 'firstname', 'lastname', 'created', 'lastmodified'],
+                ),
+                'outputs_prefix': 'Proofpoint.User',
+                'outputs_key_field': 'email',
+                'outputs': result,
+                'raw_response': result,
+            }
+        else:
+            raise RuntimeError(f'Failed to get user.\n{result}')
+    else:
+        command_results_args = {
+            'readable_output': 'Please specify an email or uid'
+        }
+    return CommandResults(**command_results_args)
+
+
+def create_user(client: Client, args: dict[str, Any]) -> CommandResults:
+    email = args.get('email')
+    fields = json.loads(args.get('fields', '{}'))
+    attributes = json.loads(args.get('attributes', '{}'))
+    result = client.create_user(email, fields, attributes)
+    demisto.debug(f'result: {result}')
+    if isinstance(result, dict):
+        if result.get('status') == 400:
+            if result.get('errors', {}).get('invalidarguments', [])[0].get('error') == 'User already exists':
+                command_results_args: dict[str, Any] = {
+                    'readable_output': 'User already exists'
+                }
+            else:
+                raise RuntimeError(f'Failed to create user.\n{result}')
+        else:
+            command_results_args = {
+                'readable_output': tableToMarkdown(
+                    'User created',
+                    result,
+                    ['uid', 'email', 'firstname', 'lastname', 'created', 'lastmodified'],
+                ),
+                'outputs_prefix': 'Proofpoint.User',
+                'outputs_key_field': 'email',
+                'outputs': result,
+                'raw_response': result
+            }
+        return CommandResults(**command_results_args)
+    else:
+        raise RuntimeError(f'Failed to create user.\n{result}')
+
+
+def modify_user(client: Client, args: dict[str, Any]) -> CommandResults:
+    email = args.get('email')
+    uid = args.get('uid')
+    fields = json.loads(args.get('fields', '{}'))
+    attributes = json.loads(args.get('attributes', '{}'))
+    if email or uid:
+        result = client.modify_user(email or uid, fields, attributes)
+        if isinstance(result, dict):
+            command_results_args: dict[str, Any] = {
+                'readable_output': tableToMarkdown(
+                    'Modified User',
+                    result,
+                    ['uid', 'email', 'firstname', 'lastname', 'created', 'lastmodified'],
+                ),
+                'outputs_prefix': 'Proofpoint.User',
+                'outputs_key_field': 'email',
+                'outputs': result,
+                'raw_response': result,
+            }
+        else:
+            raise RuntimeError(f'Failed to modify user.\n{result}')
+    else:
+        command_results_args = {
+            'readable_output': 'Please specify an email or uid'
+        }
+    return CommandResults(**command_results_args)
+
+
+def delete_user(client: Client, args: dict[str, Any]) -> CommandResults:
+    email = args.get('email')
+    uid = args.get('uid')
+    if email or uid:
+        result = client.delete_user(email or uid)
+        if isinstance(result, dict):
+            if result.get('status') == 404:
+                if result.get('errors', {}).get('invalidarguments', [])[0].get('error') == 'User not found':
+                    command_results_args: dict[str, Any] = {
+                        'readable_output': 'User not found'
+                    }
+                else:
+                    raise RuntimeError(f'Failed to delete user.\n{result}')
+            else:
+                command_results_args = {
+                    'readable_output': 'Deleted User',
+                    'raw_response': result,
+                }
+        else:
+            raise RuntimeError(f'Failed to delete user.\n{result}')
+    else:
+        command_results_args = {
+            'readable_output': 'Please specify an email or uid'
+        }
+    return CommandResults(**command_results_args)
 
 
 def main() -> None:
@@ -299,6 +445,12 @@ def main() -> None:
             verify=not params.get('unsecure', False),
             proxy=params.get('proxy', False),
         )
+        commands = {
+            'proofpoint-pps-get-user': get_user,
+            'proofpoint-pps-create-user': create_user,
+            'proofpoint-pps-modify-user': modify_user,
+            'proofpoint-pps-delete-user': delete_user,
+        }
         if command == 'test-module':
             return_results(test_module(client))
         elif command == 'proofpoint-pps-smart-search':
@@ -317,6 +469,8 @@ def main() -> None:
             return_results(delete_message(client, demisto.args()))
         elif command == 'proofpoint-pps-quarantine-message-download':
             return_results(download_message(client, demisto.args()))
+        elif command in commands:
+            return_results(commands[command](client, demisto.args()))
 
     except Exception as e:
         return_error(str(e), error=e)

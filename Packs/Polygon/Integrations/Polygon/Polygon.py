@@ -2,14 +2,14 @@ import demistomock as demisto
 from CommonServerPython import *
 
 ''' IMPORTS '''
-import requests
+import urllib3
 from io import StringIO
 
 # Disable insecure warnings
-requests.packages.urllib3.disable_warnings()
+urllib3.disable_warnings()
 
 ''' CONSTANTS '''
-INTEGRATION_NAME = "Group-IB TDS Polygon"
+INTEGRATION_NAME = "Group-IB THF Polygon"
 LANGUAGE_TO_CODE = {
     "english": "en",
     "russian": "ru"
@@ -106,7 +106,7 @@ class Client(BaseClient):
     def _get_fids(self, resp):
         fids = resp.get("data", {}).get("ids", [])
         if not fids:
-            err_msg = "There is no analysis ID in TDS response." \
+            err_msg = "There is no analysis ID in THF response." \
                       "Try to upload file/url one more time."
             raise DemistoException(err_msg)
         return fids[0]
@@ -288,7 +288,8 @@ def get_main_indicator(report, analysis_type):
                 indicator_type=DBotScoreType.FILE,
                 integration_name=INTEGRATION_NAME,
                 score=score,
-                malicious_description=malicious
+                malicious_description=malicious,
+                reliability=demisto.params().get('integrationReliability')
             )
         )
     else:
@@ -300,7 +301,8 @@ def get_main_indicator(report, analysis_type):
                 indicator_type=DBotScoreType.URL,
                 integration_name=INTEGRATION_NAME,
                 score=score,
-                malicious_description=malicious
+                malicious_description=malicious,
+                reliability=demisto.params().get('integrationReliability')
             )
         )
 
@@ -320,7 +322,8 @@ def get_packages_indicators(res):
                 indicator=info.get('sha1'),
                 indicator_type=DBotScoreType.FILE,
                 integration_name=INTEGRATION_NAME,
-                score=0
+                score=0,
+                reliability=demisto.params().get('integrationReliability')
             )
         )
         command_results.append(CommandResults(
@@ -344,7 +347,8 @@ def get_network_indicators(res):
                 indicator=dns.get('request'),
                 indicator_type=DBotScoreType.DOMAIN,
                 integration_name=INTEGRATION_NAME,
-                score=0
+                score=0,
+                reliability=demisto.params().get('integrationReliability')
             )
         )
         command_results.append(CommandResults(
@@ -360,7 +364,8 @@ def get_network_indicators(res):
                 indicator=host,
                 indicator_type=DBotScoreType.IP,
                 integration_name=INTEGRATION_NAME,
-                score=0
+                score=0,
+                reliability=demisto.params().get('integrationReliability')
             )
         )
         command_results.append(CommandResults(
@@ -376,7 +381,8 @@ def get_network_indicators(res):
                 indicator=http.get('uri'),
                 indicator_type=DBotScoreType.URL,
                 integration_name=INTEGRATION_NAME,
-                score=0
+                score=0,
+                reliability=demisto.params().get('integrationReliability')
             )
         )
         command_results.append(CommandResults(
@@ -561,7 +567,7 @@ def file_command(client, args):
             if res.get("found"):
                 if res.get("verdict"):
                     score = Common.DBotScore.BAD
-                    malicious = "TDS Polygon score: {}".format(res.get('score'))
+                    malicious = "THF Polygon score: {}".format(res.get('score'))
                     if res.get('malware_families'):
                         malicious += ", {}".format(", ".join(res.get("malware_families", [])))
                 else:
@@ -571,7 +577,8 @@ def file_command(client, args):
                 indicator_type=DBotScoreType.FILE,
                 integration_name=INTEGRATION_NAME,
                 score=score,
-                malicious_description=malicious
+                malicious_description=malicious,
+                reliability=demisto.params().get('integrationReliability')
             )
             indicator = Common.File(**{hash_type: file, "dbot_score": dbot_score})
             result = CommandResults(

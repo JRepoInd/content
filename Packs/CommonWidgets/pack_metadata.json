@@ -2,7 +2,7 @@
     "name": "Common Widgets",
     "description": "Frequently used widgets pack.",
     "support": "xsoar",
-    "currentVersion": "1.0.9",
+    "currentVersion": "1.2.53",
     "author": "Cortex XSOAR",
     "url": "https://www.paloaltonetworks.com/cortex",
     "email": "",
@@ -10,8 +10,13 @@
     "categories": [
         "Utilities"
     ],
-    "tags": [],
+    "tags": [
+        "Core"
+    ],
     "useCases": [],
     "keywords": [],
-    "dependencies": {}
+    "dependencies": {},
+    "marketplaces": [
+        "xsoar"
+    ]
 }

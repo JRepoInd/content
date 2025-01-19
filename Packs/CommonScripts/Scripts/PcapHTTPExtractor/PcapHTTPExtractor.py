@@ -6,10 +6,7 @@ from datetime import datetime
 import re
 import sys
 import traceback
-try:
-    from StringIO import StringIO  # for Python 2
-except ImportError:
-    from io import StringIO  # for Python 3
+from io import StringIO
 
 serr = sys.stderr
 sys.stderr = StringIO()
@@ -18,7 +15,7 @@ sys.stderr = StringIO()
 LIMIT = ""
 START = ""
 LIMIT_DATA = 0
-ALLOWED_CONTENT_TYPES: tuple = ()
+ALLOWED_CONTENT_TYPES = ()
 
 # Used to convert pyshark keys to Demisto's conventions
 # Also used as a whitelist of relevant keys for outputs.
@@ -64,11 +61,7 @@ def _file_has_extension(file_name, extensions):
     :param extensions: extensions to test if exists in file_name.
     :return: True if one of the extensions is in the file_name
     """
-    for ext in extensions:
-        if file_name.endswith(ext):
-            return True
-
-    return False
+    return any(file_name.endswith(ext) for ext in extensions)
 
 
 def _find_entry_id_by_name(file_name, extensions=None):
@@ -230,7 +223,7 @@ def get_http_flows(pcap_file_path):
         sanitized_res = res
 
         if req:
-            req_fields = req['HTTP'].__dict__["_all_fields"].keys()
+            req_fields = req['HTTP']._all_fields.keys()
 
             # if the file contains only a response, the response will falsely appear in the 'req' variable
             if 'http.response' in req_fields:
@@ -297,7 +290,7 @@ def create_flow_object(flow, keys_transform_map, trim_file_data_size, allowed_co
         }
 
     # Get the HTTP and TCP, IP and Meta fields.
-    r = flow["HTTP"].__dict__["_all_fields"]
+    r = flow["HTTP"]._all_fields
     flow_info = get_flow_info(flow)
 
     # Map the keys to the conventions
@@ -368,11 +361,11 @@ def get_markdown_output(http_flows):
 
     for i, flow in enumerate(http_flows):
         row = result_template.format(
-            req=tableToMarkdown("HTTPRequest #{}".format(i + 1),
+            req=tableToMarkdown(f"HTTPRequest #{i + 1}",
                                 flow["Request"],
                                 flow["Request"].keys()
                                 ),
-            res=tableToMarkdown("HTTPResponse #{}".format(i + 1),
+            res=tableToMarkdown(f"HTTPResponse #{i + 1}",
                                 flow["Response"],
                                 flow["Response"].keys()
                                 )
@@ -390,7 +383,7 @@ def main():
         START = demisto.args().get("start")
         LIMIT_DATA = int(demisto.args().get("limitData"))
         if "allowedContentTypes" not in demisto.args():
-            ALLOWED_CONTENT_TYPES = ("text", "application/json", "multipart/form-data",
+            ALLOWED_CONTENT_TYPES = ("text", "application/json", "multipart/form-data",  # type: ignore
                                      "application/xml", "application/xhtml+xml",
                                      "application/ld+json", "application/javascript",
                                      "multipart/alternative", "application/x-www-form-urlencoded")

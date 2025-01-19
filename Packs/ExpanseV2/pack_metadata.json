@@ -1,8 +1,9 @@
 {
-    "name": "Expanse v2",
-    "description": "Automate Attack Surface Management to identify Internet assets and quickly remediate misconfigurations with Expanse, a Palo Alto Networks company.",
+    "name": "Cortex Xpanse by Palo Alto Networks (Deprecated)",
+    "description": "Deprecated. Use Cortex Xpanse instead.",
+    "hidden": true,
     "support": "xsoar",
-    "currentVersion": "1.4.1",
+    "currentVersion": "1.10.60",
     "author": "Cortex XSOAR",
     "url": "https://www.paloaltonetworks.com/cortex",
     "email": "",
@@ -11,15 +12,9 @@
         "Data Enrichment & Threat Intelligence"
     ],
     "tags": [
-        "Threat Intelligence",
-        "Network",
-        "Security"
+        "Palo Alto Networks Products"
     ],
-    "useCases": [
-        "Asset Management",
-        "Threat Intelligence Management",
-        "Vulnerability Management"
-    ],
+    "useCases": [],
     "keywords": [
         "Attack Surface Management",
         "Expanse",
@@ -35,10 +30,6 @@
         "CommonScripts": {
             "mandatory": true,
             "display_name": "Common Scripts"
-        },
-        "X509Certificate": {
-            "mandatory": true,
-            "display_name": "X509Certificate"
         },
         "PAN-OS": {
             "mandatory": false,
@@ -63,6 +54,21 @@
         "Active_Directory_Query": {
             "mandatory": false,
             "display_name": "Active Directory Query"
+        },
+        "Tenable_io": {
+            "mandatory": false,
+            "display_name": "Tenable.io"
+        },
+        "Rapid7_Nexpose": {
+            "mandatory": false,
+            "display_name": "Rapid7 Nexpose"
+        },
+        "ServiceNow": {
+            "mandatory": false,
+            "display_name": "ServiceNow"
         }
-    }
+    },
+    "marketplaces": [
+        "xsoar"
+    ]
 }

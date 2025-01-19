@@ -3,9 +3,11 @@ from __future__ import print_function
 import json
 import logging
 import uuid
+import os
 
 integrationContext = {}
 is_debug = False  # type: bool
+ARGS_COMMAND_PATH = os.path.join(os.path.dirname(__file__), ".args_command.json")
 
 exampleIncidents = [
     {
@@ -412,6 +414,24 @@ exampleAutoFocusApiKey = '1234'
 
 callingContext = {}  # type: dict
 
+contentSecrets = {
+    "WildFire-Reports": {
+        "token": "<ReplaceWithToken>"
+    },
+    "AutoFocusTagsFeed": {
+        "api_key": "<ReplaceWithApiKey>"
+    },
+    "Http_Connector": {
+        "token": "<ReplaceWithToken>",
+        "url": "<ReplaceWithURL>"
+    }
+}
+
+
+def initialize():
+    """Runs some initializations to the demisto object. Should not be used in integration code"""
+    pass
+
 
 def params():
     """(Integration only)
@@ -421,6 +441,12 @@ def params():
       dict: Integrations parameters object
 
     """
+    demisto_params = os.getenv("DEMISTO_PARAMS")
+    if demisto_params:
+        try:
+            return json.loads(demisto_params)
+        except json.JSONDecodeError:
+            return {}
     return {}
 
 
@@ -431,6 +457,14 @@ def args():
       dict: Arguments object
 
     """
+    if os.path.exists(ARGS_COMMAND_PATH):
+        with open(ARGS_COMMAND_PATH) as f:
+            try:
+                args = json.load(f)
+            except json.JSONDecodeError:
+                return {}
+            args.pop("cmd", None)
+            return args
     return {}
 
 
@@ -442,6 +476,14 @@ def command():
       str: Integrations command name
 
     """
+    if os.path.exists(ARGS_COMMAND_PATH):
+        with open(ARGS_COMMAND_PATH) as f:
+            try:
+                return json.load(f)["cmd"]
+            except json.JSONDecodeError:
+                return ""
+            except KeyError:
+                return ""
     return ""
 
 
@@ -457,12 +499,13 @@ def log(msg):
     logging.getLogger().info(msg)
 
 
-def get(obj, field):
+def get(obj, field, defaultParam=None):
     """Extracts field value from nested object
 
     Args:
       obj (dict): The object to extract the field from
       field (str): The field to extract from the object, given in dot notation
+      defaultParam (object): The default value to return in case the field doesn't exist in obj
 
     Returns:
       str: The value of the extracted field
@@ -473,7 +516,7 @@ def get(obj, field):
         if obj and part in obj:
             obj = obj[part]
         else:
-            return None
+            return defaultParam
     return obj
 
 
@@ -599,8 +642,20 @@ def results(results):
     Returns:
       None: No data returned
 
+    An example of results argument:
+    ```
+    {
+        Type: EntryType.NOTE,
+        Contents: data,
+        ContentsFormat: EntryFormat.JSON,
+        HumanReadable: md,
+        ReadableContentsFormat: EntryFormat.MARKDOWN,
+        EntryContext: context,
+        Tags: [tag1, tag2]
+    }
+    ```
     """
-    if type(results) is dict and results.get("contents"):
+    if isinstance(results, dict) and results.get("contents"):
         results = results.get("contents")
     log("demisto results: {}".format(json.dumps(results, indent=4, sort_keys=True)))
 
@@ -732,7 +787,7 @@ def setIntegrationContextVersioned(context, version=-1, sync=False):
     Returns:
       None: No data returned
 
-    """
+    """  # noqa: E501
     global integrationContext
     integrationContext = context
 
@@ -754,17 +809,17 @@ def getIntegrationContextVersioned(refresh=False):
 
 def incidents(incidents=None):
     """In script, retrieves the `Incidents` list from the context
-    In integration, used to return incidents to the server
+    In integration, used to return incidents to the server.
 
     Args:
-      incidents (list): In integration only, list of incident objects (Default value = None)
+      incidents (list): In integration only, list of incident objects (Default value = None).
 
     Returns:
-      list: List of incident objects
+      list: List containing the current incident object.
 
     """
     if incidents is None:
-        return exampleIncidents[0]['Contents']['data']
+        return exampleIncidents[0]['Contents']['data']  # type: ignore[index]
     else:
         return results(
             {"Type": 1, "Contents": json.dumps(incidents), "ContentsFormat": "json"}
@@ -772,7 +827,13 @@ def incidents(incidents=None):
 
 
 def incident():
-    """Retrieves the current incident
+    """Retrieves the current incident and all its fields (e.g. name, type).
+    The incident custom fields will be populated as a `dict` under the CustomFields attribute
+    (for example the `filename` custom field can be retrieved using `demisto.incident()['CustomFields'].get('filename')`).
+
+    demisto.incident gets the data from the script on the beginning of the execution,
+    hence if updating the incident context during script execution,
+    it won't be reflected when calling demisto.incident, which will return stale context data.
 
     Returns:
       dict: dict representing an incident object
@@ -877,12 +938,14 @@ def mirrorInvestigation(id, mirrorType, autoClose=False):
     return ""
 
 
-def updateModuleHealth(error):
+def updateModuleHealth(data, is_error=False):
     """(Integration only)
-    Updated integration module health with given error message
+    Updated integration module health with given message
 
     Args:
-      error (str): The error message to display in the integration module health
+      data (Union[str, dict]): Either the message to display in the integration module health,
+        or a dictionary containing the "eventsPulled" field (number).
+      is_error (bool): Whether or not to display it as an error message in the fetch history.
 
     Returns:
       None: No data returned
@@ -988,12 +1051,13 @@ def integrationInstance():
     return ""
 
 
-def createIndicators(indicators_batch):
+def createIndicators(indicators_batch, noUpdate=False):
     """(Integration only)
     Creates indicators from given indicator objects batch
 
     Args:
       indicators_batch (list): List of indicators objects to create
+      noUpdate (bool): No update on fetched feed (no new indicators to fetch), Available from Server version 6.5.0.
 
     Returns:
       None: No data returned
@@ -1003,8 +1067,10 @@ def createIndicators(indicators_batch):
 
 
 def searchIndicators(fromDate='', query='', size=100, page=0, toDate='', value='', searchAfter=None,
-                     populateFields=None):
-    """Searches for indicators according to given query
+                     populateFields=None, **kwargs):
+    """Searches for indicators according to given query.
+    If using Elasticsearch with Cortex XSOAR 6.1 or later,
+    the searchAfter argument must be used instead of the page argument.
 
     Args:
       fromdate (str): The start date to search from (Default value = '')
@@ -1013,12 +1079,32 @@ def searchIndicators(fromDate='', query='', size=100, page=0, toDate='', value='
       page (int): Response paging (Default value = 0)
       todate (str): The end date to search until to (Default value = '')
       value (str): The indicator value to search (Default value = '')
-      searchAfter (str): Use the last searchIndicators() outputs for search batch (Default value = None)
+      searchAfter (list): Use the last searchIndicators() outputs for search batch (Default value = None)
       populateFields (str): Comma separated fields to filter (e.g. "value,type")
 
     Returns:
       dict: Object contains the search results
 
+    You can searchIndicators one batch at a time, without needing to load all indicators at once, by adding the argument
+    searchAfter after the demisto.executeCommand.
+    When you run a search for the query type:IP, the return value includes searchAfter
+    ```
+    >>> demisto.executeCommand(searchIndicators, "query": 'type:IP', "size" :1000})
+    {
+        "iocs": [],
+        "searchAfter": [1596106239679, dd7aa6abfcb3adf793922618005b2ad5],
+        "total": 7432
+    }
+    ```
+    You can then use the returned value of searchAfter to iterate over all batches.
+    ```
+    >>> res = demisto.executeCommand("searchIndicators", {"query" : 'type:IP', "size" : 1000})
+    >>> search_after_title = 'searchAfter'
+    >>> while search_after_title in res and res[search_after_title] is not None:
+    >>>     demisto.results(res)
+    >>>     res = demisto.executeCommand("searchIndicators",
+    >>>                                 {"query" : 'type:IP', "size" : 1000, "searchAfter" : res[search_after_title]})
+    ```
     """
     return {}
 
@@ -1051,7 +1137,7 @@ def mapObject(obj, mapper, mapper_type):
       dict: the obj after mapping
 
     """
-    return {}
+    return obj
 
 
 def getModules():
@@ -1117,3 +1203,167 @@ def parentEntry():
 
     """
     return {}
+
+
+def getLastMirrorRun():
+    """(Integration only)
+    Retrieves the LastMirrorRun object
+
+    Returns:
+      dict: LastMirrorRun object
+
+    """
+    return {}
+
+
+def setLastMirrorRun(obj):
+    """(Integration only)
+    Stores given object in the LastMirrorRun object
+
+    Args:
+      obj (dict): The object to store
+
+    Returns:
+      None: No data returned
+
+    """
+    return None
+
+
+def searchRelationships(args):
+    """
+    Retrieves Indicators Relationship data according to given filters.
+    Args:
+      args (dict): The relationships filter object.
+        A dictionary with the following keys:
+        - size (int)
+        - relationshipNames (List[str])
+        - entities (List[str])
+        - entityTypes (List[str])
+        - excludedEntities (List[str])
+        - query (str)
+        - fromDate (str)
+        - toDate (str)
+        - searchAfter (List[str])
+        - searchBefore (List[str])
+        - sort (List[Dict[str, Any]])
+
+    Returns:
+       (dict): The Relationship Search response.
+
+    Example (partial results):
+    ```
+    >>> demisto.searchRelationships({"entities": ["8.8.8.8", "google.com"], "size": 2})
+        {
+        "total": 2,
+        "data": [
+            {
+                "id": "27",
+                "entityA": "8.8.8.8",
+                "entityAFamily": "Indicator",
+                "entityAType": "IP",
+                "name": "contains",
+                "reverseName": "part-of",
+                "entityB": "1.1.1.1",
+                "entityBFamily": "Indicator",
+                "entityBType": "IP",
+                "type": "IndicatorToIndicator",
+                "createdInSystem": "2022-04-04T16:29:04.417942+03:00",
+                "sources": [
+                    {
+                        "reliability": "C - Fairly reliable",
+                    }
+                ]
+            },
+            {
+                "id": "26",
+                "entityA": "google.com",
+                "entityAFamily": "Indicator",
+                "entityAType": "Domain",
+                "name": "related-to",
+                "reverseName": "related-to",
+                "entityB": "bing.com",
+                "entityBFamily": "Indicator",
+                "entityBType": "Domain",
+                "type": "IndicatorToIndicator",
+                "createdInSystem": "2022-04-04T16:23:39.863033+03:00",
+                "updatedInSystemBySource": "2022-04-04T16:23:39.862853+03:00",
+                "sources": [
+                    {
+                        "reliability": "C - Fairly reliable",
+                    }
+                ]
+            }
+        ],
+        "SearchAfter": [
+            " \u0001\u0016q-\u0006`Uy'p",
+            "26"
+        ],
+        "SearchBefore": [
+            " \u0001\u0016q-\u0012\u0001\u0004n\u0013p",
+            "27"
+        ]
+    }
+    ```
+    """
+    return {'data': []}
+
+
+def _apiCall(name=None, params=None, data=None, headers=None, method=None, path=None, timeout=None, response_data_type=None):
+    """
+    Special apiCall to internal xdr api. Only available to OOB content.
+
+    Args:
+        name: name of the api (currently only wfReportIncorrectVerdict is supported)
+        params: url query args to pass. Use a dictionary such as: `{"key":"value"}
+        data: POST data as a string. Make sure to json.dumps.
+        headers: headers to pass. Use a dictionary such as: `{"key":"value"}`
+        method: HTTP method to use.
+        path: path to append to the base url.
+        timeout: The amount of time (in seconds) that a request will wait for a client to send data before the request is aborted.
+        response_data_type: The type of the response. should be None unless the response value is binary then it should be 'bin'.
+
+        *Note if data is empty then a GET request is performed instead of a POST.
+
+    Returns:
+        dict: The response of the api call
+
+    """
+    return {}
+
+
+def getLicenseCustomField(key):
+    """
+    Get a custom field from content XSOAR configuration (can only be run in system integrations)
+
+    Args:
+        key (str): The key name inside the content object to search for.
+
+    Returns:
+        str: the value stored in content object that matced the given key.
+    """
+
+    return get(contentSecrets, key)
+
+
+def setAssetsLastRun(obj):
+    """(Integration only)
+    Stores given object in the AssetsLastRun object
+    Args:
+      obj (dict): The object to store
+    Returns:
+      None: No data returned
+    """
+    return
+
+
+def getAssetsLastRun():
+    return {"lastRun": "2018-10-24T14:13:20+00:00"}
+
+
+def isTimeSensitive():
+    """
+    This function will indicate whether the command reputation (auto-enrichment) is called as auto-extract=inline.
+    So for default the function return False.
+    """
+    return False

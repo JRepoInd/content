@@ -69,6 +69,8 @@ def http_request(method, url_suffix, params_dict, headers):
 
     url = SERVER_URL + url_suffix
 
+    headers['x-tool'] = 'CortexVirusTotalPrivateAPIv2'
+
     LOG('running %s request with url=%s\theaders=%s\nparams=%s' % (method, url, headers, json.dumps(req_params)))
 
     try:
@@ -729,7 +731,7 @@ def create_url_report_output(url, response, threshold, max_len, short_format):
         resolution = additional_info.get('resolution', None)
         if resolution:
             md += 'IP address resolution for this domain is: ' + resolution + '\n'
-        update_entry_context_url(ec_url, url, field_name='Resolutions', field_value=resolution[:max_len])
+            update_entry_context_url(ec_url, url, field_name='Resolutions', field_value=resolution[:max_len])
 
         response_sha256 = additional_info.get('Response content SHA-256', None)
         if response_sha256:

@@ -219,7 +219,7 @@ dependson:
 system: true
 deprecated: true
 timeout: 86.4µs
-runonce: false
 tests:
 - No test
 fromversion: 5.0.0
+dockerimage: demisto/python:2.7.18.20958

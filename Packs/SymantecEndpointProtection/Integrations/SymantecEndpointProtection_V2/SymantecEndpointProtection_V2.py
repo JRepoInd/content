@@ -3,13 +3,15 @@ from CommonServerPython import *
 import requests
 import json
 import re
+import urllib.request
+import urllib.parse
+import urllib.error
+import urllib3
 
-requests.packages.urllib3.disable_warnings()
-if not demisto.params()['proxy']:
-    del os.environ['HTTP_PROXY']
-    del os.environ['HTTPS_PROXY']
-    del os.environ['http_proxy']
-    del os.environ['https_proxy']
+urllib3.disable_warnings()
+
+handle_proxy()
+
 ENDPOINTS_INFO_DEFAULT_COLUMNS = [
     'computerName',
     'ipAddresses',
@@ -86,7 +88,7 @@ def endpoint_endpoint_extract(raw_json):
 
 
 def build_query_params(params):
-    list_params = map(lambda key: key + '=' + str(params[key]), params.keys())
+    list_params = list(map(lambda key: key + '=' + str(params[key]), params.keys()))
     query_params = '&'.join(list_params)
     return '?' + query_params if query_params else ''
 
@@ -95,10 +97,11 @@ def do_auth(server, crads, insecure, domain):
     url = fix_url(str(server)) + 'sepm/api/v1/identity/authenticate'
     body = {
         'username': crads.get('identifier') if crads.get('identifier') else '',
-        'password': crads.get('password') if crads.get('password') else '',
+        'password': urllib.parse.quote(crads.get('password')) if crads.get('password') else '',
         'domain': domain if domain else ''
     }
     res = requests.post(url, headers={"Content-Type": "application/json"}, data=json.dumps(body), verify=not insecure)
+    res.raise_for_status()
     return parse_response(res)
 
 
@@ -107,7 +110,8 @@ def do_get(token, raw, suffix):
     server = demisto.getParam('server')
     url = fix_url(server) + suffix
     res = requests.get(url, headers={'Authorization': 'Bearer ' + token}, verify=not insecure)
-    if (raw):
+    res.raise_for_status()
+    if raw:
         return res
     else:
         return parse_response(res)
@@ -118,6 +122,8 @@ def do_post(token, is_xml, suffix, body):
     server = demisto.getParam('server')
     url = fix_url(server) + suffix
     res = requests.post(url, headers={'Authorization': 'Bearer ' + token}, data=body, verify=not insecure)
+    res.raise_for_status()
+    parsed_response = {}
     if is_xml:
         if res.content:
             parsed_response = xml2json(res.content)
@@ -142,8 +148,16 @@ def do_patch(token, suffix, body):
     insecure = demisto.getParam('insecure')
     server = demisto.getParam('server')
     url = fix_url(server) + suffix
-    res = requests.patch(url, headers={'Authorization': 'Bearer ' + token,
-                                       'Content-Type': 'application/json'}, data=json.dumps(body), verify=not insecure)
+    res = requests.patch(
+        url,
+        headers={
+            'Authorization': 'Bearer ' + token,
+            'Content-Type': 'application/json'
+        },
+        data=json.dumps(body),
+        verify=not insecure
+    )
+    res.raise_for_status()
     parsed_response = parse_response(res)
     return parsed_response
 
@@ -239,6 +253,7 @@ def get_computer_id_by_hostname(token, hostname):
 
 
 def get_computer_id(token, endpoint_ip, endpoint_host_name):
+    computer_id = ""
     if endpoint_ip:
         try:
             computer_id = get_computer_id_by_ip(token, endpoint_ip)
@@ -265,7 +280,8 @@ def update_content(token, computer_id):
         error_code = demisto.get(
             res_json, 'Envelope.Body.runClientCommandUpdateContentResponse.CommandClientResult.inputErrors.errorCode')
         error_message = demisto.get(
-            res_json, 'Envelope.Body.runClientCommandUpdateContentResponse.CommandClientResult.inputErrors.errorMessage')
+            res_json,
+            'Envelope.Body.runClientCommandUpdateContentResponse.CommandClientResult.inputErrors.errorMessage')
         if error_code or error_message:
             return_error('An error response has returned from server:'
                          ' {0} with code: {1}'.format(error_message, error_code))
@@ -344,25 +360,25 @@ def change_assigined(policy):
 
 
 def sanitize_policies_list_for_md(policies_list):
-    return map(change_assigined, policies_list)
+    return list(map(change_assigined, policies_list))
 
 
 def sanitize_policies_list(policies_list):
-    return map(lambda policy: {
+    return list(map(lambda policy: {
         'PolicyName': policy['name'],
         'Type': policy['policytype'],
         'ID': policy['id'],
         'Description': policy['desc'],
         'Enabled': policy['enabled'],
-        'AssignedLocations': map(lambda location: {
+        'AssignedLocations': list(map(lambda location: {
             'GroupID': location.get('groupId'),
             'Locations': location.get('locationIds')
-        }, policy.get('assignedtolocations') if policy.get('assignedtolocations') else []),
-        'AssignedCloudGroups': map(lambda location: {
+        }, policy.get('assignedtolocations') if policy.get('assignedtolocations') else [])),
+        'AssignedCloudGroups': list(map(lambda location: {
             'GroupID': location.get('groupId'),
             'Locations': location.get('locationIds')
-        }, policy.get('assignedtocloudgroups') if policy.get('assignedtocloudgroups') else []),
-    }, policies_list)
+        }, policy.get('assignedtocloudgroups') if policy.get('assignedtocloudgroups') else [])),
+    }, policies_list))
 
 
 def validate_ip(ip):
@@ -477,11 +493,12 @@ def endpoint_quarantine(token, endpoint, action):
 def get_location_list(token, group_id):
     url = 'sepm/api/v1/groups/{}/locations'.format(group_id)
     url_resp = do_get(token, False, url)
-    location_ids = map(lambda location_string: {'ID': location_string.split('/')[-1]}, url_resp)
+    location_ids = list(map(lambda location_string: {'ID': location_string.split('/')[-1]}, url_resp))
     return url_resp, location_ids
 
 
 def get_id_by_endpoint(token, endpoint):
+    computer_id = ""
     if not endpoint:
         return_error('Please provide the IP address or the hostname of endpoint.')
     elif validate_ip(endpoint):
@@ -687,8 +704,8 @@ def list_locations_command(token):
         'Type': entryTypes['note'],
         'ContentsFormat': formats['json'],
         'Contents': url_resp,
-        'HumanReadable': tableToMarkdown('Locations', map(lambda location: {'Location ID': location.get('ID')},
-                                                          location_ids)),
+        'HumanReadable': tableToMarkdown('Locations', list(map(lambda location: {'Location ID': location.get('ID')},
+                                                               location_ids))),
         'IgnoreAutoExtract': True,
         'EntryContext': {
             'SEPM.Locations': location_ids
@@ -792,45 +809,48 @@ def move_client_to_group_command(token):
         })
 
 
-'''COMMANDS SWITCH'''
+def main():
+    current_command = demisto.command()
+    try:
+        '''
+        Before EVERY command the following tow lines are performed (do_auth and get_token_from_response)
+        '''
+        resp = do_auth(server=demisto.getParam('server'), crads=demisto.getParam(
+            'authentication'), insecure=demisto.getParam('insecure'), domain=demisto.getParam('domain'))
+        token = get_token_from_response(resp)
+        if current_command == 'test-module':
+            # This is the call made when pressing the integration test button.
+            if token:
+                demisto.results('ok')
+        if current_command == 'sep-system-info':
+            system_info_command(token)
+        if current_command == 'sep-client-content':
+            client_content_command(token)
+        if current_command == 'sep-endpoints-info':
+            endpoints_info_command(token)
+        if current_command == 'sep-groups-info':
+            groups_info_command(token)
+        if current_command == 'sep-command-status':
+            command_status(token)
+        if current_command == 'sep-list-policies':
+            list_policies_command(token)
+        if current_command == 'sep-assign-policy':
+            assign_policie_command(token)
+        if current_command == 'sep-list-locations':
+            list_locations_command(token)
+        if current_command == 'sep-endpoint-quarantine':
+            endpoint_quarantine_command(token)
+        if current_command == 'sep-scan-endpoint':
+            scan_endpoint_command(token)
+        if current_command == 'sep-update-endpoint-content':
+            update_endpoint_content_command(token)
+        if current_command == 'sep-move-client-to-group':
+            move_client_to_group_command(token)
+        if current_command == 'sep-identify-old-clients':
+            old_clients_command(token)
+    except Exception as ex:
+        return_error(f'Cannot perform the command: {current_command}. Error: {ex}')
 
-current_command = demisto.command()
-try:
-    '''
-    Before EVERY command the following tow lines are performed (do_auth and get_token_from_response)
-    '''
-    resp = do_auth(server=demisto.getParam('server'), crads=demisto.getParam(
-        'authentication'), insecure=demisto.getParam('insecure'), domain=demisto.getParam('domain'))
-    token = get_token_from_response(resp)
-    if current_command == 'test-module':
-        # This is the call made when pressing the integration test button.
-        if token:
-            demisto.results('ok')
-    if current_command == 'sep-system-info':
-        system_info_command(token)
-    if current_command == 'sep-client-content':
-        client_content_command(token)
-    if current_command == 'sep-endpoints-info':
-        endpoints_info_command(token)
-    if current_command == 'sep-groups-info':
-        groups_info_command(token)
-    if current_command == 'sep-command-status':
-        command_status(token)
-    if current_command == 'sep-list-policies':
-        list_policies_command(token)
-    if current_command == 'sep-assign-policy':
-        assign_policie_command(token)
-    if current_command == 'sep-list-locations':
-        list_locations_command(token)
-    if current_command == 'sep-endpoint-quarantine':
-        endpoint_quarantine_command(token)
-    if current_command == 'sep-scan-endpoint':
-        scan_endpoint_command(token)
-    if current_command == 'sep-update-endpoint-content':
-        update_endpoint_content_command(token)
-    if current_command == 'sep-move-client-to-group':
-        move_client_to_group_command(token)
-    if current_command == 'sep-identify-old-clients':
-        old_clients_command(token)
-except Exception as ex:
-    demisto.results('Cannot perform the command: {}. Error: {}'.format(current_command, ex))
+
+if __name__ in ('__main__', '__builtin__', 'builtins'):
+    main()

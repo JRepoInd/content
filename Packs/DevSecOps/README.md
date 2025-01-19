@@ -5,7 +5,7 @@ DevSecOps content pack contains multiple integrations and playbooks to help shif
 While CI/CD orchestration tools such as Jenkins, CircleCI and others were primarily built by and to developers, SOAR is better positioned to bridge this orchestration gap between DevOps and SecOps for the following reasons:
 ![](doc_files/Playbooks.png)
 * CI/CD orchestration pipelines are arguably easy to read and troubleshoot by developers , SOAR provides the same orchestration workflow in two different formats that are readable by both Developers and Security Analysts.
-![](doc_files/SOAR%20Features.png)
+![](doc_files/SOAR_Features.png)
 * SOAR provides way more to a DevSecOps Eco-System than CI/CD Orchestrator does:
     * Collaboration between teams members in the Eco-System.
     * Cases management.
@@ -13,7 +13,7 @@ While CI/CD orchestration tools such as Jenkins, CircleCI and others were primar
 
 With SOAR integrations, playbooks, fields, XSOAR can be turned into a DevSecOps Orchestrator that taps in a DevSecOps Eco-System and solve for a spectrum of use cases in different stages of CI/CD piplines.
 
-![](doc_files/DevOps%20Services.png)
+![](doc_files/DevOps_Services.png)
 
 From threat-modeling in the **Planning** stage to IaC security in **Dev**, static code analysis in **Build**, post deployment scans in **Deploy** and **Monitoring**/Responding to incidents once the code is running in production.
 

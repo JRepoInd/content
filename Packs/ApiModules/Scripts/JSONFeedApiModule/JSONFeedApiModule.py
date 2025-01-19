@@ -1,12 +1,16 @@
+# pylint: disable=E9010
 from CommonServerPython import *
 
 ''' IMPORTS '''
 import urllib3
 import jmespath
-from typing import List, Dict, Union, Optional, Callable
+from typing import List, Dict, Union, Optional, Callable, Tuple
 
 # disable insecure warnings
 urllib3.disable_warnings()
+
+DATE_FORMAT = '%Y-%m-%dT%H:%M:%SZ'
+THRESHOLD_IN_SECONDS = 43200        # 12 hours in seconds
 
 
 class Client:
@@ -60,7 +64,7 @@ class Client:
         # Request related attributes
         self.url = url
         self.verify = not insecure
-        self.auth: Optional[tuple] = None
+        self.auth: Optional[tuple[str, str]] = None
         self.headers = self.parse_headers(headers)
 
         if credentials:
@@ -80,7 +84,7 @@ class Client:
 
         if isinstance(self.post_data, str):
             content_type_header = 'Content-Type'
-            if content_type_header.lower() not in [k.lower() for k in self.headers.keys()]:
+            if content_type_header.lower() not in [k.lower() for k in self.headers]:
                 self.headers[content_type_header] = 'application/x-www-form-urlencoded'
 
     @staticmethod
@@ -106,8 +110,34 @@ class Client:
         else:
             return headers
 
-    def build_iterator(self, feed: dict, **kwargs) -> List:
+    def build_iterator(self, feed: dict, feed_name: str, **kwargs) -> Tuple[List, bool]:
         url = feed.get('url', self.url)
+
+        if is_demisto_version_ge('6.5.0'):
+            prefix_feed_name = get_formatted_feed_name(feed_name)  # Support for AWS feed
+
+            # Set the If-None-Match and If-Modified-Since headers
+            # if we have etag or last_modified values in the context, with server version higher than 6.5.0.
+            last_run = demisto.getLastRun()
+            etag = last_run.get(prefix_feed_name, {}).get('etag') or last_run.get(feed_name, {}).get('etag')
+            last_modified = last_run.get(prefix_feed_name, {}).get('last_modified') or last_run.get(feed_name, {}).get('last_modified')  # noqa: E501
+            last_updated = last_run.get(prefix_feed_name, {}).get('last_updated') or last_run.get(feed_name, {}).get('last_updated')  # noqa: E501
+            # To avoid issues with indicators expiring, if 'last_updated' is over X hours old,
+            # we'll refresh the indicators to ensure their expiration time is updated.
+            # For further details, refer to : https://confluence-dc.paloaltonetworks.com/display/DemistoContent/Json+Api+Module
+            if last_updated and has_passed_time_threshold(timestamp_str=last_updated, seconds_threshold=THRESHOLD_IN_SECONDS):
+                last_modified = None
+                etag = None
+                demisto.debug("Since it's been a long time with no update, to make sure we are keeping the indicators alive, \
+                    we will refetch them from scratch")
+
+            if etag:
+                self.headers['If-None-Match'] = etag
+
+            if last_modified:
+                self.headers['If-Modified-Since'] = last_modified
+
+        result = []
         if not self.post_data:
             r = requests.get(
                 url=url,
@@ -130,27 +160,87 @@ class Client:
 
         try:
             r.raise_for_status()
-            data = r.json()
-            result = jmespath.search(expression=feed.get('extractor'), data=data)
+            if r.content:
+                demisto.debug(f'JSON: found content for {feed_name}')
+                data = r.json()
+                result = jmespath.search(expression=feed.get('extractor'), data=data)
 
         except ValueError as VE:
             raise ValueError(f'Could not parse returned data to Json. \n\nError massage: {VE}')
+        if is_demisto_version_ge('6.5.0'):
+            return result, get_no_update_value(r, feed_name)
+        return result, True
 
-        return result
+
+def get_no_update_value(response: requests.Response, feed_name: str) -> bool:
+    """
+    detect if the feed response has been modified according to the headers etag and last_modified.
+    For more information, see this:
+    https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Last-Modified
+    https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/ETag
+    Args:
+        response: (requests.Response) The feed response.
+        feed_name: (str) the name of the feed.
+    Returns:
+        boolean with the value for noUpdate argument.
+        The value should be False if the response was modified.
+    """
+    # HTTP status code 304 (Not Modified) set noUpdate to True.
+    if response.status_code == 304:
+        demisto.debug('No new indicators fetched, createIndicators will be executed with noUpdate=True.')
+        return True
+
+    etag = response.headers.get('ETag')
+    last_modified = response.headers.get('Last-Modified')
+    current_time = datetime.utcnow()
+    # Save the current time as the last updated time. This will be used to indicate the last time the feed was updated in XSOAR.
+    last_updated = current_time.strftime(DATE_FORMAT)
+
+    if not etag and not last_modified:
+        demisto.debug('Last-Modified and Etag headers are not exists,'
+                      'createIndicators will be executed with noUpdate=False.')
+        return False
+
+    last_run = demisto.getLastRun()
+    last_run[feed_name] = {
+        'last_modified': last_modified,
+        'etag': etag,
+        'last_updated': last_updated
+    }
+    demisto.setLastRun(last_run)
+    demisto.debug(f'JSON: The new last run is: {last_run}')
+    demisto.debug('New indicators fetched - the Last-Modified value has been updated,'
+                  ' createIndicators will be executed with noUpdate=False.')
+    return False
 
 
-def test_module(client: Client, limit) -> str:
+def get_formatted_feed_name(feed_name: str):
+    """support for AWS Feed config name, that contains $$ in the name.
+        example: AMAZON$$CIDR
+    Args:
+        feed_name (str): The feed config name
+    """
+    prefix_feed_name = ''
+    if '$$' in feed_name:
+        prefix_feed_name = feed_name.split('$$')[0]
+        return prefix_feed_name
+
+    return feed_name
+
+
+def test_module(client: Client, limit) -> str:  # pragma: no cover
     for feed_name, feed in client.feed_name_to_config.items():
         custom_build_iterator = feed.get('custom_build_iterator')
         if custom_build_iterator:
             custom_build_iterator(client, feed, limit)
         else:
-            client.build_iterator(feed)
+            client.build_iterator(feed, feed_name)
     return 'ok'
 
 
 def fetch_indicators_command(client: Client, indicator_type: str, feedTags: list, auto_detect: bool,
-                             limit: int = 0, **kwargs) -> Union[Dict, List[Dict]]:
+                             create_relationships: bool = False, limit: int = 0, remove_ports: bool = False,
+                             enrichment_excluded: bool = False, **kwargs) -> Tuple[List[dict], bool]:
     """
     Fetches the indicators from client.
     :param client: Client of a JSON Feed
@@ -158,9 +248,11 @@ def fetch_indicators_command(client: Client, indicator_type: str, feedTags: list
     :param feedTags: the indicator tags
     :param auto_detect: a boolean indicates if we should automatically detect the indicator_type
     :param limit: given only when get-indicators command is running. function will return number indicators as the limit
+    :param create_relationships: whether to add connected indicators
     """
     indicators: List[dict] = []
     feeds_results = {}
+    no_update = False
     for feed_name, feed in client.feed_name_to_config.items():
         custom_build_iterator = feed.get('custom_build_iterator')
         if custom_build_iterator:
@@ -169,7 +261,10 @@ def fetch_indicators_command(client: Client, indicator_type: str, feedTags: list
                 raise Exception("Custom function to handle with pagination must return a list type")
             feeds_results[feed_name] = indicators_from_feed
         else:
-            feeds_results[feed_name] = client.build_iterator(feed, **kwargs)
+            feeds_results[feed_name], no_update = client.build_iterator(feed, feed_name, **kwargs)
+
+    indicators_values: Set[str] = set()
+    indicators_values_indexes = {}
 
     for service_name, items in feeds_results.items():
         feed_config = client.feed_name_to_config.get(service_name, {})
@@ -178,19 +273,37 @@ def fetch_indicators_command(client: Client, indicator_type: str, feedTags: list
         use_prefix_flat = bool(feed_config.get('flat_json_with_prefix', False))
         mapping_function = feed_config.get('mapping_function', indicator_mapping)
         handle_indicator_function = feed_config.get('handle_indicator_function', handle_indicator)
+        create_relationships_function = feed_config.get('create_relations_function')
+        service_name = get_formatted_feed_name(service_name)
 
         for item in items:
             if isinstance(item, str):
                 item = {indicator_field: item}
 
+            indicator_value = item.get(indicator_field)
+            if indicator_value is None:
+                continue
+            if indicator_value not in indicators_values:
+                indicators_values_indexes[indicator_value] = len(indicators_values)
+                indicators_values.add(indicator_value)
+            else:
+                service = indicators[indicators_values_indexes[indicator_value]].get('rawJSON', {}).get('service', '')
+                if service and service_name not in service.split(','):
+                    service_name += f', {service}'
+                indicators[indicators_values_indexes[indicator_value]]['rawJSON']['service'] = service_name
+                continue
+
             indicators.extend(
                 handle_indicator_function(client, item, feed_config, service_name, indicator_type, indicator_field,
-                                          use_prefix_flat, feedTags, auto_detect, mapping_function))
+                                          use_prefix_flat, feedTags, auto_detect, mapping_function,
+                                          create_relationships, create_relationships_function, remove_ports,
+                                          enrichment_excluded=enrichment_excluded,
+                                          ))
 
             if limit and len(indicators) >= limit:  # We have a limitation only when get-indicators command is
                 # called, and then we return for each service_name "limit" of indicators
                 break
-    return indicators
+    return indicators, no_update
 
 
 def indicator_mapping(mapping: Dict, indicator: Dict, attributes: Dict):
@@ -208,8 +321,10 @@ def indicator_mapping(mapping: Dict, indicator: Dict, attributes: Dict):
 
 def handle_indicator(client: Client, item: Dict, feed_config: Dict, service_name: str,
                      indicator_type: str, indicator_field: str, use_prefix_flat: bool,
-                     feedTags: list, auto_detect: bool,
-                     mapping_function: Callable = indicator_mapping) -> List[dict]:
+                     feedTags: list, auto_detect: bool, mapping_function: Callable = indicator_mapping,
+                     create_relationships: bool = False, relationships_func: Callable | None = None,
+                     remove_ports: bool = False,
+                     enrichment_excluded: bool = False) -> List[dict]:
     indicator_list = []
     mapping = feed_config.get('mapping')
     take_value_from_flatten = False
@@ -241,16 +356,25 @@ def handle_indicator(client: Client, item: Dict, feed_config: Dict, service_name
         indicator_value = attributes.get(indicator_field)
     indicator['value'] = indicator_value
     attributes['value'] = indicator_value
-
     if mapping:
         mapping_function(mapping, indicator, attributes)
+
+    if create_relationships and relationships_func and feed_config.get('relation_name'):
+        indicator['relationships'] = relationships_func(feed_config, mapping, attributes)
 
     if feed_config.get('rawjson_include_indicator_type'):
         item['_indicator_type'] = current_indicator_type
 
+    if remove_ports and indicator['type'] == 'IP' and indicator['value']:
+        indicator['value'] = indicator['value'].split(':')[0]
+
     indicator['rawJSON'] = item
 
+    if enrichment_excluded:
+        indicator['enrichmentExcluded'] = enrichment_excluded
+
     indicator_list.append(indicator)
+
     return indicator_list
 
 
@@ -311,14 +435,14 @@ def extract_all_fields_from_indicator(indicator: Dict, indicator_key: str, flat_
     return fields
 
 
-def feed_main(params, feed_name, prefix):
+def feed_main(params, feed_name, prefix):  # pragma: no cover
     handle_proxy()
     client = Client(**params)
     indicator_type = params.get('indicator_type')
     auto_detect = params.get('auto_detect_type')
-
     feedTags = argToList(params.get('feedTags'))
     limit = int(demisto.args().get('limit', 10))
+    enrichment_excluded = params.get('enrichmentExcluded', False)
     command = demisto.command()
     if prefix and not prefix.endswith('-'):
         prefix += '-'
@@ -329,16 +453,37 @@ def feed_main(params, feed_name, prefix):
             return_results(test_module(client, limit))
 
         elif command == 'fetch-indicators':
-            indicators = fetch_indicators_command(client, indicator_type, feedTags, auto_detect)
-            if not len(indicators):
-                demisto.createIndicators(indicators)
+            remove_ports = argToBoolean(params.get('remove_ports', False))
+            create_relationships = params.get('create_relationships')
+            indicators, no_update = fetch_indicators_command(client,
+                                                             indicator_type,
+                                                             feedTags,
+                                                             auto_detect,
+                                                             create_relationships,
+                                                             remove_ports=remove_ports,
+                                                             enrichment_excluded=enrichment_excluded)
+
+            # check if the version is higher than 6.5.0 so we can use noUpdate parameter
+            if is_demisto_version_ge('6.5.0'):
+                if not indicators:
+                    demisto.createIndicators(indicators, noUpdate=no_update)
+                else:
+                    for b in batch(indicators, batch_size=2000):
+                        demisto.createIndicators(b, noUpdate=no_update)
+
             else:
-                for b in batch(indicators, batch_size=2000):
-                    demisto.createIndicators(b)
+                # call createIndicators without noUpdate arg
+                if not indicators:
+                    demisto.createIndicators(indicators)
+                else:
+                    for b in batch(indicators, batch_size=2000):
+                        demisto.createIndicators(b)
 
         elif command == f'{prefix}get-indicators':
-            # dummy command for testing
-            indicators = fetch_indicators_command(client, indicator_type, feedTags, auto_detect, limit)
+            remove_ports = argToBoolean(demisto.args().get('remove_ports', False))
+            create_relationships = params.get('create_relationships')
+            indicators, _ = fetch_indicators_command(client, indicator_type, feedTags, auto_detect,
+                                                     create_relationships, limit, remove_ports)
             hr = tableToMarkdown('Indicators', indicators, headers=['value', 'type', 'rawJSON'])
             return_results(CommandResults(readable_output=hr, raw_response=indicators))
 

@@ -1,25 +1,27 @@
+import demistomock as demisto  # noqa: F401
+from CommonServerPython import *  # noqa: F401
 import traceback
 from typing import Any, Dict, List
 from urllib.parse import urlparse
 from datetime import timezone
 
 import dateparser
-import requests
+import urllib3
 
-import demistomock as demisto
-from CommonServerPython import *
 
 # Disable insecure warnings
-requests.packages.urllib3.disable_warnings()
+urllib3.disable_warnings()
 
 ''' CONSTANTS '''
+UTC = timezone.utc  # noqa: UP017
+
 ''' CLIENT CLASS '''
 
 
 class Client(BaseClient):
 
     def parse_reputation(self, cybertotal_result: dict, resource: str) -> Dict[str, Any]:
-        scan_time = datetime.fromtimestamp(cybertotal_result['scan_time'], timezone.utc).isoformat()
+        scan_time = datetime.fromtimestamp(cybertotal_result['scan_time'], UTC).isoformat()
         permalink = cybertotal_result['url']
         url_path = urlparse(permalink).path
         (_, _, task_id) = url_path.rpartition('/')
@@ -67,14 +69,26 @@ class Client(BaseClient):
 
         cybertotal_result = self._http_request(
             method='GET',
-            url_suffix=f'/_api/search/ip/basic/{ip}'
+            url_suffix=f'/_api/search/ip/basic/{ip}',
+            ok_codes=(200, 201, 400),
+            resp_type='response'
         )
+
+        status_code = cybertotal_result.status_code
+        cybertotal_result = cybertotal_result.json()
+
+        if status_code == 400 and cybertotal_result.get('non_field_errors'):
+            return {'non_field_errors': cybertotal_result.get('non_field_errors')}
+
+        if status_code == 400:
+            raise DemistoException(f'Error in API call [{status_code}] - {cybertotal_result}')
+
         if 'task_state' in cybertotal_result:
             return {'task_state': cybertotal_result['task_state'], 'message': 'this search is in progress, try again later...'}
 
         return self.parse_reputation(cybertotal_result, ip)
 
-    def get_url_reputation(self, url: str) -> Dict[str, Any]:
+    def get_url_reputation(self, url: str) -> Dict[str, Any]:   # pragma: nocover
         """Gets the URL reputation using the '/_api/search/url/basic' API endpoint
 
         :type url: ``str``
@@ -86,8 +100,20 @@ class Client(BaseClient):
 
         cybertotal_result = self._http_request(
             method='GET',
-            url_suffix=f'/_api/search/url/basic?q={url}'
+            url_suffix=f'/_api/search/url/basic?q={url}',
+            ok_codes=(200, 201, 400),
+            resp_type='response'
         )
+
+        status_code = cybertotal_result.status_code
+        cybertotal_result = cybertotal_result.json()
+
+        if status_code == 400 and cybertotal_result.get('non_field_errors'):
+            return {'non_field_errors': cybertotal_result.get('non_field_errors')}
+
+        if status_code == 400:
+            raise DemistoException(f'Error in API call [{status_code}] - {cybertotal_result}')
+
         if 'task_state' in cybertotal_result:
             return {'task_state': cybertotal_result['task_state'], 'message': 'this search is in progress, try again later...'}
 
@@ -147,7 +173,7 @@ class Client(BaseClient):
         return self.parse_reputation(cybertotal_result, domain)
 
     def parse_whois(self, cybertotal_result: dict, resource: str) -> Dict[str, Any]:
-        scan_time = datetime.fromtimestamp(cybertotal_result['scan_time'], timezone.utc).isoformat()
+        scan_time = datetime.fromtimestamp(cybertotal_result['scan_time'], UTC).isoformat()
         permalink = cybertotal_result['url']
         url_path = urlparse(permalink).path
         (_, _, task_id) = url_path.rpartition('/')
@@ -158,23 +184,25 @@ class Client(BaseClient):
                 result = cybertotal_result['whois'].pop(0)
         result['permalink'] = permalink,
         result['resource'] = resource,
-        result['scan_date'] = dateparser.parse(scan_time).strftime("%Y-%m-%d %H:%M:%S"),
+        scan_time_date = dateparser.parse(scan_time)
+        assert scan_time_date is not None, f'could not parse {scan_time}'
+        result['scan_date'] = scan_time_date.strftime("%Y-%m-%d %H:%M:%S"),
         result['task_id'] = task_id
         result['message'] = "search success"
         if 'createdAt' in result:
-            result['createdAt'] = datetime.fromtimestamp(result['createdAt'], timezone.utc).isoformat()
+            result['createdAt'] = datetime.fromtimestamp(result['createdAt'], UTC).isoformat()
         if 'updatedAt' in result:
-            result['updatedAt'] = datetime.fromtimestamp(result['updatedAt'], timezone.utc).isoformat()
+            result['updatedAt'] = datetime.fromtimestamp(result['updatedAt'], UTC).isoformat()
         if 'registrarCreatedAt' in result:
-            result['registrarCreatedAt'] = datetime.fromtimestamp(result['registrarCreatedAt'], timezone.utc).isoformat()
+            result['registrarCreatedAt'] = datetime.fromtimestamp(result['registrarCreatedAt'], UTC).isoformat()
         if 'registrarUpdatedAt' in result:
-            result['registrarUpdatedAt'] = datetime.fromtimestamp(result['registrarUpdatedAt'], timezone.utc).isoformat()
+            result['registrarUpdatedAt'] = datetime.fromtimestamp(result['registrarUpdatedAt'], UTC).isoformat()
         if 'registrarExpiresAt' in result:
-            result['registrarExpiresAt'] = datetime.fromtimestamp(result['registrarExpiresAt'], timezone.utc).isoformat()
+            result['registrarExpiresAt'] = datetime.fromtimestamp(result['registrarExpiresAt'], UTC).isoformat()
         if 'auditCreatedAt' in result:
-            result['auditCreatedAt'] = datetime.fromtimestamp(result['auditCreatedAt'], timezone.utc).isoformat()
+            result['auditCreatedAt'] = datetime.fromtimestamp(result['auditCreatedAt'], UTC).isoformat()
         if 'auditUpdatedAt' in result:
-            result['auditUpdatedAt'] = datetime.fromtimestamp(result['auditUpdatedAt'], timezone.utc).isoformat()
+            result['auditUpdatedAt'] = datetime.fromtimestamp(result['auditUpdatedAt'], UTC).isoformat()
         if 'rawResponse' in result:
             result.pop('rawResponse')
         return result
@@ -269,6 +297,7 @@ def ip_reputation_command(client: Client, args: Dict[str, Any], default_threshol
 
     command_results: List[CommandResults] = []
     ip_message_list: List[Dict[str, Any]] = []
+    non_field_errors: List[str] = []
 
     for ip in ips:
         ip_data = client.get_ip_reputation(ip)
@@ -276,6 +305,10 @@ def ip_reputation_command(client: Client, args: Dict[str, Any], default_threshol
             task_state = ip_data.get('task_state', 'none')
             demisto.debug(f'search this ip {ip} on cybertotal with status: {task_state}')
             ip_message_list.append({'ip': ip})
+            continue
+
+        if 'non_field_errors' in ip_data:
+            non_field_errors.extend(ip_data['non_field_errors'])
             continue
 
         reputation = int(ip_data.get('positive_detections', 0))
@@ -293,7 +326,8 @@ def ip_reputation_command(client: Client, args: Dict[str, Any], default_threshol
             indicator_type=DBotScoreType.IP,
             integration_name='CyberTotal',
             score=score,
-            malicious_description=f'CyberTotal returned reputation {reputation}'
+            malicious_description=f'CyberTotal returned reputation {reputation}',
+            reliability=demisto.params().get('integrationReliability')
         )
 
         ip_standard_context = Common.IP(
@@ -317,6 +351,16 @@ def ip_reputation_command(client: Client, args: Dict[str, Any], default_threshol
 
     if len(ip_message_list) > 0:
         readable_output = tableToMarkdown('IP search in progress , please try again later', ip_message_list)
+        command_results.append(
+            CommandResults(
+                readable_output=readable_output,
+            )
+        )
+
+    if len(non_field_errors) > 0:
+        readable_output = '### IP search Failures:\n'
+        readable_output += '\n'.join(non_field_errors)
+
         command_results.append(
             CommandResults(
                 readable_output=readable_output,
@@ -382,7 +426,8 @@ def url_reputation_command(client: Client, args: Dict[str, Any], default_thresho
             indicator_type=DBotScoreType.URL,
             integration_name='CyberTotal',
             score=score,
-            malicious_description=f'CyberTotal returned reputation {reputation}'
+            malicious_description=f'CyberTotal returned reputation {reputation}',
+            reliability=demisto.params().get('integrationReliability')
         )
 
         url_standard_context = Common.URL(
@@ -471,7 +516,8 @@ def file_reputation_command(client: Client, args: Dict[str, Any], default_thresh
             indicator_type=DBotScoreType.FILE,
             integration_name='CyberTotal',
             score=score,
-            malicious_description=f'CyberTotal returned reputation {reputation}'
+            malicious_description=f'CyberTotal returned reputation {reputation}',
+            reliability=demisto.params().get('integrationReliability')
         )
 
         hash_standard_context = Common.File(
@@ -563,7 +609,8 @@ def domain_reputation_command(client: Client, args: Dict[str, Any], default_thre
             integration_name='CyberTotal',
             indicator_type=DBotScoreType.DOMAIN,
             score=score,
-            malicious_description=f'CyberTotal returned reputation {reputation}'
+            malicious_description=f'CyberTotal returned reputation {reputation}',
+            reliability=demisto.params().get('integrationReliability')
         )
 
         domain_standard_context = Common.Domain(
@@ -701,7 +748,7 @@ def domain_whois_command(client: Client, args: Dict[str, Any]) -> CommandResults
     )
 
 
-def test_module(client: Client) -> str:
+def test_module(client: Client) -> str:  # pragma: nocover
     """Tests API connectivity and authentication'
     Returning 'ok' indicates that the integration works like it is supposed to.
     Connection to the service is successful.
@@ -731,7 +778,7 @@ def test_module(client: Client) -> str:
     return 'ok'
 
 
-def main() -> None:
+def main() -> None:    # pragma: nocover
 
     verify_certificate = not demisto.params().get('insecure', False)
     cybertotal_url = demisto.params().get('url')

@@ -20,7 +20,12 @@
     "hidden": false,
     "associatedTypes": [
         "IAM - App Add",
-        "IAM - App Remove"
+        "IAM - App Remove",
+        "IAM - Group Membership Update",
+        "CrowdStrike Falcon OFP Detection"
+    ],
+    "systemAssociatedTypes": [
+        "CrowdStrike Falcon OFP Detection"
     ],
     "associatedToAll": false,
     "unmapped": false,

@@ -1,6 +1,8 @@
 id: TIM - Process CIDR Indicators By Size
 version: -1
 fromversion: 5.5.0
+marketplaces:
+- xsoar
 name: TIM - Process CIDR Indicators By Size
 description: This playbook processes CIDR indicators of both IPV4 and IPV6. By specifying
   in the inputs the maximum number of hosts allowed per CIDR, the playbook tags
@@ -44,11 +46,11 @@ tasks:
     nexttasks:
       '#default#':
       - '3'
-      yes:
+      'yes':
       - '4'
     separatecontext: false
     conditions:
-    - label: yes
+    - label: 'yes'
       condition:
       - - operator: isNotEmpty
           left:
@@ -95,11 +97,11 @@ tasks:
     nexttasks:
       '#default#':
       - '3'
-      yes:
+      'yes':
       - '1'
     separatecontext: false
     conditions:
-    - label: yes
+    - label: 'yes'
       condition:
       - - operator: isNotEmpty
           left:
@@ -146,11 +148,11 @@ tasks:
     nexttasks:
       '#default#':
       - '3'
-      yes:
+      'yes':
       - '5'
     separatecontext: false
     conditions:
-    - label: yes
+    - label: 'yes'
       condition:
       - - operator: isNotEmpty
           left:

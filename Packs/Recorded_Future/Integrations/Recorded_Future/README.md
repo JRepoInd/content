@@ -1,5 +1,6 @@
 <!-- HTML_DOC -->
 <div class="cl-preview-section">
+<p>Deprecated. Use Recorded Future v2 from RecordedFuture pack instead.</p>
 <p>Recorded Future is a threat intelligence platform, whose indicator and alert data is ingested into Cortex XSOAR for enrichment.</p>
 <p>This integration was integrated and tested with revision r128029 of Recorded Future.</p>
 </div>
@@ -973,6 +974,9 @@
 </div>
 <div class="cl-preview-section">
 <h3 id="get-information-for-a-domain-or-dns">1. Get information for a domain or DNS</h3>
+<p>This command is deprecated.</p>
+<p>Use `recordedfuture-intelligence` command from Recorded Future v2 with the following argument `entity_type=domain` and `entity=domain_value`.</p>
+<p>You can find context differences <a href="https://xsoar.pan.dev/docs/reference/integrations/recorded-future-v2#recordedfuture-intelligence">here</a>. Notice that 'community notes' output is no longer supported.</p>
 </div>
 <div class="cl-preview-section"><hr></div>
 <div class="cl-preview-section">
@@ -1139,10 +1143,13 @@
 <h5 id="human-readable-output">Human Readable Output</h5>
 </div>
 <div class="cl-preview-section">
-<p><img src="https://user-images.githubusercontent.com/35098543/52179606-40d1dc00-27e5-11e9-90fb-8b675105c75d.png" alt="image"></p>
+<p><img src="../../doc_files/52179606-40d1dc00-27e5-11e9-90fb-8b675105c75d.png" alt="image"></p>
 </div>
 <div class="cl-preview-section">
 <h3 id="get-information-for-an-ip-address">2. Get information for an IP address</h3>
+<p>This command is deprecated.</p>
+<p>Use `recordedfuture-intelligence` command from Recorded Future v2 with the following argument `entity_type=ip` and `entity=ip_value`.</p>
+<p>You can find context differences <a href="https://xsoar.pan.dev/docs/reference/integrations/recorded-future-v2#recordedfuture-intelligence">here</a>. Notice that 'community notes' output is no longer supported.</p>
 </div>
 <div class="cl-preview-section"><hr></div>
 <div class="cl-preview-section">
@@ -1323,10 +1330,13 @@
 <h5 id="human-readable-output-1">Human Readable Output</h5>
 </div>
 <div class="cl-preview-section">
-<p><img src="https://user-images.githubusercontent.com/35098543/52179711-3fed7a00-27e6-11e9-9365-894b22815c11.png" alt="image"></p>
+<p><img src="../../doc_files/52179711-3fed7a00-27e6-11e9-9365-894b22815c11.png" alt="image"></p>
 </div>
 <div class="cl-preview-section">
 <h3 id="get-information-for-a-file">3. Get information for a file</h3>
+<p>This command is deprecated.</p>
+<p>Use `recordedfuture-intelligence` command from Recorded Future v2 with the following argument `entity_type=file` and `entity=hash_value`.</p>
+<p>You can find context differences <a href="https://xsoar.pan.dev/docs/reference/integrations/recorded-future-v2#recordedfuture-intelligence">here</a>. Notice that 'community notes' output is no longer supported.</p>
 </div>
 <div class="cl-preview-section"><hr></div>
 <div class="cl-preview-section">
@@ -1532,10 +1542,13 @@
 <h5 id="human-readable-output-2">Human Readable Output</h5>
 </div>
 <div class="cl-preview-section">
-<p><img src="https://user-images.githubusercontent.com/35098543/52179776-141ec400-27e7-11e9-91f7-fa24c1e290c2.png" alt="image"></p>
+<p><img src="../../doc_files/52179776-141ec400-27e7-11e9-91f7-fa24c1e290c2.png" alt="image"></p>
 </div>
 <div class="cl-preview-section">
 <h3 id="get-information-for-a-url">4. Get information for a URL</h3>
+<p>This command is deprecated.</p>
+<p>Use `recordedfuture-intelligence` command from Recorded Future v2 with the following argument `entity_type=url` and `entity=url_value`.</p>
+<p>You can find context differences <a href="https://xsoar.pan.dev/docs/reference/integrations/recorded-future-v2#recordedfuture-intelligence">here</a>. Notice that 'community notes' output is no longer supported.</p>
 </div>
 <div class="cl-preview-section"><hr></div>
 <div class="cl-preview-section">
@@ -1674,7 +1687,7 @@
 <h5 id="command-example-3">Command Example</h5>
 </div>
 <div class="cl-preview-section">
-<pre>![image](https://user-images.githubusercontent.com/35098543/52180293-1421c280-27ed-11e9-82ec-cbb1669b20dc.png)</pre>
+<pre>![image](../../doc_files/52180293-1421c280-27ed-11e9-82ec-cbb1669b20dc.png)</pre>
 </div>
 <div class="cl-preview-section">
 <h5 id="context-example-3">Context Example</h5>
@@ -1706,7 +1719,7 @@
 <h5 id="human-readable-output-3">Human Readable Output</h5>
 </div>
 <div class="cl-preview-section">
-<p><img src="https://user-images.githubusercontent.com/35098543/52180330-af1a9c80-27ed-11e9-9be2-c8fd4ff93b58.png" alt="image"></p>
+<p><img src="../../doc_files/52180330-af1a9c80-27ed-11e9-9be2-c8fd4ff93b58.png" alt="image"></p>
 </div>
 <div class="cl-preview-section">
 <h3 id="get-threat-intelligence-context-for-an-indicator">5. Get threat intelligence context for an indicator</h3>
@@ -2223,10 +2236,14 @@
 <h5 id="human-readable-output-4">Human Readable Output</h5>
 </div>
 <div class="cl-preview-section">
-<p><img src="https://user-images.githubusercontent.com/35098543/52180426-7d560580-27ee-11e9-9494-3867242aa829.png" alt="image"></p>
+<p><img src="../../doc_files/52180426-7d560580-27ee-11e9-9494-3867242aa829.png" alt="image"></p>
 </div>
 <div class="cl-preview-section">
 <h3 id="get-hash-threats">6. Get hash threats</h3>
+<p>This command is deprecated.</p>
+<p>Use `recordedfuture-intelligence` command from Recorded Future v2 with the following argument `entity_type=file` and `entity=hash_value`.</p>
+<p>You can find context differences <a href="https://xsoar.pan.dev/docs/reference/integrations/recorded-future-v2#recordedfuture-intelligence">here</a> </p>
+
 </div>
 <div class="cl-preview-section"><hr></div>
 <div class="cl-preview-section">
@@ -2417,10 +2434,13 @@
 <h5 id="human-readable-output-5">Human Readable Output</h5>
 </div>
 <div class="cl-preview-section">
-<p><img src="https://user-images.githubusercontent.com/35098543/52180463-09682d00-27ef-11e9-8092-979b44295d54.png" alt="image"></p>
+<p><img src="../../doc_files/52180463-09682d00-27ef-11e9-8092-979b44295d54.png" alt="image"></p>
 </div>
 <div class="cl-preview-section">
 <h3 id="get-ip-threats">7. Get IP threats</h3>
+<p>This command is deprecated.</p>
+<p>Use `recordedfuture-intelligence` command from Recorded Future v2 with the following argument `entity_type=ip` and entity=ip_value.</p>
+<p>You can find context differences <a href="https://xsoar.pan.dev/docs/reference/integrations/recorded-future-v2#recordedfuture-intelligence">here</a>.</p>
 </div>
 <div class="cl-preview-section"><hr></div>
 <div class="cl-preview-section">
@@ -2586,10 +2606,13 @@
 <h5 id="human-readable-output-6">Human Readable Output</h5>
 </div>
 <div class="cl-preview-section">
-<p><img src="https://user-images.githubusercontent.com/35098543/52180478-50eeb900-27ef-11e9-8860-fc088b799368.png" alt="image"></p>
+<p><img src="../../doc_files/52180478-50eeb900-27ef-11e9-8860-fc088b799368.png" alt="image"></p>
 </div>
 <div class="cl-preview-section">
 <h3 id="get-url-threats">8. Get URL threats</h3>
+<p>This command is deprecated.</p>
+<p>Use `recordedfuture-intelligence` command from Recorded Future v2 with the following arguments `entity_type=url` and `entity=url_value`.</p>
+<p>You can find context differences <a href="https://xsoar.pan.dev/docs/reference/integrations/recorded-future-v2#recordedfuture-intelligence">here</a>.</p>
 </div>
 <div class="cl-preview-section"><hr></div>
 <div class="cl-preview-section">
@@ -2745,10 +2768,13 @@
 <h5 id="human-readable-output-7">Human Readable Output</h5>
 </div>
 <div class="cl-preview-section">
-<p><img src="https://user-images.githubusercontent.com/35098543/52180512-e12cfe00-27ef-11e9-8f37-8fe5fdf33843.png" alt="image"></p>
+<p><img src="../../doc_files/52180512-e12cfe00-27ef-11e9-8f37-8fe5fdf33843.png" alt="image"></p>
 </div>
 <div class="cl-preview-section">
 <h3 id="get-domain-threats">9. Get domain threats</h3>
+<p>This command is deprecated.</p>
+<p>Use `recordedfuture-intelligence` command from Recorded Future v2 with the following arguments `entity_type=domain` and `entity=domain_value`.</p>
+<p>You can find context differences <a href="https://xsoar.pan.dev/docs/reference/integrations/recorded-future-v2#recordedfuture-intelligence">here</a>.</p>
 </div>
 <div class="cl-preview-section"><hr></div>
 <div class="cl-preview-section">
@@ -2904,10 +2930,13 @@
 <h5 id="human-readable-output-8">Human Readable Output</h5>
 </div>
 <div class="cl-preview-section">
-<p><img src="https://user-images.githubusercontent.com/35098543/52180529-091c6180-27f0-11e9-8224-ad3ac75ed7dc.png" alt="image"></p>
+<p><img src="../../doc_files/52180529-091c6180-27f0-11e9-8224-ad3ac75ed7dc.png" alt="image"></p>
 </div>
 <div class="cl-preview-section">
 <h3 id="get-vulnerability-threats">10. Get vulnerability threats</h3>
+<p>This command is deprecated.</p>
+<p>Use `recordedfuture-intelligence` command from Recorded Future v2 with the following arguments `entity_type=cve` and `entity=cve_value`.</p>
+<p>You can find context differences <a href="https://xsoar.pan.dev/docs/reference/integrations/recorded-future-v2#recordedfuture-intelligence">here</a>.</p>
 </div>
 <div class="cl-preview-section"><hr></div>
 <div class="cl-preview-section">
@@ -3033,10 +3062,11 @@
 <h5 id="human-readable-output-9">Human Readable Output</h5>
 </div>
 <div class="cl-preview-section">
-<p><img src="https://user-images.githubusercontent.com/35098543/52180553-6e705280-27f0-11e9-9ef7-c1c13029eb58.png" alt="image"></p>
+<p><img src="../../doc_files/52180553-6e705280-27f0-11e9-9ef7-c1c13029eb58.png" alt="image"></p>
 </div>
 <div class="cl-preview-section">
 <h3 id="get-the-domain-risk-list">11. Get the domain risk list</h3>
+<p>This command is deprecated and will not be supported in Recorded Future v2.</p>
 </div>
 <div class="cl-preview-section"><hr></div>
 <div class="cl-preview-section">
@@ -3147,10 +3177,11 @@
 <h5 id="human-readable-output-10">Human Readable Output</h5>
 </div>
 <div class="cl-preview-section">
-<p><img src="https://user-images.githubusercontent.com/35098543/52209971-3ddef600-288e-11e9-8e00-e964cea64913.png" alt="image"></p>
+<p><img src="../../doc_files/52209971-3ddef600-288e-11e9-8e00-e964cea64913.png" alt="image"></p>
 </div>
 <div class="cl-preview-section">
 <h3 id="get-the-url-risk-list">12. Get the URL risk list</h3>
+<p>This command is deprecated and will not be supported in Recorded Future v2.</p>
 </div>
 <div class="cl-preview-section"><hr></div>
 <div class="cl-preview-section">
@@ -3261,10 +3292,11 @@
 <h5 id="human-readable-output-11">Human Readable Output</h5>
 </div>
 <div class="cl-preview-section">
-<p><img src="https://user-images.githubusercontent.com/35098543/52210045-7b438380-288e-11e9-8ea5-81a8ac075eea.png" alt="image"></p>
+<p><img src="../../doc_files/52210045-7b438380-288e-11e9-8ea5-81a8ac075eea.png" alt="image"></p>
 </div>
 <div class="cl-preview-section">
 <h3 id="get-the-ip-address-risk-list">13. Get the IP address risk list</h3>
+<p>This command is deprecated and will not be supported in Recorded Future v2.</p>
 </div>
 <div class="cl-preview-section"><hr></div>
 <div class="cl-preview-section">
@@ -3375,10 +3407,11 @@
 <h5 id="human-readable-output-12">Human Readable Output</h5>
 </div>
 <div class="cl-preview-section">
-<p><img src="https://user-images.githubusercontent.com/35098543/52210168-dbd2c080-288e-11e9-8be5-96f62b1d62f0.png" alt="image"></p>
+<p><img src="../../doc_files/52210168-dbd2c080-288e-11e9-8be5-96f62b1d62f0.png" alt="image"></p>
 </div>
 <div class="cl-preview-section">
 <h3 id="get-the-vulnerability-risk-list">14. Get the vulnerability risk list</h3>
+<p>This command is deprecated and will not be supported in Recorded Future v2.</p>
 </div>
 <div class="cl-preview-section"><hr></div>
 <div class="cl-preview-section">
@@ -3489,10 +3522,11 @@
 <h5 id="human-readable-output-13">Human Readable Output</h5>
 </div>
 <div class="cl-preview-section">
-<p><img src="https://user-images.githubusercontent.com/35098543/52210325-67e4e800-288f-11e9-9434-5def18e623d0.png" alt="image"></p>
+<p><img src="../../doc_files/52210325-67e4e800-288f-11e9-9434-5def18e623d0.png" alt="image"></p>
 </div>
 <div class="cl-preview-section">
-<h3 id="get-the-has-risk-list">15. Get the has risk list</h3>
+<h3 id="get-the-hash-risk-list">15. Get the hash risk list</h3>
+<p>This command is deprecated and will not be supported in Recorded Future v2.</p>
 </div>
 <div class="cl-preview-section"><hr></div>
 <div class="cl-preview-section">
@@ -3603,10 +3637,11 @@
 <h5 id="human-readable-output-14">Human Readable Output</h5>
 </div>
 <div class="cl-preview-section">
-<p><img src="https://user-images.githubusercontent.com/35098543/52210449-d164f680-288f-11e9-861b-54c725025772.png" alt="image"></p>
+<p><img src="../../doc_files/52210449-d164f680-288f-11e9-861b-54c725025772.png" alt="image"></p>
 </div>
 <div class="cl-preview-section">
 <h3 id="get-the-domain-risk-rules">16. Get the domain risk rules</h3>
+<p>This command is deprecated and will not be supported in Recorded Future v2.</p>
 </div>
 <div class="cl-preview-section"><hr></div>
 <div class="cl-preview-section">
@@ -3747,10 +3782,11 @@
 <h5 id="human-readable-output-15">Human Readable Output</h5>
 </div>
 <div class="cl-preview-section">
-<p><img src="https://user-images.githubusercontent.com/35098543/52210580-26a10800-2890-11e9-95f3-1206fcfd4422.png" alt="image"></p>
+<p><img src="../../doc_files/52210580-26a10800-2890-11e9-95f3-1206fcfd4422.png" alt="image"></p>
 </div>
 <div class="cl-preview-section">
 <h3 id="get-the-has-risk-rules">17. Get the has risk rules</h3>
+<p>This command is deprecated and will not be supported in Recorded Future v2.</p>
 </div>
 <div class="cl-preview-section"><hr></div>
 <div class="cl-preview-section">
@@ -3891,10 +3927,11 @@
 <h5 id="human-readable-output-16">Human Readable Output</h5>
 </div>
 <div class="cl-preview-section">
-<p><img src="https://user-images.githubusercontent.com/35098543/52210727-84cdeb00-2890-11e9-9f2b-05575fb07f43.png" alt="image"></p>
+<p><img src="../../doc_files/52210727-84cdeb00-2890-11e9-9f2b-05575fb07f43.png" alt="image"></p>
 </div>
 <div class="cl-preview-section">
 <h3 id="get-the-ip-address-risk-rules">18. Get the IP address risk rules</h3>
+<p>This command is deprecated and will not be supported in Recorded Future v2.</p>
 </div>
 <div class="cl-preview-section"><hr></div>
 <div class="cl-preview-section">
@@ -3995,10 +4032,11 @@
 <h5 id="human-readable-output-17">Human Readable Output</h5>
 </div>
 <div class="cl-preview-section">
-<p><img src="https://user-images.githubusercontent.com/35098543/52210851-d5454880-2890-11e9-8375-82058307dd3a.png" alt="image"></p>
+<p><img src="../../doc_files/52210851-d5454880-2890-11e9-8375-82058307dd3a.png" alt="image"></p>
 </div>
 <div class="cl-preview-section">
 <h3 id="get-the-url-risk-rules">19. Get the URL risk rules</h3>
+<p>This command is deprecated and will not be supported in Recorded Future v2.</p>
 </div>
 <div class="cl-preview-section"><hr></div>
 <div class="cl-preview-section">
@@ -4121,10 +4159,11 @@
 <h5 id="human-readable-output-18">Human Readable Output</h5>
 </div>
 <div class="cl-preview-section">
-<p><img src="https://user-images.githubusercontent.com/35098543/52210941-12113f80-2891-11e9-9be2-bb944ef37462.png" alt="image"></p>
+<p><img src="../../doc_files/52210941-12113f80-2891-11e9-9be2-bb944ef37462.png" alt="image"></p>
 </div>
 <div class="cl-preview-section">
 <h3 id="get-the-vulnerability-risk-rules">20. Get the vulnerability risk rules</h3>
+<p>This command is deprecated and will not be supported in Recorded Future v2.</p>
 </div>
 <div class="cl-preview-section"><hr></div>
 <div class="cl-preview-section">
@@ -4225,10 +4264,13 @@
 <h5 id="human-readable-output-19">Human Readable Output</h5>
 </div>
 <div class="cl-preview-section">
-<p><img src="https://user-images.githubusercontent.com/35098543/52211023-4ab11900-2891-11e9-92e2-05f407dfe2f2.png" alt="image"></p>
+<p><img src="../../doc_files/52211023-4ab11900-2891-11e9-92e2-05f407dfe2f2.png" alt="image"></p>
 </div>
 <div class="cl-preview-section">
 <h3 id="get-a-list-of-alert-rules">21. Get a list of alert rules</h3>
+<p>This command is deprecated.</p>
+<p>Use `recordedfuture-alert-rules` command from Recorded Future v2 instead.</p>
+<p>You can find context differences <a href="https://xsoar.pan.dev/docs/reference/integrations/recorded-future-v2#recordedfuture-alert-rules">here</a>.</p>
 </div>
 <div class="cl-preview-section"><hr></div>
 <div class="cl-preview-section">
@@ -4328,10 +4370,13 @@
 <h5 id="human-readable-output-20">Human Readable Output</h5>
 </div>
 <div class="cl-preview-section">
-<p><img src="https://user-images.githubusercontent.com/35098543/52211907-dcba2100-2893-11e9-83ce-f048959938f9.png" alt="image"></p>
+<p><img src="../../doc_files/52211907-dcba2100-2893-11e9-83ce-f048959938f9.png" alt="image"></p>
 </div>
 <div class="cl-preview-section">
 <h3 id="get-a-list-of-alerts">22. Get a list of alerts</h3>
+<p>This command is deprecated.</p>
+<p>Use `recordedfuture-alerts` command from Recorded Future v2 instead.</p>
+<p>You can find context differences <a href="https://xsoar.pan.dev/docs/reference/integrations/recorded-future-v2#recordedfuture-alerts">here</a>.</p>
 </div>
 <div class="cl-preview-section"><hr></div>
 <div class="cl-preview-section">
@@ -4537,7 +4582,7 @@
 <h5 id="human-readable-output-21">Human Readable Output</h5>
 </div>
 <div class="cl-preview-section">
-<p><img src="https://user-images.githubusercontent.com/35098543/52212030-30c50580-2894-11e9-84e2-d8e40d9f4c65.png" alt="image"></p>
+<p><img src="../../doc_files/52212030-30c50580-2894-11e9-84e2-d8e40d9f4c65.png" alt="image"></p>
 </div>
 <div class="cl-preview-section">
 <h2 id="additional-information">Additional Information</h2>
@@ -4566,5 +4611,5 @@
 </div>
 <div class="cl-preview-section"><hr></div>
 <div class="cl-preview-section">
-<p>The <a href="https://support.recordedfuture.com/hc/en-us/articles/115005362948-Recorded-Future-API-Credits-and-Quota-Enforcement" target="_blank" rel="noopener">Recorded Future API</a> enforces a quota<br> <br> For alerts:<br> <img src="https://user-images.githubusercontent.com/35098543/52214134-9e276500-2899-11e9-8acd-d7166a2c24db.png" alt="image"><br> (From the Recorded Future support site)</p>
+<p>The <a href="https://support.recordedfuture.com/hc/en-us/articles/115005362948-Recorded-Future-API-Credits-and-Quota-Enforcement" target="_blank" rel="noopener">Recorded Future API</a> enforces a quota<br> <br> For alerts:<br> <img src="../../doc_files/52214134-9e276500-2899-11e9-8acd-d7166a2c24db.png" alt="image"><br> (From the Recorded Future support site)</p>
 </div>

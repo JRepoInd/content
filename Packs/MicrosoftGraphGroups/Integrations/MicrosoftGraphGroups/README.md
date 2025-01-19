@@ -1,5 +1,5 @@
 <p>
-Microsoft Graph Groups enables you to create and manage different types of groups and group functionality according to your requirements.
+Azure Active Directory Groups enables you to create and manage different types of groups and group functionality according to your requirements.
 
 This integration was integrated and tested with version 1.0 of Microsoft Graph Groups API
 </p>
@@ -13,16 +13,24 @@ For more details about the authentication used in this integration, see <a href=
 <h3>Required Permissions</h3>
 <li>Directory.ReadWrite.All - Delegated</li>
 <li>Directory.ReadWrite.All - Application</li>
-<li>Group.ReadWrite.All - Application</li>
+<li>Group.ReadWrite.All - Application Or GroupMember.ReadWrite.All - Delegation permission</li>
 
-<h2>Configure Microsoft Graph Groups on Cortex XSOAR</h2>
+<h3>Note</h3>
+Using "GroupMember.ReadWrite.All" permission instead of Group.ReadWrite.All:
+This permission allows the app to list groups, read basic properties, and read and update the membership of the groups the signed-in user has access to.
+Group properties and owners cannot be updated and groups cannot be deleted.
+<strong><br>Using this permission will raise errors on the following commands:
+<li>msgraph-groups-delete-group</li>
+<li>msgraph-groups-create-group</strong></li>
+
+<h2>Configure Azure Active Directory Groups on Cortex XSOAR</h2>
 
 <li>Manage the organization groups.</li>
 
 <ol>
   <li>Navigate to&nbsp;<strong>Settings</strong>&nbsp;&gt;&nbsp;<strong>Integrations</strong>
   &nbsp;&gt;&nbsp;<strong>Servers &amp; Services</strong>.</li>
-  <li>Search for Microsoft Graph Groups.</li>
+  <li>Search for Azure Active Directory Groups.</li>
   <li>
     Click&nbsp;<strong>Add instance</strong>&nbsp;to create and configure a new integration instance.
     <ul>
@@ -31,6 +39,8 @@ For more details about the authentication used in this integration, see <a href=
    <li><strong>ID (received from the admin consent - see Detailed Instructions (?)</strong></li>
    <li><strong>Token (received from the admin consent - see Detailed Instructions (?) section)</strong></li>
    <li><strong>Key (received from the admin consent - see Detailed Instructions (?)</strong></li>
+   <li><strong>Certificate Thumbprint</strong></li>
+   <li><strong>Private Key</strong></li>
    <li><strong>Trust any certificate (not secure)</strong></li>
    <li><strong>Use system proxy settings</strong></li>
     </ul>
@@ -53,6 +63,7 @@ For more details about the authentication used in this integration, see <a href=
   <li><a href="#msgraph-groups-list-members" target="_self">Lists group members: msgraph-groups-list-members</a></li>
   <li><a href="#msgraph-groups-add-member" target="_self">Add a member to a group: msgraph-groups-add-member</a></li>
   <li><a href="#msgraph-groups-remove-member" target="_self">Removes a member from a group: msgraph-groups-remove-member</a></li>
+  <li><a href="#msgraph-groups-generate-login-url" target="_self">Generates the login url used for Authorization code flow.: msgraph-groups-generate-login-url</a></li>
 </ol>
 <h3 id="msgraph-groups-list-groups">1. msgraph-groups-list-groups</h3>
 <hr>
@@ -195,7 +206,7 @@ If the collection includes DynamicMembership, the group has dynamic membership; 
     <tr>
       <td>MSGraphGroup.ProxyAddresses</td>
       <td>String</td>
-      <td>Email addresses for the group that directs to the same group mailbox. For example: ["SMTP: support@demisto.com", "smtp: support@demisto.com"].</td>
+      <td>Email addresses for the group that directs to the same group mailbox. For example: ["SMTP: example@demisto.com", "smtp: example@demisto.com"].</td>
     </tr>
     <tr>
       <td>MSGraphGroup.RenewedDateTime</td>
@@ -275,12 +286,6 @@ If the collection includes DynamicMembership, the group has dynamic membership; 
     </tr>
   </tbody>
 </table>
-
-<!-- remove the following comments to manually add an image: -->
-<!--
-<a href="insert URL to your image" target="_blank" rel="noopener noreferrer"><img src="insert URL to your image"
- alt="image" width="749" height="412"></a>
- -->
 </p>
 
 <h3 id="msgraph-groups-get-group">2. msgraph-groups-get-group</h3>
@@ -409,7 +414,7 @@ If the collection includes DynamicMembership, the group has dynamic membership; 
     <tr>
       <td>MSGraphGroup.ProxyAddresses</td>
       <td>String</td>
-      <td>Email addresses for the group that directs to the same group mailbox. For example: ["SMTP: support@demisto.com", "smtp: support@demisto.com"].</td>
+      <td>Email addresses for the group that directs to the same group mailbox. For example: ["SMTP: example@demisto.com", "smtp: example@demisto.com"].</td>
     </tr>
     <tr>
       <td>MSGraphGroup.RenewedDateTime</td>
@@ -491,12 +496,6 @@ If the collection includes DynamicMembership, the group has dynamic membership; 
     </tr>
   </tbody>
 </table>
-
-<!-- remove the following comments to manually add an image: -->
-<!--
-<a href="insert URL to your image" target="_blank" rel="noopener noreferrer"><img src="insert URL to your image"
- alt="image" width="749" height="412"></a>
- -->
 </p>
 
 <h3 id="msgraph-groups-create-group">3. msgraph-groups-create-group</h3>
@@ -640,7 +639,7 @@ If the group collection includes DynamicMembership, the group has dynamic member
     <tr>
       <td>MSGraphGroup.ProxyAddresses</td>
       <td>String</td>
-      <td>Email addresses for the group that directs to the same group mailbox. For example, ["SMTP: support@demisto.com", "smtp: support@demisto.com"].</td>
+      <td>Email addresses for the group that directs to the same group mailbox. For example, ["SMTP: example@demisto.com", "smtp: example@demisto.com"].</td>
     </tr>
     <tr>
       <td>MSGraphGroup.RenewedDateTime</td>
@@ -713,12 +712,6 @@ If the group collection includes DynamicMembership, the group has dynamic member
     </tr>
   </tbody>
 </table>
-
-<!-- remove the following comments to manually add an image: -->
-<!--
-<a href="insert URL to your image" target="_blank" rel="noopener noreferrer"><img src="insert URL to your image"
- alt="image" width="749" height="412"></a>
- -->
 </p>
 
 <h3 id="msgraph-groups-delete-group">4. msgraph-groups-delete-group</h3>
@@ -796,14 +789,6 @@ If the group collection includes DynamicMembership, the group has dynamic member
 </p>
 
 <h5>Human Readable Output</h5>
-<p>
-
-<!-- remove the following comments to manually add an image: -->
-<!--
-<a href="insert URL to your image" target="_blank" rel="noopener noreferrer"><img src="insert URL to your image"
- alt="image" width="749" height="412"></a>
- -->
-</p>
 
 <h3 id="msgraph-groups-list-members">5. msgraph-groups-list-members</h3>
 <hr>
@@ -853,6 +838,11 @@ If the group collection includes DynamicMembership, the group has dynamic member
     <tr>
       <td>filter</td>
       <td>Filters members results. For example, startswith(displayName,'user').</td>
+      <td>Optional</td>
+    </tr>
+    <tr>
+      <td>count</td>
+      <td>Retrieves the total count of matching resources.</td>
       <td>Optional</td>
     </tr>
   </tbody>
@@ -1008,12 +998,6 @@ The general format is alias@domain, where the domain must be present in the tena
     </tr>
   </tbody>
 </table>
-
-<!-- remove the following comments to manually add an image: -->
-<!--
-<a href="insert URL to your image" target="_blank" rel="noopener noreferrer"><img src="insert URL to your image"
- alt="image" width="749" height="412"></a>
- -->
 </p>
 
 <h3 id="msgraph-groups-add-member">6. msgraph-groups-add-member</h3>
@@ -1076,11 +1060,6 @@ There are no context output for this command.
 <p>
 User {user_id} was added to the Group {group_id} successfully.
 </p>
-<!-- remove the following comments to manually add an image: -->
-<!--
-<a href="insert URL to your image" target="_blank" rel="noopener noreferrer"><img src="insert URL to your image"
- alt="image" width="749" height="412"></a>
- -->
 </p>
 
 <h3 id="msgraph-groups-remove-member">7. msgraph-groups-remove-member</h3>
@@ -1143,10 +1122,25 @@ There are no context output for this command.
 <p>
 User {user_id} was removed from the Group {group_id} successfully.
 </p>
-<!-- remove the following comments to manually add an image: -->
-<!--
-<a href="insert URL to your image" target="_blank" rel="noopener noreferrer"><img src="insert URL to your image"
- alt="image" width="749" height="412"></a>
- -->
+
+<h3 id="msgraph-groups-auth-reset">8. msgraph-groups-auth-reset</h3>
+<hr>
+<p>Run this command if for some reason you need to rerun the authentication process.</p>
+<h5>Base Command</h5>
+<p>
+  <code>msgraph-groups-auth-reset</code>
 </p>
-<h2>Additional Information</h2><h2>Known Limitations</h2><h2>Troubleshooting</h2>
+
+<h5>Input</h5>
+
+<p>There are no input arguments for this command.&nbsp;</p>
+<h5>Context Output</h5>
+There are no context output for this command.
+<p>&nbsp;</p>
+
+<h2>Additional Information</h2><h2>Troubleshooting</h2>
+
+<h2>Known Limitations</h2>
+<p>
+<a href="https://learn.microsoft.com/en-us/graph/api/resources/groups-overview?view=graph-rest-1.0&tabs=http">As per</a>, Microsoft also supports dynamic distribution groups which cannot be managed or retrieved through Microsoft Graph.
+</p>

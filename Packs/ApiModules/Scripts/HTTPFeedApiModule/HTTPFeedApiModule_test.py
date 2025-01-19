@@ -1,7 +1,9 @@
-from HTTPFeedApiModule import get_indicators_command, Client, datestring_to_server_format, feed_main,\
-    fetch_indicators_command
+from HTTPFeedApiModule import get_indicators_command, Client, datestring_to_server_format, feed_main, \
+    fetch_indicators_command, get_no_update_value
 import requests_mock
 import demistomock as demisto
+import pytest
+import requests
 
 
 def test_get_indicators():
@@ -145,12 +147,12 @@ def test_datestring_to_server_format():
     datestring4 = "2020-02-10T13:39:14.123"
     datestring5 = "2020-02-10T13:39:14Z"
     datestring6 = "2020-11-01T04:16:13-04:00"
-    assert '2020-02-10T13:39:14Z' == datestring_to_server_format(datestring1)
-    assert '2020-02-10T13:39:14Z' == datestring_to_server_format(datestring2)
-    assert '2020-02-10T13:39:14Z' == datestring_to_server_format(datestring3)
-    assert '2020-02-10T13:39:14Z' == datestring_to_server_format(datestring4)
-    assert '2020-02-10T13:39:14Z' == datestring_to_server_format(datestring5)
-    assert '2020-11-01T08:16:13Z' == datestring_to_server_format(datestring6)
+    assert datestring_to_server_format(datestring1) == '2020-02-10T13:39:14Z'
+    assert datestring_to_server_format(datestring2) == '2020-02-10T13:39:14Z'
+    assert datestring_to_server_format(datestring3) == '2020-02-10T13:39:14Z'
+    assert datestring_to_server_format(datestring4) == '2020-02-10T13:39:14Z'
+    assert datestring_to_server_format(datestring5) == '2020-02-10T13:39:14Z'
+    assert datestring_to_server_format(datestring6) == '2020-11-01T08:16:13Z'
 
 
 def test_get_feed_config():
@@ -352,15 +354,15 @@ def test_get_indicators_with_relations():
             }],
         }
     }
-    expected_res = [{'value': '127.0.0.1', 'type': 'IP',
+    expected_res = ([{'value': '127.0.0.1', 'type': 'IP',
                      'rawJSON': {'malwarefamily': '"Test"', 'relationship_entity_b': 'Test', 'value': '127.0.0.1',
                                  'type': 'IP', 'tags': []},
-                     'relationships': [
+                      'relationships': [
                          {'name': 'indicator-of', 'reverseName': 'indicated-by', 'type': 'IndicatorToIndicator',
                           'entityA': '127.0.0.1', 'entityAFamily': 'Indicator', 'entityAType': 'IP',
                           'entityB': 'Test',
-                          'entityBFamily': 'Indicator', 'entityBType': 'STIX Malware', 'fields': {}}],
-                     'fields': {'tags': []}}]
+                          'entityBFamily': 'Indicator', 'entityBType': 'Malware', 'fields': {}}],
+                      'fields': {'tags': []}}], True)
 
     asn_ranges = '"2021-01-17 07:44:49","127.0.0.1","3889","online","2021-04-22","Test"'
     with requests_mock.Mocker() as m:
@@ -422,10 +424,10 @@ def test_get_indicators_without_relations():
             }],
         }
     }
-    expected_res = [{'value': '127.0.0.1', 'type': 'IP',
+    expected_res = ([{'value': '127.0.0.1', 'type': 'IP',
                      'rawJSON': {'malwarefamily': '"Test"', 'relationship_entity_b': 'Test', 'value': '127.0.0.1',
                                  'type': 'IP', 'tags': []},
-                     'fields': {'tags': []}}]
+                      'fields': {'tags': []}}], True)
 
     asn_ranges = '"2021-01-17 07:44:49","127.0.0.1","3889","online","2021-04-22","Test"'
     with requests_mock.Mocker() as m:
@@ -441,3 +443,258 @@ def test_get_indicators_without_relations():
                                               create_relationships=False)
 
         assert indicators == expected_res
+
+
+def test_fetch_indicators_exclude_enrichment():
+    """
+    Given:
+        - Exclude enrichment parameter is used
+    When:
+        - Calling the fetch_indicators_command
+    Then:
+        - The indicators should include the enrichmentExcluded field if exclude is True.
+    """
+
+    feed_url_to_config = {
+        'https://www.spamhaus.org/drop/asndrop.txt': {
+            "indicator_type": 'IP',
+            "indicator": {
+                "regex": r"^.+,\"?(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})\"?",
+                "transform": "\\1"
+            },
+            'relationship_name': 'indicator-of',
+            'relationship_entity_b_type': 'STIX Malware',
+            "fields": [{
+                'firstseenbysource': {
+                    "regex": r"^(\d{4}-\d{2}-\d{2}\s\d{2}:\d{2}:\d{2})",
+                    "transform": "\\1"
+                },
+                "port": {
+                    "regex": r"^.+,.+,(\d{1,5}),",
+                    "transform": "\\1"
+                },
+                "updatedate": {
+                    "regex": r"^.+,.+,.+,(\d{4}-\d{2}-\d{2})",
+                    "transform": "\\1"
+                },
+                "malwarefamily": {
+                    "regex": r"^.+,.+,.+,.+,(.+)",
+                    "transform": "\\1"
+                },
+                "relationship_entity_b": {
+                    "regex": r"^.+,.+,.+,.+,\"(.+)\"",
+                    "transform": "\\1"
+                }
+            }],
+        }
+    }
+    expected_res = ([{'value': '127.0.0.1', 'type': 'IP',
+                     'rawJSON': {'malwarefamily': '"Test"', 'relationship_entity_b': 'Test', 'value': '127.0.0.1',
+                                 'type': 'IP', 'tags': []},
+                      'fields': {'tags': []},
+                      'enrichmentExcluded': True}], True)
+
+    asn_ranges = '"2021-01-17 07:44:49","127.0.0.1","3889","online","2021-04-22","Test"'
+    with requests_mock.Mocker() as m:
+        m.get('https://www.spamhaus.org/drop/asndrop.txt', content=asn_ranges.encode('utf-8'))
+        client = Client(
+            url="https://www.spamhaus.org/drop/asndrop.txt",
+            source_name='spamhaus',
+            ignore_regex='^;.*',
+            feed_url_to_config=feed_url_to_config,
+            indicator_type='ASN'
+        )
+        indicators = fetch_indicators_command(client, feed_tags=[], tlp_color=[], itype='IP', auto_detect=False,
+                                              create_relationships=False, enrichment_excluded=True)
+
+        assert indicators == expected_res
+
+
+def test_get_no_update_value(mocker):
+    """
+    Given
+    - response with last_modified and etag headers with the same values like in the integration context.
+
+    When
+    - Running get_no_update_value method.
+
+    Then
+    - Ensure that the response is False
+    """
+    mocker.patch.object(demisto, 'debug')
+
+    class MockResponse:
+        headers = {'Last-Modified': 'Fri, 30 Jul 2021 00:24:13 GMT',  # guardrails-disable-line
+                   'ETag': 'd309ab6e51ed310cf869dab0dfd0d34b'}  # guardrails-disable-line
+        status_code = 200
+    no_update = get_no_update_value(MockResponse(), 'https://www.spamhaus.org/drop/asndrop.txt')
+    assert not no_update
+    assert demisto.debug.call_args[0][0] == 'New indicators fetched - the Last-Modified value has been updated,' \
+                                            ' createIndicators will be executed with noUpdate=False.'
+
+
+def test_get_no_update_value_etag_with_double_quotes(mocker):
+    """
+    Given
+    - response with etag header that contains double-quotes.
+
+    When
+    - Running get_no_update_value method.
+
+    Then
+    - Ensure that the etag value in setLastRun is without double-quotes.
+    """
+    mocker.patch.object(demisto, 'setLastRun')
+
+    url = 'https://www.spamhaus.org/drop/asndrop.txt'
+    etag = 'd309ab6e51ed310cf869dab0dfd0d34b'
+
+    class MockResponse:
+        headers = {'Last-Modified': 'Fri, 30 Jul 2021 00:24:13 GMT',  # guardrails-disable-line
+                   'ETag': f'"{etag}"'}  # guardrails-disable-line
+        status_code = 200
+    get_no_update_value(MockResponse(), url)
+    assert demisto.setLastRun.mock_calls[0][1][0][url]['etag'] == etag
+
+
+def test_build_iterator_not_modified_header(mocker):
+    """
+    Given
+    - response with status code 304(Not Modified)
+
+    When
+    - Running build_iterator method.
+
+    Then
+    - Ensure that the results are empty and No_update value is True.
+    """
+    mocker.patch.object(demisto, 'debug')
+    mocker.patch('CommonServerPython.get_demisto_version', return_value={"version": "6.5.0"})
+    with requests_mock.Mocker() as m:
+        m.get('https://api.github.com/meta', status_code=304)
+
+        client = Client(
+            url='https://api.github.com/meta'
+        )
+        result = client.build_iterator()
+        assert result
+        assert result[0]['https://api.github.com/meta']
+        assert list(result[0]['https://api.github.com/meta']['result']) == []
+        assert result[0]['https://api.github.com/meta']['no_update']
+        assert demisto.debug.call_args[0][0] == 'No new indicators fetched, ' \
+                                                'createIndicators will be executed with noUpdate=True.'
+
+
+def test_build_iterator_with_version_6_2_0(mocker):
+    """
+    Given
+    - server version 6.2.0
+
+    When
+    - Running build_iterator method.
+
+    Then
+    - Ensure that the no_update value is True
+    - Request is called without headers "If-None-Match" and "If-Modified-Since"
+    """
+    mocker.patch.object(demisto, 'debug')
+    mocker.patch('CommonServerPython.get_demisto_version', return_value={"version": "6.2.0"})
+
+    with requests_mock.Mocker() as m:
+        m.get('https://api.github.com/meta', status_code=304)
+
+        client = Client(
+            url='https://api.github.com/meta',
+            headers={}
+        )
+        result = client.build_iterator()
+        assert result[0]['https://api.github.com/meta']['no_update']
+        assert list(result[0]['https://api.github.com/meta']['result']) == []
+        assert 'If-None-Match' not in client.headers
+        assert 'If-Modified-Since' not in client.headers
+
+
+def test_get_no_update_value_without_headers(mocker):
+    """
+    Given
+    - response without last_modified and etag headers.
+
+    When
+    - Running get_no_update_value.
+
+    Then
+    - Ensure that the response is False.
+    """
+    mocker.patch.object(demisto, 'debug')
+    mocker.patch('CommonServerPython.get_demisto_version', return_value={"version": "6.5.0"})
+
+    class MockResponse:
+        headers = {}
+        status_code = 200
+    no_update = get_no_update_value(MockResponse(), 'https://www.spamhaus.org/drop/asndrop.txt')
+    assert not no_update
+    assert demisto.debug.call_args[0][0] == 'Last-Modified and Etag headers are not exists,' \
+                                            'createIndicators will be executed with noUpdate=False.'
+
+
+@pytest.mark.parametrize('has_passed_time_threshold_response, expected_result', [
+    (True, None),
+    (False, {'If-None-Match': 'etag', 'If-Modified-Since': '2023-05-29T12:34:56Z'})
+])
+def test_build_iterator__with_and_without_passed_time_threshold(mocker, has_passed_time_threshold_response, expected_result):
+    """
+    Given
+    - A boolean result from the has_passed_time_threshold function
+    When
+    - Running build_iterator method.
+    Then
+    - Ensure the next request headers will be as expected:
+        case 1: has_passed_time_threshold_response is True, no headers will be added
+        case 2: has_passed_time_threshold_response is False, headers containing 'last_modified' and 'etag' will be added
+    """
+    mocker.patch('CommonServerPython.get_demisto_version', return_value={"version": "6.5.0"})
+    mock_session = mocker.patch.object(requests, 'get')
+    mocker.patch('HTTPFeedApiModule.has_passed_time_threshold', return_value=has_passed_time_threshold_response)
+    mocker.patch('demistomock.getLastRun', return_value={
+        'https://api.github.com/meta': {
+            'etag': 'etag',
+            'last_modified': '2023-05-29T12:34:56Z',
+            'last_updated': '2023-05-05T09:09:06Z'
+        }})
+    client = Client(
+        url='https://api.github.com/meta',
+        credentials={'identifier': 'user', 'password': 'password'})
+
+    client.build_iterator()
+    assert mock_session.call_args[1].get('headers') == expected_result
+
+
+def test_build_iterator_etag_with_double_quotes(mocker):
+    """
+    Given
+    - getLastRun with etag header that contains double-quotes.
+
+    When
+    - Running build_iterator method.
+
+    Then
+    - Ensure the next request header contains 'etag' without double-quotes.
+    """
+
+    etag = 'd309ab6e51ed310cf869dab0dfd0d34b'
+
+    mocker.patch('CommonServerPython.get_demisto_version', return_value={"version": "6.5.0"})
+    mock_session = mocker.patch.object(requests, 'get')
+    mocker.patch('HTTPFeedApiModule.has_passed_time_threshold', return_value=False)
+    mocker.patch('demistomock.getLastRun', return_value={
+        'https://api.github.com/meta': {
+            'etag': f'"{etag}"',
+            'last_modified': '2023-05-29T12:34:56Z',
+            'last_updated': '2023-05-05T09:09:06Z'
+        }})
+    client = Client(
+        url='https://api.github.com/meta',
+        credentials={'identifier': 'user', 'password': 'password'})
+
+    client.build_iterator()
+    assert mock_session.call_args[1]['headers']['If-None-Match'] == etag

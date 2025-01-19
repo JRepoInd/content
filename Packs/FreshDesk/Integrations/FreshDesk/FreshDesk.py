@@ -5,9 +5,10 @@ from CommonServerUserPython import *
 
 
 import requests
+import urllib3
 
 # Disable insecure warnings
-requests.packages.urllib3.disable_warnings()
+urllib3.disable_warnings()
 # Remove proxy if not set to true in params
 handle_proxy(proxy_param_name='proxy')
 ''' GLOBALS/PARAMS '''
@@ -16,7 +17,7 @@ PARAMS = demisto.params()
 CREDS = PARAMS.get('credentials')
 USERNAME = CREDS.get('identifier') if CREDS else None
 PASSWORD = CREDS.get('password') if CREDS else None
-TOKEN = PARAMS.get('token')
+TOKEN = PARAMS.get('token_creds', {}).get('password') or PARAMS.get('token')
 
 if not (USERNAME and PASSWORD) and not TOKEN:
     err_msg = 'You must provide either your Freshdesk account API key or the ' \
@@ -29,9 +30,9 @@ AUTH = (TOKEN, 'X') if TOKEN else (USERNAME, PASSWORD)
 # How much time before the first fetch to retrieve incidents
 FETCH_TIME = PARAMS.get('fetch_time', '24 hours')
 # Remove trailing slash to prevent wrong URL path to service
-SERVER = PARAMS['url'][:-1] if (PARAMS.get('url') and PARAMS['url'].endswith('/')) else PARAMS['url']
+SERVER = PARAMS['url'].removesuffix('/')
 # Should we use SSL
-USE_SSL = not demisto.params().get('unsecure', False)
+USE_SSL = not PARAMS.get('insecure', False)
 # Service base URL
 BASE_URL = SERVER + '/api/v2/'
 
@@ -42,6 +43,9 @@ HEADERS = {
 }
 # Headers to be used when making a request to POST a multi-part encoded file
 MULTIPART_HEADERS = {'Accept': 'application/json'}
+
+# Amount of results returned per fetch (default 50)
+MAX_INCIDENTS = int(PARAMS.get('maxFetch', 50))
 
 # Default amount of results returned per-page/per-api-call when the
 # fd-search-tickets command's results that match the command's specified
@@ -60,6 +64,11 @@ DEFAULT_TICKET_CONTEXT_FIELDS = [
 ''' HELPER FUNCTIONS '''
 
 
+def get_number_of_incidents_to_fetch():
+    # FreshDesk API supports maximum of 100 tickets per page so if user asked for more, pagination is needed.
+    return 100 if MAX_INCIDENTS >= 100 else MAX_INCIDENTS
+
+
 def reformat_canned_response_context(context):
     """
     Reformat context for canned-response related commands (from having used string_to_context_key)
@@ -71,7 +80,7 @@ def reformat_canned_response_context(context):
     returns:
         The reformatted context
     """
-    for key, val in context.iteritems():
+    for key, val in list(context.items()):
         if 'Id' in key:
             new_key = key.replace('Id', 'ID')
             context[new_key] = val
@@ -122,7 +131,7 @@ def format_contact_context(contact):
     dont_include = ['other_companies', 'other_emails', 'custom_fields', 'avatar']
     # Parse response into context
     context = {}
-    for key, val in contact.iteritems():
+    for key, val in contact.items():
         if key not in dont_include and val:
             new_key = string_to_context_key(key)
             if 'Id' in new_key:
@@ -150,7 +159,7 @@ def reformat_ticket_context(context):
         'UserID', 'BodyText', 'Category', 'Private', 'Incoming'
     ]
 
-    for key, val in context.iteritems():
+    for key, val in list(context.items()):
         if key == 'Tags':
             new_key = key[:-1]
             context[new_key] = val
@@ -172,10 +181,7 @@ def reformat_ticket_context(context):
             context[new_key] = val
             del context[key]
         elif 'Cc' in key:
-            if key.endswith('s'):
-                new_key = key[:-1].replace('Cc', 'CC')
-            else:
-                new_key = key.replace('Cc', 'CC')
+            new_key = key.removesuffix('s').replace('Cc', 'CC')
             context[new_key] = val
             del context[key]
 
@@ -187,9 +193,9 @@ def reformat_ticket_context(context):
     new_context = {}
     new_context['AdditionalFields'] = context.get('AdditionalFields') if context.get('AdditionalFields') else {}
     additional_fields = {}
-    for key, val in context.iteritems():
+    for key, val in list(context.items()):
         if key not in standard_context_outputs:
-            if not ((isinstance(val, list) or isinstance(val, dict)) and len(val) == 0):
+            if not ((isinstance(val, dict | list)) and len(val) == 0):
                 additional_fields[key] = val
         else:
             new_context[key] = val
@@ -197,7 +203,7 @@ def reformat_ticket_context(context):
     return new_context
 
 
-def handle_search_tickets_pagination(args, response):
+def handle_search_tickets_pagination(args, response, limit=-1):
     """
     Retrieve all resulting tickets even over the default 30 returned by a single API call.
 
@@ -210,6 +216,9 @@ def handle_search_tickets_pagination(args, response):
 
     parameter: (dict) response
         The initial json response from making an API call in the search_tickets function
+
+    parameter: (int) limit
+        Stops the pagination as soon as the number of tickets exceeds the limit (default -1 for no limit)
 
     returns:
         All Ticket Objects
@@ -236,6 +245,9 @@ def handle_search_tickets_pagination(args, response):
         page = 1
         next_page = tickets
         while next_page and page <= max_pages:
+            # Stop pagination if limit is defined and we exceeded it
+            if 0 < limit <= len(tickets):
+                break
             page += 1
             args['page'] = page
             next_page = search_tickets(args)
@@ -271,7 +283,7 @@ def attachments_into_context(api_response, context):
         attachments_context_readable = []
         for attachment in attachments:
             attachment_context = {}
-            for key, val in attachment.iteritems():
+            for key, val in attachment.items():
                 if key in attachment_keys_to_include:
                     if key == 'attachment_url':
                         key = 'AttachmentURL'
@@ -351,7 +363,7 @@ def additional_fields_to_args(args, additional_fields_arg_name):
         for field_and_val in fields_and_vals:
             field_and_val = field_and_val.split('=')
             # If the length doesn't equal 2, means there were either no equal signs or more than one
-            if not len(field_and_val) == 2:
+            if len(field_and_val) != 2:
                 err_msg = 'It appears you entered either too many or too few' \
                           ' equal signs in the \'additional_fields\' argument.'
                 return_error(err_msg)
@@ -381,9 +393,12 @@ def ticket_to_incident(ticket):
     """
     incident = {}
     # Incident Title
-    incident['name'] = 'Freshdesk Ticket: "{}"'.format(ticket.get('subject'))
-    # Incident occurrence time - the ticket's creation time
-    incident['occurred'] = ticket.get('created_at')
+    subject = ticket.get('subject', '').encode('ascii', 'replace').decode("utf-8")
+    incident['name'] = f'Freshdesk Ticket: "{subject}"'
+    # Incident update time - the ticket's update time - The API does not support filtering tickets by creation time
+    # but only by update time. The update time will be the creation time of the incidents and the incident id check will
+    # prevent duplications of incidents.
+    incident['occurred'] = ticket.get('updated_at')
     # The raw response from the service, providing full info regarding the item
     incident['rawJSON'] = json.dumps(ticket)
     return incident
@@ -407,9 +422,8 @@ def get_additional_fields(args):
         elif filter == 'spam':
             additional_fields.append('spam')
     requester = args.get('requester')
-    if requester:
-        if '@' in requester:
-            additional_fields.append('email')
+    if requester and '@' in requester:
+        additional_fields.append('email')
     company_id = args.get('company_id')
     if company_id:
         additional_fields.append('company_id')
@@ -455,7 +469,7 @@ def handle_array_input(args):
     attchs_present = args.get('attachments')
     if attchs_present:
         for arr_input in array_inputs:
-            if arr_input in args.keys():
+            if arr_input in args:
                 if arr_input != 'attachments':
                     args[arr_input + '[]'] = argToList(args.get(arr_input))
                     del args[arr_input]
@@ -463,7 +477,7 @@ def handle_array_input(args):
                     args[arr_input] = argToList(args.get(arr_input))
     else:
         for arr_input in array_inputs:
-            if arr_input in args.keys():
+            if arr_input in args:
                 args[arr_input] = argToList(args.get(arr_input))
     return args
 
@@ -560,7 +574,7 @@ def handle_number_input(args):
     ]
     # Convert cmd args that are expected to be numbers from strings to numbers
     for num_arg in number_args:
-        if num_arg in args.keys():
+        if num_arg in args:
             args[num_arg] = int(args.get(num_arg))
     return args
 
@@ -740,7 +754,7 @@ def http_request(method, url_suffix, params=None, data=None, files=None, headers
         params=params,
         data=data,
         headers=headers,
-        auth=AUTH,
+        auth=AUTH,  # type: ignore[arg-type]
         files=files
     )
     # Handle error responses gracefully
@@ -748,14 +762,14 @@ def http_request(method, url_suffix, params=None, data=None, files=None, headers
         LOG(res.json())
         LOG(res.text)
         LOG.print_log()
-        err_msg = 'Error in API call to Freshdesk Integration [{}] - {}'.format(res.status_code, res.reason)
+        err_msg = f'Error in API call to Freshdesk Integration [{res.status_code}] - {res.reason}'
         err = json.loads(res.content)
         if err.get('errors'):
             for error in err.get('errors'):
                 err_msg += '\n' + json.dumps(error, indent=2)
         else:
-            for key, value in res.json().iteritems():
-                err_msg += '\n{}: {}'.format(key, value)
+            for key, value in res.json().items():
+                err_msg += f'\n{key}: {value}'
         return_error(err_msg)
     # Handle response with no content
     elif res.status_code == 204:
@@ -775,29 +789,38 @@ def test_module():
 
 
 def fetch_incidents():
+    per_page = get_number_of_incidents_to_fetch()
+
     # demisto.getLastRun() will returns an obj with the previous run in it.
     last_run = demisto.getLastRun()
-    # Get the last fetch time, if exists
+    # Get the last fetch time and last id fetched if exist
     last_fetch = last_run.get('last_created_incident_timestamp')
-
+    last_incident_id = last_run.get('last_incident_id', -1)
     # Handle first time fetch, fetch incidents retroactively
     if not last_fetch:
         last_fetch, _ = parse_date_range(FETCH_TIME, to_timestamp=True)
     updated_since = timestamp_to_datestring(last_fetch, date_format='%Y-%m-%dT%H:%M:%SZ')
-    args = {'updated_since': updated_since, 'order_type': 'asc'}
+    args = {'updated_since': updated_since, 'order_type': 'asc', 'per_page': per_page}
 
-    tickets = search_tickets(args)
+    response = search_tickets(args)  # page 1
+    # handle pagination until user's limit
+    tickets = handle_search_tickets_pagination(args, response, limit=MAX_INCIDENTS)
     # convert the ticket/events to demisto incidents
     incidents = []
     for ticket in tickets:
         incident = ticket_to_incident(ticket)
+        incident_id = ticket.get('id')
         incident_date = date_to_timestamp(incident.get('occurred'), '%Y-%m-%dT%H:%M:%SZ')
-        # Update last run and add incident if the incident is newer than last fetch
-        if incident_date > last_fetch:
+        # Update last run and add incident if the incident is newer than last fetch and was not fetched before
+        # The incident IDs are in incremental order.
+        if incident_date >= last_fetch and incident_id > last_incident_id:
             last_fetch = incident_date
             incidents.append(incident)
+            last_incident_id = incident_id
+        if len(incidents) >= MAX_INCIDENTS:
+            break
 
-    demisto.setLastRun({'last_created_incident_timestamp': last_fetch})
+    demisto.setLastRun({'last_created_incident_timestamp': last_fetch, 'last_incident_id': last_incident_id})
     demisto.incidents(incidents)
 
 
@@ -872,7 +895,7 @@ def create_ticket_command():
     # Parse response into context
     include_in_context = DEFAULT_TICKET_CONTEXT_FIELDS[:]
 
-    context = {string_to_context_key(key): val for key, val in ticket.iteritems() if val}
+    context = {string_to_context_key(key): val for key, val in ticket.items() if val}
     context = additional_fields_to_context(context, include_in_context, additional_fields, additional_values)
     context, context_readable = attachments_into_context(ticket, context)
     context = reformat_ticket_context(context)
@@ -903,7 +926,7 @@ def update_ticket(args):
     args = clean_arguments(args)
 
     # The service endpoint to request from
-    endpoint_url = 'tickets/{}'.format(ticket_number)
+    endpoint_url = f'tickets/{ticket_number}'
 
     response = None
     if not args.get('attachments'):
@@ -966,7 +989,7 @@ def update_ticket_command():
     include_in_context = DEFAULT_TICKET_CONTEXT_FIELDS[:]
     include_in_context.append('updated_at')
     # Parse default context fields
-    context = {string_to_context_key(key): val for key, val in ticket.iteritems() if val}
+    context = {string_to_context_key(key): val for key, val in ticket.items() if val}
     # Parse additional fields into context
     context = additional_fields_to_context(context, include_in_context, additional_fields, additional_fields_values)
     # Parse attachments into context
@@ -989,7 +1012,7 @@ def update_ticket_command():
 
 def get_ticket(args):
     ticket_number = args.get('id')
-    endpoint_url = 'tickets/{}'.format(ticket_number)
+    endpoint_url = f'tickets/{ticket_number}'
     url_params = {}
 
     # Check if embedding additional info in API response was specified in cmd args
@@ -1032,7 +1055,7 @@ def get_ticket_command():
     # Parse response into context
     context = {
         string_to_context_key(key): val
-        for key, val in ticket.iteritems()
+        for key, val in ticket.items()
         if key not in nonstd_context_fields and val is not None
     }
 
@@ -1042,11 +1065,11 @@ def get_ticket_command():
     context['AdditionalFields'] = {}
     requester = ticket.get('requester')
     if requester:
-        requester_context = {string_to_context_key(key): val for key, val in requester.iteritems() if val}
+        requester_context = {string_to_context_key(key): val for key, val in requester.items() if val}
         context['AdditionalFields']['Requestor'] = requester_context
     stats = ticket.get('stats')
     if stats:
-        stats_context = {string_to_context_key(key): val for key, val in stats.iteritems() if val}
+        stats_context = {string_to_context_key(key): val for key, val in stats.items() if val}
         context['AdditionalFields']['Stats'] = stats_context
 
     if not ticket.get('deleted'):
@@ -1069,7 +1092,7 @@ def get_ticket_command():
 
 
 def delete_ticket(ticket_id):
-    endpoint_url = 'tickets/{}'.format(ticket_id)
+    endpoint_url = f'tickets/{ticket_id}'
     response = http_request('DELETE', endpoint_url)
     return response
 
@@ -1091,7 +1114,7 @@ def delete_ticket_command():
         'ID': int(ticket_id),
         'AdditionalFields': {'Deleted': True}
     }
-    message = 'Soft-Deleted Ticket #{}'.format(ticket_id)
+    message = f'Soft-Deleted Ticket #{ticket_id}'
     demisto.results({
         'Type': entryTypes['note'],
         'ContentsFormat': formats['json'],
@@ -1121,6 +1144,9 @@ def search_tickets(args):
     updated_since = args.get('updated_since')
     if updated_since:
         url_params['updated_since'] = updated_since
+    per_page = args.get('per_page')
+    if per_page:
+        url_params['per_page'] = per_page
 
     # Sort By
     order_by = args.get('order_by')
@@ -1216,22 +1242,22 @@ def search_tickets_command():
     readable_contexts = []
     for ticket in tickets:
         # Parse ticket into the standard outputs
-        context = {string_to_context_key(key): val for key, val in ticket.iteritems() if key in context_outputs}
+        context = {string_to_context_key(key): val for key, val in ticket.items() if key in context_outputs}
 
         # Parse ticket attachments into context
         context, context_readable = attachments_into_context(ticket, context)
 
         # Parse ticket for the additionally requested fields
         context['AdditionalFields'] = {
-            string_to_context_key(key): val for key, val in ticket.iteritems() if key in additional_fields
+            string_to_context_key(key): val for key, val in ticket.items() if key in additional_fields
         }
         requester = ticket.get('requester')
         if requester:
-            requester_context = {string_to_context_key(key): val for key, val in requester.iteritems() if val}
+            requester_context = {string_to_context_key(key): val for key, val in requester.items() if val}
             context['AdditionalFields']['Requestor'] = requester_context
         stats = ticket.get('stats')
         if stats:
-            stats_context = {string_to_context_key(key): val for key, val in stats.iteritems() if val}
+            stats_context = {string_to_context_key(key): val for key, val in stats.items() if val}
             context['AdditionalFields']['Stats'] = stats_context
 
         context_readable = reformat_ticket_context(context_readable)
@@ -1264,7 +1290,7 @@ def ticket_reply(args):
     ticket_id = args.get('ticket_id')
     del args['ticket_id']
     args = handle_array_input(args)
-    endpoint_url = 'tickets/{}/reply'.format(ticket_id)
+    endpoint_url = f'tickets/{ticket_id}/reply'
 
     response = None
     if not args.get('attachments'):
@@ -1313,7 +1339,7 @@ def ticket_reply_command():
     # Make request and get raw response
     reply = ticket_reply(args)
     # Parse response into context
-    context = {string_to_context_key(key): val for key, val in reply.iteritems() if val}
+    context = {string_to_context_key(key): val for key, val in reply.items() if val}
     context = reformat_conversation_context(context)
     # Parse attachments into context
     context, context_readable = attachments_into_context(reply, context)
@@ -1344,7 +1370,7 @@ def create_ticket_note(args):
     # Set defaults for 'private' and 'incoming' fields if not set by user
     args['private'] = args.get('private', 'true')
     args['incoming'] = args.get('incoming', 'false')
-    endpoint_url = 'tickets/{}/notes'.format(ticket_id)
+    endpoint_url = f'tickets/{ticket_id}/notes'
 
     response = None
     if not args.get('attachments'):
@@ -1399,7 +1425,7 @@ def create_ticket_note_command():
     # Make request and get raw response
     note = create_ticket_note(args)
     # Parse response into context
-    context = {string_to_context_key(key): val for key, val in note.iteritems() if val}
+    context = {string_to_context_key(key): val for key, val in note.items() if val}
     context = reformat_conversation_context(context)
     # Parse attachments into context
     context, context_readable = attachments_into_context(note, context)
@@ -1424,7 +1450,7 @@ def create_ticket_note_command():
 
 
 def get_ticket_conversations(ticket_id):
-    endpoint_url = 'tickets/{}/conversations'.format(ticket_id)
+    endpoint_url = f'tickets/{ticket_id}/conversations'
     response = http_request('GET', endpoint_url)
     return response
 
@@ -1447,7 +1473,7 @@ def get_ticket_conversations_command():
     contexts = []
     readable_contexts = []
     for conversation in conversations:
-        context = {string_to_context_key(key): val for key, val in conversation.iteritems() if val}
+        context = {string_to_context_key(key): val for key, val in conversation.items() if val}
         context = reformat_conversation_context(context)
         # Parse attachments into context
         context, context_readable = attachments_into_context(conversation, context)
@@ -1459,7 +1485,7 @@ def get_ticket_conversations_command():
         'ID': int(ticket_id),
         'Conversation': contexts
     }
-    title = 'Conversations of Ticket #{}'.format(ticket_id)
+    title = f'Conversations of Ticket #{ticket_id}'
     human_readable = tableToMarkdown(title, readable_contexts, removeNull=True)
     demisto.results({
         'Type': entryTypes['note'],
@@ -1521,8 +1547,8 @@ def list_contacts_command():
         # Parse individual contact response in context
         context = format_contact_context(contact)
         contexts.append(context)
-    filters_as_strings = ', '.join(['{}: {}'.format(key, val) for key, val in filters.iteritems()])
-    title = 'Contacts Filtered by {}'.format(filters_as_strings) if filters else 'All Contacts'
+    filters_as_strings = ', '.join([f'{key}: {val}' for key, val in filters.items()])
+    title = f'Contacts Filtered by {filters_as_strings}' if filters else 'All Contacts'
     human_readable = tableToMarkdown(title, contexts, removeNull=False)
     demisto.results({
         'Type': entryTypes['note'],
@@ -1556,7 +1582,7 @@ def get_contact(args):
                       ' email address.'
             return_error(err_msg)
         except Exception as e:
-            return_error(e.message)
+            return_error(e)
     else:
         try:
             filters = {'mobile': args.get('mobile')}
@@ -1569,9 +1595,9 @@ def get_contact(args):
                       'you have a FreshDesk contact with that exact mobile number.'
             return_error(err_msg)
         except Exception as e:
-            return_error(e.message)
+            return_error(e)
 
-    endpoint_url = 'contacts/{}'.format(contact_id)
+    endpoint_url = f'contacts/{contact_id}'
     response = http_request('GET', endpoint_url)
     return response
 
@@ -1634,7 +1660,7 @@ def list_canned_response_folders_command():
     contexts = []
     for folder in cr_folders:
         # Parse individual contact response in context
-        context = {string_to_context_key(key): val for key, val in folder.iteritems() if val}
+        context = {string_to_context_key(key): val for key, val in folder.items() if val}
         context = reformat_canned_response_context(context)
         contexts.append(context)
     title = 'All Canned Response Folders'
@@ -1652,7 +1678,7 @@ def list_canned_response_folders_command():
 
 
 def get_canned_response_folder(id):
-    endpoint_url = 'canned_response_folders/{}/responses'.format(id)
+    endpoint_url = f'canned_response_folders/{id}/responses'
     response = http_request('GET', endpoint_url)
     return response
 
@@ -1675,12 +1701,12 @@ def get_canned_response_folder_command():
     contexts = []
     readable_contexts = []
     for cr in canned_responses:
-        context = {string_to_context_key(key): val for key, val in cr.iteritems() if val}
+        context = {string_to_context_key(key): val for key, val in cr.items() if val}
         context = reformat_canned_response_context(context)
         context, context_readable = attachments_into_context(cr, context)
         contexts.append(context)
         readable_contexts.append(context_readable)
-    title = 'Details of Canned Responses in CR Folder #{}'.format(cr_folder_id)
+    title = f'Details of Canned Responses in CR Folder #{cr_folder_id}'
     human_readable = tableToMarkdown(title, readable_contexts, removeNull=True)
     demisto.results({
         'Type': entryTypes['note'],
@@ -1717,7 +1743,7 @@ def list_groups_command():
     for group in groups:
         # Parse individual group response in context
         context = {}
-        for key, val in group.iteritems():
+        for key, val in list(group.items()):
             if val:
                 if key == 'agent_ids':
                     key = 'agent_id'
@@ -1774,7 +1800,7 @@ def list_agents_command():
     for agent in agents:
         # Parse the individual agent into context
         context = {}
-        for key, val in agent.iteritems():
+        for key, val in list(agent.items()):
             if val:
                 if key == 'group_ids':
                     key = 'group_id'
@@ -1784,7 +1810,7 @@ def list_agents_command():
                 if 'Id' in new_key:
                     new_key = new_key.replace('Id', 'ID')
                 context[new_key] = val
-        context['Contact'] = {string_to_context_key(key): val for key, val in agent.get('contact').iteritems() if val}
+        context['Contact'] = {string_to_context_key(key): val for key, val in agent.get('contact').items() if val}
         contexts.append(context)
     title = 'All Agents'
     human_readable = tableToMarkdown(title, contexts, removeNull=True)
@@ -1830,11 +1856,10 @@ try:
         demisto.results('ok')
     elif demisto.command() == 'fetch-incidents':
         fetch_incidents()
-    elif demisto.command() in commands.keys():
+    elif demisto.command() in commands:
         # Execute that command
         commands[demisto.command()]()
 
 # Log exceptions
 except Exception as e:
-    LOG(e)
-    return_error(e.message)
+    return_error(f"Failed to execute {demisto.command()} command. Error: {str(e)}", e)

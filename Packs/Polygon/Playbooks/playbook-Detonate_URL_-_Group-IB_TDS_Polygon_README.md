@@ -59,7 +59,7 @@ This playbook does not use any integrations.
 | Process.Path | String | Process path | 
 | Process.StartTime | date | Process start time | 
 | Process.EndTime | date | Process end time | 
-| Polygon.Analysis.ID | string | TDS File ID | 
+| Polygon.Analysis.ID | string | THF File ID | 
 | Polygon.Analysis.Name | string | File Name | 
 | Polygon.Analysis.Size | number | File Size | 
 | Polygon.Analysis.Started | date | Analysis start timestamp | 
@@ -84,4 +84,4 @@ This playbook does not use any integrations.
 | Polygon.Analysis.Process | unknown | The information about processes started during the analysis | 
 
 ## Playbook Image
-![Polygon Detonate URL](https://github.com/demisto/content/raw/c81536f5842604b7e7f0be024721bdf07447992a/docs/images/playbooks/Detonate_URL_-_Group-IB_TDS_Polygon.png)
+![Polygon Detonate URL](../doc_files/Detonate_URL_-_Group-IB_TDS_Polygon.png)

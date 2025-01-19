@@ -1,34 +1,45 @@
 ## Overview
 ---
 
-Palo Alto Networks Cortex Data Lake provides cloud-based, centralized log storage and aggregation for your on premise, virtual (private cloud and public cloud) firewalls, for Prisma Access, and for cloud-delivered services such as Cortex XDR
-This integration was integrated and tested with version 2 of Cortex Data Lake
+Palo Alto Networks Strata Logging Service XSOAR Connector provides cloud-based, centralized log storage and aggregation for your on premise, virtual (private cloud and public cloud) firewalls, for Prisma Access, and for cloud-delivered services such as Cortex XDR.
+This integration was integrated and tested with version 2 of Strata Logging Service XSOAR Connector.
 
 ---
 
-## Configure Cortex Data Lake on Cortex XSOAR
+## Configure Strata Logging Service XSOAR Connector on Cortex XSOAR
 ---
 
-1. Go to the [HUB](https://apps.paloaltonetworks.com/apps) and select the `Cortex XSOAR` app
-2. In the War Room, run the command `!GetLicenseID` to get the `license ID`.
-3. Go to __Settings__ > __ABOUT__ > __License__ to get the `Customer Name`.
-4. Insert the `license ID` and the `Customer Name` in the required fields and complete the authentication process in order to get the __Authentication Token__  __Registration ID__ __Encryption Key__
-5. Navigate to __Settings__ > __Integrations__ > __Servers & Services__.
-6. Search for Cortex Data Lake.
-7. Click __Add instance__ to create and configure a new integration instance.
+1. Go to the Palo Alto Networks [HUB](https://apps.paloaltonetworks.com/apps) and select and add the **Cortex XSOAR** app as described [here](https://docs.paloaltonetworks.com/hub/hub-getting-started/get-started/accessing-applications.html).
+The following screen will appear:
+
+   ![image](https://github.com/demisto/content-docs/blob/master/docs/doc_imgs/integrations/cdl-authorization.png?raw=true)
+
+2. In the Palo Alto Networks Cortex XSOAR Playground or War Room, run the ***!GetLicenseID*** command to get the License ID.
+The License ID will be used in Step 4.
+3. (Cortex XOAR 6.x) Go to __Settings__ > __ABOUT__ > __License__ and get the value in the license field Customer name. 
+   
+   (Cortex xSOAR 8, Administrators only ) Go to __Profile__ > __ABOUT__ and get the value in the license field Customer name.
+
+   The Customer name will be used in Step 4.
+   
+5. In the Palo Alto Networks HUB, enter the License ID and the Customer name in the screen obtained in Step 1. The License ID and Customer name were obtained in Steps 2 and 3. Click **Start Authorization Process** to get the Authentication Token, Registration ID, and Encryption Key - these three fields will be used in the Palo Alto Networks Cortex v2 integration instance in Step 7 below.
+6. In Palo Alto Networks Cortex XSOAR, navigate to __Settings__ > __Integrations__ > __Servers & Services__.
+7. Search for Strata Logging Service XSOAR Connector.
+8. Click __Add instance__ to create and configure a new integration instance.
     * __Name__: a textual name for the integration instance.
-    * __Authentication Token__: From the authentication process
-    * __Registration ID__: From the authentication process
-    * __Encryption Key__: From the authentication process
-    * __Fetch incidents__: Whether to fetch incidents or not
-    * __first_fetch_timestamp__: First fetch time (\<number\> \<time unit\>, e.g., 12 hours, 7 days, 3 months, 1 year)
+    * __Authentication Token__: Retrieved in the authentication process in Step 4.
+    * __Registration ID__: Retrieved in the authentication process in Step 4.
+    * __Encryption Key__: Retrieved in the authentication process in Step 4.
+    * __Fetch incidents__: Whether to fetch incidents or not.
+    * __first_fetch_timestamp__: First fetch time (\<number\> \<time unit\>, e.g., 12 hours, 7 days, 3 months, 1 year).
     * __Fetch Table__: Choose the table from which incidents will be fetched.
-    * __Severity of events to fetch (Firewall)__: Select from all,Critical,High,Medium,Low,Informational,Unused
-    * __Subtype of events to fetch (Firewall)__: Select from all,attack,url,virus,spyware,vulnerability,file,scan,flood,packet,resource,data,url-content,wildfire,extpcap,wildfire-virus,http-hdr-insert,http-hdr,email-hdr,spyware-dns,spyware-wildfire-dns,spyware-wpc-dns,spyware-custom-dns,spyware-cloud-dns,spyware-raven,spyware-wildfire-raven,spyware-wpc-raven,wpc-virus,sctp
+    * __Severity of events to fetch (Firewall)__: Select from all, Critical, High, Medium,Low, Informational, Unused.
+    * __Subtype of events to fetch (Firewall)__: Select from all, attack, url, virus, spyware, vulnerability, file, scan, flood, packet, resource, data, url-content, wildfire, extpcap, wildfire-virus, http-hdr-insert, http-hdr, email-hdr, spyware-dns, spyware-wildfire-dns, spyware-wpc-dns, spyware-custom-dns, spyware-cloud-dns, spyware-raven, spyware-wildfire-raven, spyware-wpc-raven, wpc-virus,sctp
     * __Fetch Fields__: Comma-separated fields that will be fetched with every incident, e.g., "pcap,session_id". Enter "*" for all possible fields.
+    * __Fetch Filter__: Specify the filter that should be used to fetch incidents. Can not be used in combination with the Subtype and Severity parameters.
     * __Incidents fetched per query__: How many incidents will be fetched per query. Caution: high number could create overload. Default is 10.
-    * __proxy__: Use system proxy settings
-    * __insecure__: Trust any certificate (not secure)
+    * __proxy__: Use system proxy settings.
+    * __insecure__: Trust any certificate (not secure).
 4. Click __Test__ to validate the URLs, token, and connection.
 
 In order for the integration to work, the following URLs need to be accessible:
@@ -41,11 +52,25 @@ In order for the integration to work, the following URLs need to be accessible:
    - EU: `api.nl.cdl.paloaltonetworks.com`
 
 ## Fetched Incidents Data
-Fetches Firewall threat logs as incidents
+The integration can fetch incidents from the following tables:
+- firewall.auth
+- firewall.decryption
+- firewall.extpcap
+- firewall.file_data
+- firewall.globalprotect
+- firewall.hipmatch
+- firewall.iptag
+- firewall.threat
+- firewall.traffic
+- firewall.url
+- firewall.userid
+- log.system
+- log.config
+
 
 ## CDL Server - API Calls Caching Mechanism
 The integration implements a caching mechanism for repetitive error when requesting access token from CDL server.
-When the intgeration reaches the limit of allowed calls, the following error will be shown:
+When the integration reaches the limit of allowed calls, the following error will be shown:
 
 ```We have found out that your recent attempts to authenticate against the CDL server have failed. Therefore we have limited the number of calls that the CDL integration performs.```
 
@@ -85,6 +110,8 @@ Runs a query on the Cortex logging service.
 | --- | --- | --- |
 | query | A free-text SQL query. For example, query="SELECT * FROM \`firewall.traffic\` limit 10". There are multiple tables in Loggings, for example: threat, traffic, and so on. Refer to the Cortex Logging service schema reference for the full list. | Optional |
 | limit | The number of logs to return. Default is 10 | Optional | 
+| page | Page to return. | Optional | 
+| page_size | Number of entries per page. Defaults to 50 (in case only page was provided). | Optional | 
 | transform_results | If set to false, query results are not mapped into the standard command context. Default is "true". | Optional | 
 
 
@@ -98,7 +125,7 @@ Runs a query on the Cortex logging service.
 | CDL.Logging.Protocol | String | IP protocol associated with the session. | 
 | CDL.Logging.DestinationIP | String | Original destination IP address. | 
 | CDL.Logging.RuleMatched | String | Name of the security policy rule that the network traffic matched. | 
-| CDL.Logging.CharacteristicOfApp | Number | Identifies the behaviorial characteristic of the application associated with the network traffic. | 
+| CDL.Logging.CharacteristicOfApp | Number | Identifies the behavioral characteristic of the application associated with the network traffic. | 
 | CDL.Logging.LogSourceName | String | Name of the source of the log. | 
 | CDL.Logging.IsNat | number | Indicates if the firewall is performing network address translation (NAT) for the logged traffic. | 
 | CDL.Logging.NatDestinationPort | Number | Post-NAT destination port. | 
@@ -168,6 +195,8 @@ Runs a query on the Cortex logging service, according to preset queries.
 | start_time | The query start time. For example, start_time="2018-04-26 00:00:00" | Optional | 
 | end_time | The query end time. For example, end_time="2018-04-26 00:00:00" | Optional | 
 | limit | The number of logs to return. Default is 10 | Optional | 
+| page | Page to return. | Optional | 
+| page_size | Number of entries per page. Defaults to 50 (in case only page was provided). | Optional | 
 | time_range | First log time (\<number\> \<time unit\>, e.g., 12 hours, 7 days, 3 months, 1 year) | Optional | 
 
 
@@ -179,7 +208,7 @@ Runs a query on the Cortex logging service, according to preset queries.
 | CDL.Logging.Threat.Action | String | Identifies the action that the firewall took for the network traffic. | 
 | CDL.Logging.Threat.App | String | Application associated with the network traffic. | 
 | CDL.Logging.Threat.Nat | String | Indicates whether the firewall is performing network address translation (NAT) for the logged traffic. If it is, this value is 1. | 
-| CDL.Logging.Threat.SubcategoryOfApp | String | Identifies the application's subcategory. The subcategoryis related to the application's category, which is identified in category_of_app. | 
+| CDL.Logging.Threat.SubcategoryOfApp | String | Identifies the application's subcategory. The subcategory is related to the application's category, which is identified in category_of_app. | 
 | CDL.Logging.Threat.PcapID | String | Packet capture (pcap) ID. This is used to correlate threat pcap files with extended pcaps taken as a part of the session flow. All threat logs will contain either a pcap_id of 0 (no associated pcap) , or an ID referencing the extended pcap file. | 
 | CDL.Logging.Threat.Natdst | String | If destination NAT performed, the post-NAT destination IP address. The IP address is an IPv4/IPv6 address in hex format. | 
 | CDL.Logging.Threat.Flags | String | Bit field which provides details on the session, such as whether the session use IPv6, whether the session was denied due to a URL filtering rule, and/or whether the log corresponds to a transaction within an HTTP proxy session. | 
@@ -193,7 +222,7 @@ Runs a query on the Cortex logging service, according to preset queries.
 | CDL.Logging.Threat.RiskOfApp | String | Indicates how risky the application is from a network security perspective. Values range from 1-5, where 5 is the riskiest. | 
 | CDL.Logging.Threat.Natsport | String | Post-NAT source port. | 
 | CDL.Logging.Threat.URLDenied | String | Session was denied due to a URL filtering rule. | 
-| CDL.Logging.Threat.CharacteristicOfApp | String | Identifies the behaviorial characteristic of the application associated with the network traffic. | 
+| CDL.Logging.Threat.CharacteristicOfApp | String | Identifies the behavioral characteristic of the application associated with the network traffic. | 
 | CDL.Logging.Threat.HTTPMethod | String | Only in URL filtering logs. Describes the HTTP Method used in the web request | 
 | CDL.Logging.Threat.From | String | The networking zone from which the traffic originated. | 
 | CDL.Logging.Threat.Vsys | String | Virtual system associated with the network traffic. | 
@@ -303,6 +332,8 @@ Runs a query on the Cortex logging service, according to preset queries.
 | start_time | Query start time. For example, start_time="2018-04-26 00:00:00" | Optional | 
 | end_time | Query end time. For example, end_time="2018-04-26 00:00:00" | Optional | 
 | limit | Amount of logs. Default is 10 | Optional | 
+| page | Page to return. | Optional | 
+| page_size | Number of entries per page. Defaults to 50 (in case only page was provided). | Optional | 
 | time_range | First log time (\<number\> \<time unit\>, e.g., 12 hours, 7 days, 3 months, 1 year) | Optional | 
 
 
@@ -315,11 +346,11 @@ Runs a query on the Cortex logging service, according to preset queries.
 | CDL.Logging.Traffic.NatSourcePort | String | Post-NAT source port. | 
 | CDL.Logging.Traffic.SessionID | String | Identifies the firewall's internal identifier for a specific network session. | 
 | CDL.Logging.Traffic.Packets | String | Number of total packets (transmit and receive) seen for the session. | 
-| CDL.Logging.Traffic.CharacteristicOfApp | String | Identifies the behaviorial characteristic of the application associated with the network traffic. | 
+| CDL.Logging.Traffic.CharacteristicOfApp | String | Identifies the behavioral characteristic of the application associated with the network traffic. | 
 | CDL.Logging.Traffic.App | String | Application associated with the network traffic. | 
 | CDL.Logging.Traffic.Vsys | String | Virtual system associated with the network traffic. | 
 | CDL.Logging.Traffic.IsNat | String | Indicates whether the firewall is performing network address translation (NAT) for the logged traffic. If it is, this value is 1. | 
-| CDL.Logging.Traffic.LogTime | date | Time the log was received in Cortex Data Lake. | 
+| CDL.Logging.Traffic.LogTime | date | Time the log was received in Strata Logging Service XSOAR Connector. | 
 | CDL.Logging.Traffic.SubcategoryOfApp | String | Identifies the application's subcategory. The subcategory is related to the application's category, | 
 | CDL.Logging.Traffic.Protocol | String | IP protocol associated with the session. | 
 | CDL.Logging.Traffic.NatDestinationPort | String | Post-NAT destination port. | 
@@ -341,7 +372,7 @@ Runs a query on the Cortex logging service, according to preset queries.
 | CDL.Logging.Traffic.AppCategory | String | Identifies the high-level family of the application. | 
 | CDL.Logging.Traffic.SourceLocation | String | Source country or internal region for private addresses. | 
 | CDL.Logging.Traffic.DestinationLocation | String | Destination country or internal region for private addresses. | 
-| CDL.Logging.Traffic.LogSourceID | String | D that uniquely identifies the source of the log. If the source is a firewall, this is its serial number. | 
+| CDL.Logging.Traffic.LogSourceID | String | ID that uniquely identifies the source of the log. If the source is a firewall, this is its serial number. | 
 | CDL.Logging.Traffic.TotalBytes | String | Number of total bytes (transmit and receive). | 
 | CDL.Logging.Traffic.VsysID | String | A unique identifier for a virtual system on a Palo Alto Networks firewall. | 
 | CDL.Logging.Traffic.ToZone | String | Networking zone to which the traffic was sent. | 
@@ -465,6 +496,8 @@ Runs a query on the threat table with the query 'SELECT * FROM `firewall.threat`
 | start_time | The query start time. For example, start_time="2018-04-26 00:00:00" | Optional | 
 | end_time | The query end time. For example, end_time="2018-04-26 00:00:00" | Optional | 
 | limit | The number of logs to return. Default is 10. | Optional | 
+| page | Page to return. | Optional | 
+| page_size | Number of entries per page. Defaults to 50 (in case only page was provided). | Optional | 
 | time_range | First log time (\<number\> \<time unit\>, e.g., 12 hours, 7 days, 3 months, 1 year) | Optional | 
 | SHA256 | The SHA256 hash of the file for the query. For example, SHA256="503ca1a4fc0d48b18c0336f544ba0f0abf305ae3a3f49b3c2b86b8645d6572dc" would return all logs associated with this file. | Required | 
 
@@ -477,7 +510,7 @@ Runs a query on the threat table with the query 'SELECT * FROM `firewall.threat`
 | CDL.Logging.Threat.Action | String | Identifies the action that the firewall took for the network traffic. | 
 | CDL.Logging.Threat.App | String | Application associated with the network traffic. | 
 | CDL.Logging.Threat.Nat | String | Indicates whether the firewall is performing network address translation (NAT) for the logged traffic. If it is, this value is 1. | 
-| CDL.Logging.Threat.SubcategoryOfApp | String | Identifies the application's subcategory. The subcategoryis related to the application's category, which is identified in category_of_app. | 
+| CDL.Logging.Threat.SubcategoryOfApp | String | Identifies the application's subcategory. The subcategory is related to the application's category, which is identified in category_of_app. | 
 | CDL.Logging.Threat.PcapID | String | Packet capture (pcap) ID. This is used to correlate threat pcap files with extended pcaps taken as a part of the session flow. All threat logs will contain either a pcap_id of 0 (no associated pcap) , or an ID referencing the extended pcap file. | 
 | CDL.Logging.Threat.Natdst | String | If destination NAT performed, the post-NAT destination IP address. The IP address is an IPv4/IPv6 address in hex format. | 
 | CDL.Logging.Threat.Flags | String | Bit field which provides details on the session, such as whether the session use IPv6, whether the session was denied due to a URL filtering rule, and/or whether the log corresponds to a transaction within an HTTP proxy session. | 
@@ -491,7 +524,7 @@ Runs a query on the threat table with the query 'SELECT * FROM `firewall.threat`
 | CDL.Logging.Threat.RiskOfApp | String | Indicates how risky the application is from a network security perspective. Values range from 1-5, where 5 is the riskiest. | 
 | CDL.Logging.Threat.Natsport | String | Post-NAT source port. | 
 | CDL.Logging.Threat.URLDenied | String | Session was denied due to a URL filtering rule. | 
-| CDL.Logging.Threat.CharacteristicOfApp | String | Identifies the behaviorial characteristic of the application associated with the network traffic. | 
+| CDL.Logging.Threat.CharacteristicOfApp | String | Identifies the behavioral characteristic of the application associated with the network traffic. | 
 | CDL.Logging.Threat.HTTPMethod | String | Only in URL filtering logs. Describes the HTTP Method used in the web request | 
 | CDL.Logging.Threat.From | String | The networking zone from which the traffic originated. | 
 | CDL.Logging.Threat.Vsys | String | Virtual system associated with the network traffic. | 
@@ -607,11 +640,13 @@ Searches the Cortex firewall.traffic table. Traffic logs contain entries for the
 | source_port | Source port utilized by the session. Can be port number or an array of destination port numbers to search. For example '443' or '443,445' | Optional | 
 | action | An action name or an array of action names to search. | Optional | 
 | query | A free-text query for which to search. This forms the WHERE part of the query, for example, !cdl-query-traffic-logs query="source_ip.value LIKE '192.168.1.*' AND dest_ip.value='8.8.8.8' And dest_port=1234" | Optional | 
-| fields | The fields that are selected in the query. Selection can be "all" (same as *) or a comma saparated list of specific fields in the table.  | Optional | 
+| fields | The fields that are selected in the query. Selection can be "all" (same as *) or a comma separated list of specific fields in the table.  | Optional | 
 | start_time | The query start time. For example, start_time="2018-04-26 00:00:00" | Optional | 
 | end_time | The query end time. For example, end_time="2018-04-26 00:00:00". | Optional | 
 | time_range | First fetch time (\<number\> \<time unit\>, e.g., 12 hours, 7 days, 3 months, 1 year) | Optional | 
 | limit | The number of logs to return. Default is 5. | Optional | 
+| page | Page to return. | Optional | 
+| page_size | Number of entries per page. Defaults to 50 (in case only page was provided). | Optional | 
 | dest_ip | A destination IP address or an array of destination IPs addresses for which to search, for example 1.1.1.1,2.2.2.2. | Optional | 
 | dest_port | Destination port utilized by the session. Can be port number or an array of destination port numbers to search. For example '443' or '443,445' | Optional | 
 | ip | IP address. Enter an IP address or an array of IP addresses for which to search, for example 1.1.1.1,2.2.2.2. | Optional | 
@@ -626,11 +661,11 @@ Searches the Cortex firewall.traffic table. Traffic logs contain entries for the
 | CDL.Logging.Traffic.NatSourcePort | String | Post-NAT source port. | 
 | CDL.Logging.Traffic.SessionID | String | Identifies the firewall's internal identifier for a specific network session. | 
 | CDL.Logging.Traffic.Packets | String | Number of total packets (transmit and receive) seen for the session. | 
-| CDL.Logging.Traffic.CharacteristicOfApp | String | Identifies the behaviorial characteristic of the application associated with the network traffic. | 
+| CDL.Logging.Traffic.CharacteristicOfApp | String | Identifies the behavioral characteristic of the application associated with the network traffic. | 
 | CDL.Logging.Traffic.App | String | Application associated with the network traffic. | 
 | CDL.Logging.Traffic.Vsys | String | Virtual system associated with the network traffic. | 
 | CDL.Logging.Traffic.IsNat | String | Indicates whether the firewall is performing network address translation (NAT) for the logged traffic. If it is, this value is 1. | 
-| CDL.Logging.Traffic.LogTime | date | Time the log was received in Cortex Data Lake. | 
+| CDL.Logging.Traffic.LogTime | date | Time the log was received in Strata Logging Service XSOAR Connector. | 
 | CDL.Logging.Traffic.SubcategoryOfApp | String | Identifies the application's subcategory. The subcategory is related to the application's category, | 
 | CDL.Logging.Traffic.Protocol | String | IP protocol associated with the session. | 
 | CDL.Logging.Traffic.NatDestinationPort | String | Post-NAT destination port. | 
@@ -652,7 +687,7 @@ Searches the Cortex firewall.traffic table. Traffic logs contain entries for the
 | CDL.Logging.Traffic.AppCategory | String | Identifies the high-level family of the application. | 
 | CDL.Logging.Traffic.SourceLocation | String | Source country or internal region for private addresses. | 
 | CDL.Logging.Traffic.DestinationLocation | String | Destination country or internal region for private addresses. | 
-| CDL.Logging.Traffic.LogSourceID | String | D that uniquely identifies the source of the log. If the source is a firewall, this is its serial number. | 
+| CDL.Logging.Traffic.LogSourceID | String | ID that uniquely identifies the source of the log. If the source is a firewall, this is its serial number. | 
 | CDL.Logging.Traffic.TotalBytes | String | Number of total bytes (transmit and receive). | 
 | CDL.Logging.Traffic.VsysID | String | A unique identifier for a virtual system on a Palo Alto Networks firewall. | 
 | CDL.Logging.Traffic.ToZone | String | Networking zone to which the traffic was sent. | 
@@ -666,6 +701,7 @@ Searches the Cortex firewall.traffic table. Traffic logs contain entries for the
 ##### Command Example
 ```!cdl-query-traffic-logs action="allow" fields="vendor_name,log_source,rule_matched,dest_location,log_time" time_range="10 days" limit="5"```
 
+```!cdl-query-traffic-logs query="log_source_id = '{firewall_target}'" fields=all limit=5 start_time="2018-07-13 00:00:00"```
 ##### Context Example
 ```
 {
@@ -737,11 +773,13 @@ Searches the Cortex panw.threat table, which is the threat logs table for PAN-OS
 | file_sha_256 | The binary hash (SHA256) of the file. Enter a SHA256 hash or array of SHA256 hashes to search. | Optional | 
 | file_name | The name of the file that is blocked. Enter a file name or array of file names to search. | Optional | 
 | query | Free input query to search. This is the WHERE part of the query. so an example will be !cdl-query-traffic-logs query="source_ip.value LIKE '192.168.1.*' AND dst = '192.168.1.12'" | Optional | 
-| fields | The fields that are selected in the query. Selection can be "all" (same as *) or listing of specific fields in the table. List of fields can be found after viewing all the outputed fields with all. | Optional | 
+| fields | The fields that are selected in the query. Selection can be "all" (same as *) or listing of specific fields in the table. List of fields can be found after viewing all the outputted fields with all. | Optional | 
 | start_time | The query start time. For example, start_time="2018-04-26 00:00:00" | Optional | 
 | end_time | The query end time. For example, end_time="2018-04-26 00:00:00" | Optional | 
 | time_range | First fetch time (\<number\> \<time unit\>, e.g., 12 hours, 7 days, 3 months, 1 year) | Optional | 
 | limit | The number of logs to return. Default is 5. | Optional | 
+| page | Page to return. | Optional | 
+| page_size | Number of entries per page. Defaults to 50 (in case only page was provided). | Optional | 
 | ip | IP address. Enter an IP address or an array of IP addresses for which to search, for example 1.1.1.1,2.2.2.2. | Optional | 
 | port | Port utilized by the session. Enter a port or array of ports to search. | Optional | 
 
@@ -754,7 +792,7 @@ Searches the Cortex panw.threat table, which is the threat logs table for PAN-OS
 | CDL.Logging.Threat.Action | String | Identifies the action that the firewall took for the network traffic. | 
 | CDL.Logging.Threat.App | String | Application associated with the network traffic. | 
 | CDL.Logging.Threat.Nat | String | Indicates whether the firewall is performing network address translation (NAT) for the logged traffic. If it is, this value is 1. | 
-| CDL.Logging.Threat.SubcategoryOfApp | String | Identifies the application's subcategory. The subcategoryis related to the application's category, which is identified in category_of_app. | 
+| CDL.Logging.Threat.SubcategoryOfApp | String | Identifies the application's subcategory. The subcategory is related to the application's category, which is identified in category_of_app. | 
 | CDL.Logging.Threat.PcapID | String | Packet capture (pcap) ID. This is used to correlate threat pcap files with extended pcaps taken as a part of the session flow. All threat logs will contain either a pcap_id of 0 (no associated pcap) , or an ID referencing the extended pcap file. | 
 | CDL.Logging.Threat.Natdst | String | If destination NAT performed, the post-NAT destination IP address. The IP address is an IPv4/IPv6 address in hex format. | 
 | CDL.Logging.Threat.Flags | String | Bit field which provides details on the session, such as whether the session use IPv6, whether the session was denied due to a URL filtering rule, and/or whether the log corresponds to a transaction within an HTTP proxy session. | 
@@ -768,7 +806,7 @@ Searches the Cortex panw.threat table, which is the threat logs table for PAN-OS
 | CDL.Logging.Threat.RiskOfApp | String | Indicates how risky the application is from a network security perspective. Values range from 1-5, where 5 is the riskiest. | 
 | CDL.Logging.Threat.Natsport | String | Post-NAT source port. | 
 | CDL.Logging.Threat.URLDenied | String | Session was denied due to a URL filtering rule. | 
-| CDL.Logging.Threat.CharacteristicOfApp | String | Identifies the behaviorial characteristic of the application associated with the network traffic. | 
+| CDL.Logging.Threat.CharacteristicOfApp | String | Identifies the behavioral characteristic of the application associated with the network traffic. | 
 | CDL.Logging.Threat.HTTPMethod | String | Only in URL filtering logs. Describes the HTTP Method used in the web request | 
 | CDL.Logging.Threat.From | String | The networking zone from which the traffic originated. | 
 | CDL.Logging.Threat.Vsys | String | Virtual system associated with the network traffic. | 
@@ -886,11 +924,13 @@ Searches the URL table
 | dest_port | Network traffic's destination port. Enter a port or array of ports to search. | Optional | 
 | action | The action that the firewall took for the network traffic. Enter an action or array of actions to search. | Optional | 
 | query | Free input query to search. This is the WHERE part of the query. so an example will be !cdl-query-url-logs query="source_ip.value LIKE '192.168.1.*' AND dest_ip.value = '192.168.1.12'" | Optional | 
-| fields | The fields that are selected in the query. Selection can be "all" (same as *) or listing of specific fields in the table. List of fields can be found after viewing all the outputed fields with all. | Optional | 
+| fields | The fields that are selected in the query. Selection can be "all" (same as *) or listing of specific fields in the table. List of fields can be found after viewing all the outputted fields with all. | Optional | 
 | start_time | The query start time. For example, start_time="2018-04-26 00:00:00" | Optional | 
 | end_time | The query end time. For example, end_time="2018-04-26 00:00:00" | Optional | 
 | time_range | First log time (&lt;number&gt; &lt;time unit&gt;, e.g., 12 hours, 7 days, 3 months, 1 year) | Optional | 
 | limit | The number of logs to return. Default is 5. | Optional | 
+| page | Page to return. | Optional | 
+| page_size | Number of entries per page. Defaults to 50 (in case only page was provided). | Optional | 
 | ip | IP address. Enter an IP address or an array of IP addresses for which to search, for example 1.1.1.1,2.2.2.2. | Optional | 
 | port | Port utilized by the session. Enter a port or array of ports to search. | Optional | 
 | url | This argument allows to perform a LIKE search of the specified values on the Url and Uri fields An example value will be paloaltonetworks.com,demisto which will provide results like https://apps.paloaltonetworks.com and https://demisto.com | Optional | 
@@ -905,7 +945,7 @@ Searches the URL table
 | CDL.Logging.URL.PcapID | String | Packet capture \(pcap\) ID. This is used to correlate threat pcap files with extended pcaps taken as a part of the session flow. All threat logs will contain either a pcap\_id of 0 \(no associated pcap\) , or an ID referencing the extended pcap file. | 
 | CDL.Logging.URL.DestinationPort | String | Network traffic's destination port. If this value is 0, then the app is using its standard port. | 
 | CDL.Logging.URL.AppCategory | String | Identifies the high\-level family of the application. | 
-| CDL.Logging.URL.AppSubCategory | String | Identifies the application's subcategory. The subcategoryis related to the application's category, which is identified in category\_of\_app. | 
+| CDL.Logging.URL.AppSubCategory | String | Identifies the application's subcategory. The subcategory is related to the application's category, which is identified in category\_of\_app. | 
 | CDL.Logging.URL.SourceLocation | String | Source country or internal region for private addresses. | 
 | CDL.Logging.URL.DestinationLocation | String | Destination country or internal region for private addresses. | 
 | CDL.Logging.URL.ToZone | String | Networking zone to which the traffic was sent. | 
@@ -917,7 +957,7 @@ Searches the URL table
 | CDL.Logging.URL.ThreatCategory | String | Threat category of the detected threat. | 
 | CDL.Logging.URL.ThreatName | String | Threat name of the detected threat. | 
 | CDL.Logging.URL.Subtype | String | Identifies the log subtype. | 
-| CDL.Logging.URL.LogTime | String | Time the log was received in Cortex Data Lake. | 
+| CDL.Logging.URL.LogTime | String | Time the log was received in Strata Logging Service XSOAR Connector. | 
 | CDL.Logging.URL.LogSourceName | String | Name that uniquely identifies the source of the log. | 
 | CDL.Logging.URL.Denied | Boolean | Indicates whether the session was denied due to a URL filtering rule. | 
 | CDL.Logging.URL.Category | String | The URL category. | 
@@ -1008,18 +1048,19 @@ header field. |
 
 
 ### cdl-query-file-data
+
 ***
 Searches the Cortex firewall.file_data table.
-
 
 #### Base Command
 
 `cdl-query-file-data`
+
 #### Input
 
 | **Argument Name** | **Description** | **Required** |
 | --- | --- | --- |
-| action | Identifies the action that the firewall took for the network traffic. | Optional | 
+| action | Identifies the action that the firewall took for the network traffic. Possible values are: unknown, n-a, aged-out, decoder, tcp-reuse, resources-unavailable, tcp-fin, tcp-rst-from-server, tcp-rst-from-client, policy-deny, threat, decrypt-error, decrypt-unsupport-param, decrypt-cert-validation, request-timeout, shutdown-from-endpoint, abort-from-endpoint, split-tunnel. | Optional | 
 | app | Application associated with the network traffic. | Optional | 
 | app_category | Identifies the high-level family of the application. | Optional | 
 | dest_device_host | Hostname of the device to which the session was directed. | Optional | 
@@ -1057,7 +1098,8 @@ Searches the Cortex firewall.file_data table.
 | end_time | The query end time. For example, end_time="2018-04-26 00:00:00". | Optional | 
 | time_range | First log time (&lt;number&gt; &lt;time unit&gt;. For example, 12 minutes, 7 days, 3 weeks). | Optional | 
 | limit | Limit the results to return. The default is 5. | Optional | 
-
+| page | Page to return. | Optional | 
+| page_size | Number of entries per page. Defaults to 50 (in case only page was provided). | Optional | 
 
 #### Context Output
 
@@ -1073,7 +1115,7 @@ Searches the Cortex firewall.file_data table.
 | CDL.Logging.File.LogSourceName | String | Name of the source of the log - hostname of the firewall that logged the network traffic. | 
 | CDL.Logging.File.NatDestination | String | If destination NAT performed, the post-NAT destination IP address. | 
 | CDL.Logging.File.NatDestinationPort | Number | Post-NAT destination port. | 
-| CDL.Logging.File.CharacteristicOfApp | String | Identifies the behaviorial characteristic of the application associated with the network traffic. | 
+| CDL.Logging.File.CharacteristicOfApp | String | Identifies the behavioral characteristic of the application associated with the network traffic. | 
 | CDL.Logging.File.SourceLocation | String | Source country or internal region for private addresses. | 
 | CDL.Logging.File.DestinationIP | String | Original destination IP address. | 
 | CDL.Logging.File.Action | String | Identifies the action that the firewall took for the network traffic. | 
@@ -1104,8 +1146,8 @@ Searches the Cortex firewall.file_data table.
 | CDL.Logging.File.ReportID | Number | Identifies the analysis requested from the sandbox \(cloud or appliance\). | 
 | CDL.Logging.File.DestinationPort | Number | Network traffic's destination port. If this value is 0, then the app is using
 its standard port. | 
-| CDL.Logging.File.IsDupLog | Boolean | Indicates whether this log data is available in multiple locations, such as from Cortex Data Lake as well as from an on-premise log collector. | 
-| CDL.Logging.File.LogTime | Date | Time the log was received in Cortex Data Lake. | 
+| CDL.Logging.File.IsDupLog | Boolean | Indicates whether this log data is available in multiple locations, such as from Strata Logging Service XSOAR Connector as well as from an on-premise log collector. | 
+| CDL.Logging.File.LogTime | Date | Time the log was received in Strata Logging Service XSOAR Connector. | 
 | CDL.Logging.File.SessionID | Number | Identifies the firewall's internal identifier for a specific network session. | 
 | CDL.Logging.File.RecordSize | Number | Record size. | 
 | CDL.Logging.File.IngestionTime | Date | Ingestion time of the log. | 
@@ -1128,7 +1170,7 @@ its standard port. |
 | CDL.Logging.File.FileID | Number | Numerical identifier for the threat type. | 
 | CDL.Logging.File.IsCaptivePortal | Boolean | Indicates if user information for the session was captured through Captive Portal. | 
 | CDL.Logging.File.Protocol | String | IP protocol associated with the session. | 
-| CDL.Logging.File.CustomerID | Number | The ID that uniquely identifies the Cortex Data Lake instance which received this log record. | 
+| CDL.Logging.File.CustomerID | Number | The ID that uniquely identifies the Strata Logging Service XSOAR Connector instance which received this log record. | 
 | CDL.Logging.File.Subtype | String | Identifies the log subtype. | 
 | CDL.Logging.File.TunneledApp | String | Tunneled app \(For internal use only\). | 
 | CDL.Logging.File.LogSourceID | String | ID that uniquely identifies the source of the log - serial number of the firewall that generated the log. | 
@@ -1276,4 +1318,5 @@ Use this command in case your authentication calls fail due to internal call-lim
 against. That is, log types must be fully qualified and the instance ID is a part of the fully qualified name:
 `<instanceID>.firewall.traffic`
 However in this integration the instance ID is added automatically to the query so the name `firewall.traffic` is a valid table name
-* The SQL syntex supported for queries is `csql`
+* The SQL syntax supported for queries is `csql`
+* The provided authentication items ([configuration step 4](#configure-cortex-data-lake-on-cortex-xsoar)) can only be used once for each Strata Logging Service XSOAR Connector tenant (but can be shared for different Cortex XSOAR instances). Trying to re-generate those items will revoke any previously generated set of authentication items.

@@ -1,17 +1,17 @@
-import demistomock as demisto
-from CommonServerPython import *
+import demistomock as demisto  # noqa: F401
 import jwt
-import json
-import requests
-from typing import Set, List
+import urllib3
+from CommonServerPython import *  # noqa: F401
+from MicrosoftApiModule import *   # noqa: E402
 
 # Disable insecure warnings
-requests.packages.urllib3.disable_warnings()
+urllib3.disable_warnings()
 
 # CONSTANTS
 DATE_FORMAT = '%Y-%m-%dT%H:%M:%S'
 APP_NAME = 'ms-management-api'
 PUBLISHER_IDENTIFIER = 'ebac1a16-81bf-449b-8d43-5732c3c1d999'  # This isn't a secret and is public knowledge.
+TIMEOUT_DEFAULT = 15
 
 CONTENT_TYPE_TO_TYPE_ID_MAPPING = {
     'ExchangeAdmin': 1,
@@ -69,8 +69,11 @@ class Client(BaseClient):
     """
 
     def __init__(self, base_url: str, verify: bool,
-                 proxy: bool, self_deployed, refresh_token, auth_and_token_url,
-                 enc_key, auth_code, tenant_id):
+                 proxy: bool, self_deployed, refresh_token: str, auth_and_token_url: str,
+                 enc_key: Optional[str], auth_code: str, tenant_id: str, redirect_uri: str, timeout: int,
+                 certificate_thumbprint: Optional[str] = None, private_key: Optional[str] = None,
+                 managed_identities_client_id: Optional[str] = None,
+                 ):
         super().__init__(base_url=base_url, verify=verify, proxy=proxy)
         self.tenant_id = tenant_id
         self.suffix_template = '{}/activity/feed/subscriptions/{}'
@@ -79,10 +82,11 @@ class Client(BaseClient):
         self.refresh_token = refresh_token
         self.auth_and_token_url = auth_and_token_url
         self.enc_key = enc_key
+        self.timeout = timeout
         self.ms_client = MicrosoftClient(self_deployed=self.self_deployed,
                                          tenant_id=self.tenant_id,
                                          auth_id=self.auth_and_token_url,
-                                         enc_key=self.enc_key,
+                                         enc_key=self.enc_key if isinstance(self.enc_key, str) else '',
                                          app_name=APP_NAME,
                                          base_url=base_url,
                                          grant_type=AUTHORIZATION_CODE,
@@ -90,10 +94,29 @@ class Client(BaseClient):
                                          proxy=proxy,
                                          refresh_token=self.refresh_token,
                                          ok_codes=(200, 201, 202, 204),
-                                         scope='',
+                                         timeout=self.timeout,
+                                         scope=Scopes.management_azure,
                                          auth_code=auth_code,
                                          resource='https://manage.office.com',
-                                         token_retrieval_url='https://login.windows.net/common/oauth2/token')
+                                         token_retrieval_url='https://login.windows.net/common/oauth2/token',
+                                         redirect_uri=redirect_uri,
+                                         certificate_thumbprint=certificate_thumbprint,
+                                         private_key=private_key,
+                                         managed_identities_client_id=managed_identities_client_id,
+                                         managed_identities_resource_uri=Resources.manage_office,
+                                         command_prefix="ms-management-activity"
+                                         )
+
+    def http_request(self, method, url_suffix='', full_url=None, headers=None, params=None, timeout=None, ok_codes=None,
+                     return_empty_response=False, **kwargs):
+        """
+        Calls the built in http_request, replacing a None timeout with self.timeout
+        """
+        if timeout is None:
+            timeout = self.timeout
+        return self._http_request(method=method, url_suffix=url_suffix, full_url=full_url, params=params,
+                                  ok_codes=ok_codes, headers=headers, return_empty_response=return_empty_response,
+                                  timeout=timeout, **kwargs)
 
     def get_access_token_data(self):
         access_token_jwt = self.ms_client.get_access_token()
@@ -103,13 +126,11 @@ class Client(BaseClient):
     def get_authentication_string(self):
         return f'Bearer {self.access_token}'
 
-    def get_blob_data_request(self, blob_url, timeout=10):
-        '''
+    def get_blob_data_request(self, blob_url):
+        """
         Args:
             blob_url: The URL for the blob.
-            timeout: Timeout for http request.
-            The default timeout in the Client class is 10 seconds. That's why the defualt here is 10 as well.
-        '''
+        """
         auth_string = self.get_authentication_string()
         headers = {
             'Content-Type': 'application/json',
@@ -118,24 +139,21 @@ class Client(BaseClient):
         params = {
             'PublisherIdentifier': PUBLISHER_IDENTIFIER
         }
-        response = self._http_request(
+        response = self.http_request(
             method='GET',
             url_suffix='',
             full_url=blob_url,
             headers=headers,
             params=params,
-            timeout=timeout,
         )
         return response
 
-    def list_content_request(self, content_type, start_time, end_time, timeout=10):
+    def list_content_request(self, content_type, start_time, end_time):
         """
         Args:
             content_type: the content type
             start_time: start time to fetch content
             end_time: end time to fetch content
-            timeout: Timeout for http request.
-            The default timeout in the Client class is 10 seconds. That's why the defualt here is 10 as well.
         """
         auth_string = self.get_authentication_string()
         headers = {
@@ -150,12 +168,11 @@ class Client(BaseClient):
             params['startTime'] = start_time
             params['endTime'] = end_time
 
-        response = self._http_request(
+        response = self.http_request(
             method='GET',
             url_suffix=self.suffix_template.format(self.tenant_id, 'content'),
             headers=headers,
             params=params,
-            timeout=timeout,
         )
         return response
 
@@ -167,7 +184,7 @@ class Client(BaseClient):
         params = {
             'PublisherIdentifier': PUBLISHER_IDENTIFIER
         }
-        response = self._http_request(
+        response = self.http_request(
             method='GET',
             url_suffix=self.suffix_template.format(self.tenant_id, 'list'),
             headers=headers,
@@ -185,7 +202,7 @@ class Client(BaseClient):
             'PublisherIdentifier': PUBLISHER_IDENTIFIER,
             'contentType': content_type
         }
-        return self._http_request(
+        return self.http_request(
             method='POST',
             url_suffix=self.suffix_template.format(self.tenant_id, start_or_stop_suffix),
             headers=headers,
@@ -195,16 +212,23 @@ class Client(BaseClient):
         )
 
 
-def test_module():
+def test_module(client: Client):
     params = demisto.params()
     fetch_delta = params.get('first_fetch_delta', '10 minutes')
     user_input_fetch_start_date, _ = parse_date_range(fetch_delta)
     if datetime.now() - timedelta(days=7) - timedelta(minutes=5) >= user_input_fetch_start_date:
-        return 'Error: first fetch time delta should not be over one week.'
-    if params.get('self_deployed') and not params.get('auth_code'):
-        return 'Error: in the self_deployed authentication flow the authentication code parameter cannot be empty.'
-    return 'The basic parameters are ok, authentication cannot be checked using the test module. ' \
-           'Please run ms-management-activity-list-subscriptions to test your credentials.'
+        raise DemistoException('Error: first fetch time delta should not be over one week.')
+
+    if client.ms_client.managed_identities_client_id:
+        client.get_access_token_data()
+        return 'ok'
+
+    if params.get('self_deployed') and (not params.get('auth_code') or not params.get('redirect_uri')):
+        raise DemistoException('Error: in the self_deployed authentication flow the Authorization code and '
+                               'the Application redirect URI cannot be empty.')
+    raise DemistoException('The basic parameters are ok, authentication cannot be checked using the *Test* button.\n '
+                           'Please run the !ms-management-activity-list-subscriptions command instead once all '
+                           'relevant parameters have been entered.')
 
 
 def get_start_or_stop_subscription_human_readable(content_type, start_or_stop):
@@ -216,7 +240,7 @@ def get_start_or_stop_subscription_human_readable(content_type, start_or_stop):
 
 
 def get_start_or_stop_subscription_context(content_type, start_or_stop):
-    is_subscription_enabled = True if start_or_stop == 'start' else False
+    is_subscription_enabled = start_or_stop == 'start'
     subscription_context = {
         'ContentType': content_type,
         'Enabled': is_subscription_enabled
@@ -311,13 +335,13 @@ def get_content_records_context(content_records):
     return content_records_context
 
 
-def get_all_content_type_records(client, content_type, start_time, end_time, timeout=10):
-    content_blobs = client.list_content_request(content_type, start_time, end_time, timeout)
+def get_all_content_type_records(client, content_type, start_time, end_time):
+    content_blobs = client.list_content_request(content_type, start_time, end_time)
     # The list_content request returns a list of content records, each containing a url that holds the actual data
     content_uris = [content_blob.get('contentUri') for content_blob in content_blobs]
     content_records: List = []
     for uri in content_uris:
-        content_records_in_uri = client.get_blob_data_request(uri, timeout)
+        content_records_in_uri = client.get_blob_data_request(uri)
         content_records.extend(content_records_in_uri)
     return content_records
 
@@ -393,9 +417,8 @@ def list_content_command(client, args):
     content_type = args['content_type']
     start_time = args.get('start_time')
     end_time = args.get('end_time')
-    timeout = args.get('timeout', 10)
 
-    content_records = get_all_content_type_records(client, content_type, start_time, end_time, timeout)
+    content_records = get_all_content_type_records(client, content_type, start_time, end_time)
     filtered_content_records = filter_records(content_records, args)
     content_records_context = get_content_records_context(filtered_content_records)
     human_readable = create_events_human_readable(content_records_context, content_type)
@@ -435,16 +458,20 @@ def get_fetch_start_and_end_time(last_run, first_fetch_datetime):
         last_fetch = last_run.get('last_fetch')
         fetch_start_datetime = datetime.strptime(last_fetch, DATE_FORMAT)
 
+    # the start time must be no more than 7 days in the past
+    demisto.debug(f"For start time takes the bigger between: last_fetch={fetch_start_datetime.strftime(DATE_FORMAT)}, 7 days ago")
+    fetch_start_datetime = max(fetch_start_datetime, dateparser.parse("7 days ago"))
     fetch_end_datetime = get_fetch_end_time_based_on_start_time(fetch_start_datetime)
 
     # The API expects strings of format YYYY:DD:MMTHH:MM:SS
     fetch_start_time_str = fetch_start_datetime.strftime(DATE_FORMAT)
     fetch_end_time_str = fetch_end_datetime.strftime(DATE_FORMAT)
+    demisto.debug(f"get_fetch_start_and_end_time: {fetch_start_time_str=}, {fetch_end_time_str=}")
     return fetch_start_time_str, fetch_end_time_str
 
 
 def get_all_content_records_of_specified_types(client, content_types_to_fetch, start_time, end_time):
-    all_content_records: List = list()
+    all_content_records = []
     content_types_to_fetch = content_types_to_fetch.split(',') if type(content_types_to_fetch) is str \
         else content_types_to_fetch
     for content_type in content_types_to_fetch:
@@ -492,13 +519,23 @@ def content_records_to_incidents(content_records, start_time, end_time):
 
 
 def fetch_incidents(client, last_run, first_fetch_datetime):
+    demisto.debug(f"fetch_incidents: {last_run=}, {first_fetch_datetime=}")
     start_time, end_time = get_fetch_start_and_end_time(last_run, first_fetch_datetime)
     content_types_to_fetch = get_content_types_to_fetch(client)
     content_records = get_all_content_records_of_specified_types(client, content_types_to_fetch, start_time, end_time)
     filtered_content_records = filter_records(content_records, demisto.params())
     incidents, last_fetch = content_records_to_incidents(filtered_content_records, start_time, end_time)
     next_run = {'last_fetch': last_fetch}
+    demisto.debug(f"fetch_incidents: {next_run=}")
     return next_run, incidents
+
+
+def calculate_timeout_value(params: dict, args: dict) -> int:
+    if arg_timeout := int(args.get('timeout') or 0):
+        return arg_timeout
+    elif param_timeout := int(params.get('timeout') or 0):
+        return param_timeout
+    return TIMEOUT_DEFAULT  # for unit tests
 
 
 def main():
@@ -509,20 +546,29 @@ def main():
     first_fetch_datetime, _ = parse_date_range(first_fetch_delta)
 
     proxy = demisto.params().get('proxy', False)
-
-    LOG(f'Command being called is {demisto.command()}')
+    args = demisto.args()
+    params = demisto.params()
+    command = demisto.command()
+    LOG(f'Command being called is {command}')
     try:
-        if demisto.command() == 'test-module':
-            result = test_module()
-            return_error(result)
-
-        args = demisto.args()
-        params = demisto.params()
-        refresh_token = params.get('refresh_token', '')
-        self_deployed = params.get('self_deployed', False)
+        refresh_token = params.get('credentials_refresh_token', {}).get('password') or params.get('refresh_token', '')
+        managed_identities_client_id = get_azure_managed_identities_client_id(params)
+        self_deployed = params.get('self_deployed', False) or managed_identities_client_id is not None
+        redirect_uri = params.get('redirect_uri', '')
         tenant_id = refresh_token if self_deployed else ''
-        auth_id = params['auth_id']
-        enc_key = params['enc_key']
+        auth_id = params.get('credentials_auth_id', {}).get('password') or params.get('auth_id')
+        enc_key = params.get('credentials_enc_key', {}).get('password') or params.get('enc_key')
+        auth_code = params.get('credentials_auth_code', {}).get('password') or params.get('auth_code', '')
+        certificate_thumbprint = params.get('credentials_certificate_thumbprint', {}).get(
+            'password') or params.get('certificate_thumbprint')
+        private_key = params.get('private_key')
+
+        if not managed_identities_client_id:
+            if not self_deployed and not enc_key:
+                raise DemistoException('Key must be provided. For further information see https://xsoar.pan.dev/docs'
+                                       '/reference/articles/microsoft-integrations---authentication')
+            elif not enc_key and not (certificate_thumbprint and private_key):
+                raise DemistoException('Key or Certificate Thumbprint and Private Key must be provided.')
 
         refresh_token = get_integration_context().get('current_refresh_token') or refresh_token
 
@@ -534,15 +580,25 @@ def main():
             self_deployed=self_deployed,
             refresh_token=refresh_token,
             auth_and_token_url=auth_id,
+            timeout=calculate_timeout_value(params=params, args=args),
             enc_key=enc_key,
-            auth_code=params.get('auth_code', '')
+            auth_code=auth_code,
+            redirect_uri=redirect_uri,
+            certificate_thumbprint=certificate_thumbprint,
+            private_key=private_key,
+            managed_identities_client_id=managed_identities_client_id
         )
 
-        access_token, token_data = client.get_access_token_data()
-        client.access_token = access_token
-        client.tenant_id = token_data['tid']
+        if command == 'test-module':
+            return_results(test_module(client=client))
 
-        if demisto.command() == 'fetch-incidents':
+        # in the generate login url command we still don't't have the auth code do get the token
+        if command != 'ms-management-activity-generate-login-url':
+            access_token, token_data = client.get_access_token_data()
+            client.access_token = access_token
+            client.tenant_id = token_data['tid']
+
+        if command == 'fetch-incidents':
             next_run, incidents = fetch_incidents(
                 client=client,
                 last_run=demisto.getLastRun(),
@@ -551,24 +607,28 @@ def main():
             demisto.setLastRun(next_run)
             demisto.incidents(incidents)
 
-        elif demisto.command() == 'ms-management-activity-start-subscription':
+        elif command == 'ms-management-activity-start-subscription':
             start_or_stop_subscription_command(client, args, 'start')
 
-        elif demisto.command() == 'ms-management-activity-stop-subscription':
+        elif command == 'ms-management-activity-stop-subscription':
             start_or_stop_subscription_command(client, args, 'stop')
 
-        elif demisto.command() == 'ms-management-activity-list-subscriptions':
+        elif command == 'ms-management-activity-list-subscriptions':
             list_subscriptions_command(client)
 
-        elif demisto.command() == 'ms-management-activity-list-content':
+        elif command == 'ms-management-activity-list-content':
             list_content_command(client, args)
+
+        elif command == 'ms-management-activity-generate-login-url':
+            return_results(generate_login_url(client.ms_client))
+
+        elif command == 'ms-management-activity-auth-reset':
+            return_results(reset_auth())
 
     # Log exceptions
     except Exception as e:
-        return_error(f'Failed to execute {demisto.command()} command. Error: {str(e)}')
+        return_error(f'Failed to execute {command} command. Error: {str(e)}')
 
-
-from MicrosoftApiModule import *  # noqa: E402
 
 if __name__ in ['__main__', '__builtin__', 'builtins']:
     main()

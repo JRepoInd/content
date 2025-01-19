@@ -1,68 +1,45 @@
 import pytest
+import re
 
 import demistomock as demisto
-from IsIncidentPartOfCampaign import check_incidents_ids_in_campaigns_list, get_incidents_ids_by_type, main
+from IsIncidentPartOfCampaign import main
 
-PHISHING_CAMPAIGN_INCIDENTS = [
-    {'id': '1',
-     'type': 'Phishing Campaign',
-     'EmailCampaign': {'incidents': [{'id': '11'}, {'id': '12'}]}
-     },
-    {'id': '2',
-     'type': 'Phishing Campaign',
-     'EmailCampaign': {'incidents': [{'id': '21'}, {'id': '22'}]}
-     },
-]
-OTHER_INCIDENTS = [
-    {'id': '3',
-     'type': 'Phishing',
-     },
+INCIDENTS: list[dict] = [
+    {'id': '1', 'type': 'Phishing Campaign'},
+    {'id': '2', 'type': 'Phishing Campaign'},
+    {'id': '3', 'type': 'Phishing'},
+    {'id': '4', 'type': 'Phishing', 'partofcampaign': '1'},
+    {'id': '5', 'type': 'Phishing', 'partofcampaign': '2'},
+    {'id': '6', 'type': 'Phishing'},
 ]
 
 
-def _wrap_mocked_get_context(raw_incident):
-    return [{'Contents': {'context': raw_incident}}]
+def get_incidents_by_query_func(args):
+    query = args["query"]
+    match = re.search(r"incident.id:\(([^\)]*)\)", query)
+    incident_ids = set(match.group(1).split(" ") if match and match.group(1) else [])
+    return [i for i in INCIDENTS if i.get("id") in incident_ids and i.get("partofcampaign")]
 
 
-def _wrap_mocked_get_incident(raw_incidents):
-    return [{'Contents': {'data': raw_incidents}}]
+@pytest.fixture(autouse=True)
+def mock_get_incidents_by_query(mocker):
+    mocker.patch(
+        "IsIncidentPartOfCampaign.get_incidents_by_query",
+        side_effect=get_incidents_by_query_func,
+    )
 
 
-@pytest.mark.parametrize('incidents_ids_set, result',
-                         [({'11'}, '1'), ({'11', '21'}, '1'), ({'21', '22'}, '2'), ({'31'}, None)])
-def test_check_incidents_ids_in_campaigns_list(mocker, incidents_ids_set, result):
-    mocker.patch.object(demisto, 'executeCommand',
-                        side_effect=[_wrap_mocked_get_context(incident) for incident in PHISHING_CAMPAIGN_INCIDENTS])
-    assert result == check_incidents_ids_in_campaigns_list(['1', '2'], incidents_ids_set)
-
-
-def test_check_incidents_ids_in_campaigns_list_no_incidents():
-    assert check_incidents_ids_in_campaigns_list([], {'11', '12'}) is None
-
-
-def test_get_incidents_ids_by_type(mocker):
-    mocker.patch.object(demisto, 'executeCommand',
-                        return_value=_wrap_mocked_get_incident(PHISHING_CAMPAIGN_INCIDENTS + OTHER_INCIDENTS))
-    assert get_incidents_ids_by_type('Phishing Campaign') == ['1', '2']
-
-
-def test_get_incidents_ids_by_type_empty(mocker):
-    mocker.patch.object(demisto, 'executeCommand',
-                        return_value=_wrap_mocked_get_incident(None))
-    assert get_incidents_ids_by_type('Phishing Campaign') == []
-
-
-def test_main(mocker):
-    mocker.patch.object(demisto, 'args',
-                        return_value={'CampaignIncidentType': 'Phishing Campaign', 'IncidentIDs': '11,21'})
-    mocker.patch.object(demisto, 'executeCommand',
-                        side_effect=[_wrap_mocked_get_incident(PHISHING_CAMPAIGN_INCIDENTS + OTHER_INCIDENTS)] + [
-                            _wrap_mocked_get_context(incident) for incident in PHISHING_CAMPAIGN_INCIDENTS])
+def test_success(mocker):
+    """Given a list of incident IDs that are part of a campaign, make sure results are returned"""
+    mocker.patch.object(demisto, "args", return_value={"IncidentIDs": "3,5"})
     results = main()
-    assert results.readable_output == "Found campaign with ID - 1"
-    assert results.outputs['ExistingCampaignID'] == '1'
-    mocker.patch.object(demisto, 'executeCommand',
-                        side_effect=[_wrap_mocked_get_incident(None)])
+    assert "Found campaign with ID" in results.readable_output
+    assert results.outputs["ExistingCampaignID"] in ["1", "2"]
+
+
+def test_no_results(mocker):
+    """Given a list of incident IDs, but they are not part of a campaign, make sure no results are returned"""
+    mocker.patch.object(demisto, "args", return_value={"IncidentIDs": "1"})
     results = main()
-    assert results.readable_output == "No campaign has found"
-    assert results.outputs['ExistingCampaignID'] is None
+    assert "No campaign was found" in results.readable_output
+    assert not results.outputs["ExistingCampaignID"]

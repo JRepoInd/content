@@ -427,12 +427,6 @@ Vectra API is available for administrators and developers to integrate Vectra's 
     </tr>
   </tbody>
 </table>
-
-<!-- remove the following comments to manually add an image: -->
-<!--
-<a href="insert URL to your image" target="_blank" rel="noopener noreferrer"><img src="insert URL to your image"
- alt="image" width="749" height="412"></a>
- -->
 </p>
 
 <h3>2. vectra-get-hosts</h3>
@@ -728,12 +722,6 @@ Vectra API is available for administrators and developers to integrate Vectra's 
     </tr>
   </tbody>
 </table>
-
-<!-- remove the following comments to manually add an image: -->
-<!--
-<a href="insert URL to your image" target="_blank" rel="noopener noreferrer"><img src="insert URL to your image"
- alt="image" width="749" height="412"></a>
- -->
 </p>
 
 <h3>3. vectra-triage</h3>
@@ -860,11 +848,6 @@ No output examples
 <p>
 Couldn't find any results
 </p>
-<!-- remove the following comments to manually add an image: -->
-<!--
-<a href="insert URL to your image" target="_blank" rel="noopener noreferrer"><img src="insert URL to your image"
- alt="image" width="749" height="412"></a>
- -->
 </p>
 
 <h3>4. vectra-get-host-by-id</h3>
@@ -948,12 +931,6 @@ There are no context output for this command.
     </tr>
   </tbody>
 </table>
-
-<!-- remove the following comments to manually add an image: -->
-<!--
-<a href="insert URL to your image" target="_blank" rel="noopener noreferrer"><img src="insert URL to your image"
- alt="image" width="749" height="412"></a>
- -->
 </p>
 
 <h3>5. vectra-get-detection-by-id</h3>
@@ -989,12 +966,6 @@ There are no context output for this command.
 </table>
 
 <p>&nbsp;</p>
-
-<!-- remove the following comments to manually add an image: -->
-<!--
-<a href="insert URL to your image" target="_blank" rel="noopener noreferrer"><img src="insert URL to your image"
- alt="image" width="749" height="412"></a>
- -->
 </p>
 
 <h3>6. vectra-get-users</h3>
@@ -1057,13 +1028,6 @@ There are no context output for this command.
 <p>
   <code>!vectra-get-users</code>
 </p>
-
-
-<!-- remove the following comments to manually add an image: -->
-<!--
-<a href="insert URL to your image" target="_blank" rel="noopener noreferrer"><img src="insert URL to your image"
- alt="image" width="749" height="412"></a>
- -->
 </p>
 
 <h3>7. vectra-get-proxies</h3>
@@ -1157,11 +1121,6 @@ There are no context output for this command.
 <p>
 Couldn't find any results
 </p>
-<!-- remove the following comments to manually add an image: -->
-<!--
-<a href="insert URL to your image" target="_blank" rel="noopener noreferrer"><img src="insert URL to your image"
- alt="image" width="749" height="412"></a>
- -->
 </p>
 
 <h3>8. vectra-get-threatfeed</h3>
@@ -1291,12 +1250,6 @@ Couldn't find any results
     </tr>
   </tbody>
 </table>
-
-<!-- remove the following comments to manually add an image: -->
-<!--
-<a href="insert URL to your image" target="_blank" rel="noopener noreferrer"><img src="insert URL to your image"
- alt="image" width="749" height="412"></a>
- -->
 </p>
 
 <h3>9. vectra-search</h3>
@@ -1409,3 +1362,41 @@ There are no context output for this command.
   </tbody>
 </table>
 
+# Replacement Commands
+
+Vectra has developed a new XSOAR content pack to replace the legacy Cortex XSOAR content pack. This new content pack includes commands that replace and extend the functionality of existing commands. The following table outlines which commands should be used for updating existing integrations.
+
+
+| Legacy Command               | Replacement Command                               |
+|------------------------------|---------------------------------------------------|
+| `vectra-detections`          | `vectra-search-detections`                        |
+| `vectra-get-detections`      | `vectra-search-detections`                        |
+| `vectra-get-detection-by-id` | `vectra-detection-describe`                       |
+| `vectra-hosts`               | `vectra-search-hosts`                             |
+| `vectra-get-hosts`           | `vectra-search-hosts`                             |
+| `vectra-get-host-by-id`      | `vectra-host-describe`                            |
+| `vectra-get-users`           | `vectra-search-users`                             |
+| `vectra-search`              | `vectra-search-hosts`, `vectra-search-detections` |
+
+
+# New Commands
+
+In addition to the replacement commands, new functionality is included with the current content pack. The following table outlines the new functionality provided.
+
+| Command                        | Command Description                                               |
+|--------------------------------|-------------------------------------------------------------------|
+| `vectra-search-accounts`       | Returns a list of Account objects                                 |
+| `vectra-search-assignments`    | Return a list of assignments                                      |
+| `vectra-search-outcomes`       | Returns a list of assignment outcomes                             |
+| `vectra-account-describe`      | Returns a single Account details                                  |
+| `vectra-account-add-tags`      | Add tags to an Account                                            |
+| `vectra-host-del-tags`         | Delete tags from an Host                                          |
+| `vectra-detection-get-pcap`    | Returns a Detection's PCAP file (if available)                    |
+| `vectra-detection-markasfixed` | Marks/Unmarks a Detection as fixed by providing the Detection ID  |
+| `vectra-detection-add-tags`    | Add tags to a Detection                                           |
+| `vectra-detection-del-tags`    | Delete tags from a Detection                                      |
+| `vectra-outcome-describe`      | Returns a single outcome details                                  |
+| `vectra-outcome-create`        | Creates a new assignment outcome                                  |
+| `vectra-assignment-describe`   | Returns a single assignment details                               |
+| `vectra-assignment-assign`     | Assigns an Account/Host entity to a Vectra User for investigation |
+| `vectra-assignment-resolve`    | Resolves an assignment by selecting resolution scheme             |

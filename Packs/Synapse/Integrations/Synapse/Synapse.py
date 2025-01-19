@@ -1,7 +1,6 @@
 import asyncio
 import ipaddress
 import json
-import traceback
 
 import aiohttp
 import pytz
@@ -32,7 +31,7 @@ class Client(BaseClient):
         self.proxy = proxy
         self.auth = (username, password)
         self.aio_auth = aiohttp.BasicAuth(username, password)
-        super(Client, self).__init__(base_url, **kwargs)
+        super().__init__(base_url, **kwargs)
 
     def _check_for_error(self, resp):
         """
@@ -165,7 +164,7 @@ class Client(BaseClient):
             address = urljoin(self._base_url, '/storm')
             query = {'query': my_query}
             async with sess.get(address, json=query, auth=self.aio_auth) as resp:
-                async for byts, x in resp.content.iter_chunks():
+                async for byts, _x in resp.content.iter_chunks():
                     if not byts:
                         break
                     mesg = json.loads(byts)
@@ -185,7 +184,7 @@ def validate_timezone_helper(TIMEZONE):
         return_error(f'Error: Timezone format "{TIMEZONE}" invalid')
     else:
         tz = pytz.timezone(TIMEZONE)
-    return tz
+    return tz  # pylint: disable=E0606
 
 
 def convert_raw_into_nodes_helper(results):
@@ -215,13 +214,13 @@ def get_full_tags_helper(data):
     """
     tags = []
 
-    temp_tags = [t for t in data.keys()]
+    temp_tags = list(data.keys())
     if temp_tags:
         tags.append(temp_tags.pop(0))
     else:
         return tags
 
-    for i in range(0, len(temp_tags)):
+    for _i in range(0, len(temp_tags)):
         if temp_tags:
             temp = temp_tags.pop(0)
         else:
@@ -259,8 +258,8 @@ def model_query_helper(model, query):
     Returns properties for given node type. Raises error not found if not present.
     """
     parsed_data = {'query': query}
-    mod_types = [t for t in model['types'].keys()]
-    mod_forms = [f for f in model['forms'].keys()]
+    mod_types = list(model['types'].keys())
+    mod_forms = list(model['forms'].keys())
 
     if (query not in mod_types) and (query not in mod_forms):
         raise Exception(f'Error: Query "{query}" not found in model. Try adjusting syntax (i.e. "inet:ipv4").')
@@ -399,7 +398,8 @@ def ip_reputation_command(client, args, good_tag, bad_tag) -> List[CommandResult
             indicator_type=DBotScoreType.IP,
             integration_name='Synapse',
             score=score,
-            malicious_description=f'Synapse returned reputation tag: {reputation["tag"]}'
+            malicious_description=f'Synapse returned reputation tag: {reputation["tag"]}',
+            reliability=demisto.params().get('integrationReliability')
         )
 
         # Create the IP Standard Context structure using Common.IP and add
@@ -454,7 +454,8 @@ def domain_reputation_command(client, args, good_tag, bad_tag) -> List[CommandRe
             indicator_type=DBotScoreType.DOMAIN,
             integration_name='Synapse',
             score=score,
-            malicious_description=f'Synapse returned reputation tag: {reputation["tag"]}'
+            malicious_description=f'Synapse returned reputation tag: {reputation["tag"]}',
+            reliability=demisto.params().get('integrationReliability')
         )
 
         # Create the Domain Standard Context structure using Common.Domain and add
@@ -513,7 +514,8 @@ def url_reputation_command(client, args, good_tag, bad_tag) -> List[CommandResul
             indicator_type=DBotScoreType.URL,
             integration_name='Synapse',
             score=score,
-            malicious_description=f'Synapse returned reputation tag: {reputation["tag"]}'
+            malicious_description=f'Synapse returned reputation tag: {reputation["tag"]}',
+            reliability=demisto.params().get('integrationReliability')
         )
 
         # Create the URL Standard Context structure using Common.URL and add
@@ -566,7 +568,8 @@ def file_reputation_command(client, args, good_tag, bad_tag) -> List[CommandResu
             indicator_type=DBotScoreType.FILE,
             integration_name='Synapse',
             score=score,
-            malicious_description=f'Synapse returned reputation tag: {reputation["tag"]}'
+            malicious_description=f'Synapse returned reputation tag: {reputation["tag"]}',
+            reliability=demisto.params().get('integrationReliability')
         )
 
         # Create the File Standard Context structure using Common.File and add
@@ -610,7 +613,7 @@ def storm_query_command(client, args):
 
     if len(nodes) == 1:
         name_single = 'Synapse Node Properties'
-        headers_single = [h for h in data[0][1]['props'].keys()]
+        headers_single = list(data[0][1]['props'].keys())
         readable_output += tableToMarkdown(name_single, data[0][1]['props'], headers=headers_single, removeNull=False)
 
     results = CommandResults(
@@ -816,7 +819,7 @@ def query_model_command(client, args):
 
     if full_resp.get('Form'):
         name_form = f'Synapse `{full_resp.get("Valu")}` Form Properties'
-        headers_form = [h for h in q_form['Properties'].keys()]
+        headers_form = list(q_form['Properties'].keys())
         readable_output += tableToMarkdown(name_form, q_form['Properties'], headers=headers_form, removeNull=False)
 
     results = CommandResults(
@@ -841,11 +844,15 @@ def main() -> None:
     password = demisto.params().get('credentials').get('password')
     port = demisto.params().get('port')
     base = demisto.params()['url'].rstrip('/') + ':' + str(port)
-    base_url = urljoin(base, '/api/v1')
     use_ssl = not demisto.params().get('insecure', False)
     use_proxy = demisto.params().get('proxy', False)
     good_tag = demisto.params().get('good_tag')
     bad_tag = demisto.params().get('bad_tag')
+    use_optic = demisto.params().get('use_optic', False)
+    if use_optic:
+        base_url = urljoin(base, '/api/v1/optic')
+    else:
+        base_url = urljoin(base, '/api/v1')
 
     demisto.debug(f'Command being called is {demisto.command()}')
     try:
@@ -895,7 +902,6 @@ def main() -> None:
 
     # Log exceptions and return errors
     except Exception as e:
-        demisto.error(traceback.format_exc())  # print the traceback
         return_error(f'Failed to execute {demisto.command()} command.\nError:\n{str(e)}')
 
 

@@ -3,9 +3,6 @@ from CommonServerPython import *
 from CommonServerUserPython import *
 from typing import Dict, Any, List, Optional, Tuple
 
-# Disable insecure warnings
-requests.packages.urllib3.disable_warnings()
-
 ''' CONSTANTS '''
 
 VENDOR = 'Threat Crowd'
@@ -82,13 +79,13 @@ def ip_command(client: Client, args: Dict[str, Any]) -> List[CommandResults]:
             ip, DBotScoreType.IP, VENDOR, score, reliability=client.reliability)
         ip_object = Common.IP(ip, dbot)
 
-        hashes = res.get('hashes')[:entries_limit]
+        hashes = res.get('hashes', [])[:entries_limit]
         resolutions = handle_resolutions(res.get('resolutions', []), entries_limit)
 
         markdown = f"### Threat crowd report for ip {ip}: \n  ### DBotScore: {score_str} \n" \
                    f"{tableToMarkdown('Resolutions', resolutions, removeNull=True)} \n " \
                    f"{tableToMarkdown('Hashes', hashes, headers='Hashes', removeNull=True)}" \
-                   f"{tableToMarkdown('References', res.get('references'), removeNull=True)}"
+                   f"{tableToMarkdown('References', res.get('references'), removeNull=True, headers='References')}"
 
         outputs = {
             'hashes': hashes,
@@ -321,7 +318,6 @@ def main() -> None:
 
     # Log exceptions and return errors
     except Exception as e:
-        demisto.error(traceback.format_exc())  # print the traceback
         return_error(f'Failed to execute {command} command.\nError:\n{str(e)}')
 
 

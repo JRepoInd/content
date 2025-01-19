@@ -1,29 +1,30 @@
+import demistomock as demisto  # noqa: F401
+from CommonServerPython import *  # noqa: F401
+
 """ IMPORTS """
-from CommonServerPython import *
 import os
 import re
-import requests
 import json
-from pancloud import QueryService, Credentials, exceptions
+from pan_cortex_data_lake import Credentials, exceptions, QueryService
+import time
 import base64
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
-from typing import Dict, Any, List, Tuple, Callable
+from typing import Any
+from collections.abc import Callable
 from tempfile import gettempdir
 from dateutil import parser
-import demistomock as demisto
 from datetime import timedelta
 
 # disable insecure warnings
-requests.packages.urllib3.disable_warnings()
+import urllib3
+
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 ''' GLOBAL CONSTS '''
 ACCESS_TOKEN_CONST = 'access_token'  # guardrails-disable-line
-REFRESH_TOKEN_CONST = 'refresh_token'  # guardrails-disable-line
 EXPIRES_IN = 'expires_in'
 INSTANCE_ID_CONST = 'instance_id'
 API_URL_CONST = 'api_url'
-REGISTRATION_ID_CONST = 'reg_id'
-ENCRYPTION_KEY_CONST = 'auth_key'
 FIRST_FAILURE_TIME_CONST = 'first_failure_time'
 LAST_FAILURE_TIME_CONST = 'last_failure_time'
 DEFAULT_API_URL = 'https://api.us.cdl.paloaltonetworks.com'
@@ -31,7 +32,18 @@ MINUTES_60 = 60 * 60
 SECONDS_30 = 30
 FETCH_TABLE_HR_NAME = {
     "firewall.threat": "Cortex Firewall Threat",
-    "firewall.file_data": "Cortex Firewall File Data"
+    "firewall.file_data": "Cortex Firewall File Data",
+    "firewall.auth": "Cortex Firewall Authentication",
+    "firewall.decryption": "Cortex Firewall Decryption",
+    "firewall.extpcap": "Cortex Firewall Extpcap",
+    "firewall.globalprotect": "Cortex Firewall GlobalProtect",
+    "firewall.hipmatch": "Cortex Firewall HIP Match",
+    "firewall.iptag": "Cortex Firewall IPtag",
+    "firewall.traffic": "Cortex Firewall Traffic",
+    "firewall.url": "Cortex Firewall URL",
+    "firewall.userid": "Cortex Firewall UserID",
+    "log.system": "Cortex Common System",
+    "log.config": "Cortex Common Config"
 }
 BAD_REQUEST_REGEX = r'^Error in API call \[400\].*'
 
@@ -42,7 +54,7 @@ class Client(BaseClient):
     Should only do requests and return data.
     """
 
-    def __init__(self, token_retrieval_url, registration_id, use_ssl, proxy, refresh_token, enc_key):
+    def __init__(self, token_retrieval_url, registration_id, use_ssl, proxy, refresh_token, enc_key, is_fr):
         headers = get_x_content_info_headers()
         headers['Authorization'] = registration_id
         headers['Accept'] = 'application/json'
@@ -50,6 +62,8 @@ class Client(BaseClient):
         self.refresh_token = refresh_token
         self.enc_key = enc_key
         self.use_ssl = use_ssl
+        self.is_fr = is_fr
+        self.registration_id = registration_id
         # Trust environment settings for proxy configuration
         self.trust_env = proxy
         self._set_access_token()
@@ -64,12 +78,11 @@ class Client(BaseClient):
         integration_context = demisto.getIntegrationContext()
         access_token = integration_context.get(ACCESS_TOKEN_CONST)
         valid_until = integration_context.get(EXPIRES_IN)
-        if access_token and valid_until:
-            if int(time.time()) < valid_until:
-                self.access_token = access_token
-                self.api_url = integration_context.get(API_URL_CONST, DEFAULT_API_URL)
-                self.instance_id = integration_context.get(INSTANCE_ID_CONST)
-                return
+        if access_token and valid_until and int(time.time()) < valid_until:
+            self.access_token = access_token
+            self.api_url = integration_context.get(API_URL_CONST, DEFAULT_API_URL)
+            self.instance_id = integration_context.get(INSTANCE_ID_CONST)
+            return
         demisto.debug(f'access token time: {valid_until} expired/none. Will call oproxy')
         access_token, api_url, instance_id, refresh_token, expires_in = self._oproxy_authorize()
         updated_integration_context = {
@@ -79,17 +92,17 @@ class Client(BaseClient):
             INSTANCE_ID_CONST: instance_id
         }
         if refresh_token:
-            updated_integration_context.update({REFRESH_TOKEN_CONST: refresh_token})
+            updated_integration_context.update({'refresh_token': refresh_token})
         demisto.setIntegrationContext(updated_integration_context)
         self.access_token = access_token
         self.api_url = api_url
         self.instance_id = instance_id
 
-    def _oproxy_authorize(self) -> Tuple[Any, Any, Any, Any, int]:
+    def _oproxy_authorize(self) -> tuple[Any, Any, Any, Any, int]:
         oproxy_response = self._get_access_token_with_backoff_strategy()
         access_token = oproxy_response.get(ACCESS_TOKEN_CONST)
         api_url = oproxy_response.get('url')
-        refresh_token = oproxy_response.get(REFRESH_TOKEN_CONST)
+        refresh_token = oproxy_response.get('refresh_token')
         instance_id = oproxy_response.get(INSTANCE_ID_CONST)
         # In case the response has EXPIRES_IN key with empty string as value, we need to make sure we don't try to cast
         # an empty string to an int.
@@ -160,9 +173,14 @@ class Client(BaseClient):
         """
         demisto.debug('CDL - Fetching access token')
         try:
+            token = get_encrypted(self.refresh_token, self.enc_key)
+            if self.is_fr:
+                data = {'encrypted_token': token, 'registration_id': self.registration_id}
+            else:
+                data = {'token': token}
             oproxy_response = self._http_request('POST',
                                                  '/cdl-token',
-                                                 json_data={'token': get_encrypted(self.refresh_token, self.enc_key)},
+                                                 json_data=data,
                                                  timeout=(60 * 3, 60 * 3),
                                                  retries=3,
                                                  backoff_factor=10,
@@ -208,18 +226,22 @@ class Client(BaseClient):
 
         demisto.setIntegrationContext(integration_context)
 
-    def query_loggings(self, query: str) -> Tuple[List[dict], list]:
+    def query_loggings(self, query: str, page_number: Optional[str] = None, page_size: Optional[str] = None) \
+            -> tuple[list[dict], list]:
         """
         This function handles all the querying of Cortex Logging service
 
         Args:
             query: The sql string query.
+            page_number: The page number to query.
+            page_size: The page size to query.
 
         Returns:
             A list of records according to the query
         """
         query_data = {'query': self.add_instance_id_to_query(query),
                       'language': 'csql'}
+        demisto.debug(f'Query being executed in CDL: {str(query_data)}')
         query_service = self.initial_query_service()
         response = query_service.create_query(query_params=query_data, enforce_json=True)
         query_result = response.json()
@@ -234,16 +256,29 @@ class Client(BaseClient):
             except AttributeError:
                 error_message = query_result
 
-            raise DemistoException(f'Error in query to Cortex Data Lake [{status_code}] - {error_message}')
-
+            raise DemistoException(f'Error in query to Cortex Data Lake XSOAR Connector [{status_code}] - {error_message}')
+        raw_results = []
         try:
-            raw_results = [r.json() for r in query_service.iter_job_results(job_id=query_result.get('jobId'),
-                                                                            result_format='valuesDictionary',
-                                                                            max_wait=2000)]
+            for r in query_service.iter_job_results(job_id=query_result.get(
+                    'jobId'),
+                    page_number=arg_to_number(page_number),
+                    page_size=arg_to_number(page_size) or 50 if page_number else None,
+                    max_wait=2000,
+                    result_format='valuesDictionary'):
+                raw_results.append(r.json())
+
+        # There is a known issue in iter_job_results where pageCursor and pageNumber are not handled as expected after the first
+        # job reaches a 'DONE' status and contains the desired results. This may result in a response with an unexpected
+        # status code and missing standard fields, including the 'state' field. The method then attempts to access the 'state'
+        # field directly, which can lead to an error. This workaround helps to address the situation.
+
+        except KeyError as e:
+            if not e.args[0] == 'state':
+                raise DemistoException(f'Received error {str(e)} when querying logs.')
         except exceptions.HTTPError as e:
             raise DemistoException(f'Received error {str(e)} when querying logs.')
 
-        extended_results: List[Dict] = []
+        extended_results: list[dict] = []
         for result in raw_results:
             page = result.get('page', {})
             data = page.get('result', {}).get('data', [])
@@ -357,6 +392,24 @@ def common_context_transformer(row_content):
     }
 
 
+def system_log_context_transformer(row_content):
+    """
+    This function retrieves data from a row of raw data into context path locations
+    Args:
+        row_content: a dict representing raw data of a row
+    Returns:
+        a dict with context paths and their corresponding value
+    """
+    return {
+        'EventName': row_content.get('event_name'),
+        'EventDescription': row_content.get('event_description'),
+        'VendorSeverity': row_content.get('severity', ""),
+        'LogTime': human_readable_time_from_epoch_time(row_content.get('log_time', 0)),
+        'LogType': row_content.get('log_type', {}).get('value'),
+        'LogSourceName': row_content.get('log_source_name')
+    }
+
+
 def traffic_context_transformer(row_content: dict) -> dict:
     """
     This function retrieves data from a row of raw data into context path locations
@@ -453,6 +506,7 @@ def threat_context_transformer(row_content: dict) -> dict:
         'SourceIP': row_content.get('source_ip', {}).get('value'),
         'RuleMatched': row_content.get('rule_matched'),
         'ThreatCategory': row_content.get('threat_category', {}).get('value'),
+        'ThreatName': row_content.get('threat_name'),
         'LogSourceName': row_content.get('log_source_name'),
         'Subtype': row_content.get('sub_type', {}).get('value'),
         'Direction': row_content.get('direction_of_attack', {}).get('value'),
@@ -651,7 +705,7 @@ def records_to_human_readable_output(fields: str, table_name: str, results: list
     else:
         for result in results:
             filtered_result = {}
-            for root in result.keys():
+            for root in result:
                 parsed_tree: dict = parse_tree_by_root_to_leaf_paths(root, result[root])
                 filtered_result.update(parsed_tree)
             filtered_results.append(filtered_result)
@@ -777,6 +831,12 @@ def build_where_clause(args: dict) -> str:
         if any(args.get(key) for key in args_dict):
             where_clause += ' AND '
 
+    if args.get('rule'):
+        rules_list = argToList(args.pop('rule'))
+        where_clause += '(' + ' OR '.join(f'rule_matched = "{rule}"' for rule in rules_list) + ')'
+        if any(args.get(key) for key in args_dict):
+            where_clause += ' AND '
+
     # We want to add only keys that are part of the query
     string_query_fields = {key: value for key, value in args.items() if key in args_dict and key not in non_string_keys}
     or_statements = []
@@ -838,7 +898,8 @@ def prepare_fetch_incidents_query(fetch_timestamp: str,
                                   fetch_table: str,
                                   fetch_subtype: list,
                                   fetch_fields: str,
-                                  fetch_limit: str) -> str:
+                                  fetch_limit: str,
+                                  fetch_filter: str = '') -> str:
     """
     Prepares the SQL query for fetch incidents command
     Args:
@@ -847,26 +908,33 @@ def prepare_fetch_incidents_query(fetch_timestamp: str,
         fetch_severity: Severity associated with the incident.
         fetch_subtype: Identifies the log subtype.
         fetch_table: Identifies the fetch type.
-        fetch_fields: Fields to fetch fro the table.
+        fetch_fields: Fields to fetch from the table.
+        fetch_filter: Filter that should be used for the query.
 
     Returns:
         SQL query that matches the arguments
     """
-    query = f'SELECT {fetch_fields} FROM `{fetch_table}` '  # guardrails-disable-line
-    query += f'WHERE time_generated Between TIMESTAMP("{fetch_timestamp}") ' \
+    if fetch_filter and (fetch_subtype or fetch_severity):
+        raise DemistoException('Fetch Filter parameter cannot be used with Subtype/Severity parameters.')
+    query = f'SELECT {fetch_fields} FROM `{fetch_table}` '  # guardrails-disable-line # noqa: S608
+    time_filter = 'event_time' if 'log' in fetch_table else 'time_generated'
+    query += f'WHERE {time_filter} Between TIMESTAMP("{fetch_timestamp}") ' \
              f'AND CURRENT_TIMESTAMP'
+    if fetch_filter:
+        query += f' AND {fetch_filter}'
     if fetch_subtype and 'all' not in fetch_subtype:
         sub_types = [f'sub_type.value = "{sub_type}"' for sub_type in fetch_subtype]
         query += f' AND ({" OR ".join(sub_types)})'
     if fetch_severity and 'all' not in fetch_severity:
         severities = [f'vendor_severity.value = "{severity}"' for severity in fetch_severity]
         query += f' AND ({" OR ".join(severities)})'
-    query += f' ORDER BY time_generated ASC LIMIT {fetch_limit}'
+    query += f' ORDER BY {time_filter} ASC LIMIT {fetch_limit}'
     return query
 
 
 def convert_log_to_incident(log: dict, fetch_table: str) -> dict:
-    time_generated = log.get('time_generated', 0)
+    time_filter = 'event_time' if 'log' in fetch_table else 'time_generated'
+    time_generated = log.get(time_filter, 0)
     occurred = human_readable_time_from_epoch_time(time_generated, utc_time=True)
     incident = {
         'name': FETCH_TABLE_HR_NAME[fetch_table],
@@ -879,17 +947,22 @@ def convert_log_to_incident(log: dict, fetch_table: str) -> dict:
 ''' COMMANDS FUNCTIONS '''
 
 
-def test_module(client: Client, fetch_table, fetch_fields, is_fetch):
-    if not is_fetch:
+def test_module(client: Client, fetch_table, fetch_fields, is_fetch, fetch_query, fetch_subtype, fetch_severity, first_fetch):
+    if is_fetch:
+        fetch_time, _ = parse_date_range(first_fetch)
+        fetch_time = fetch_time.replace(microsecond=0)
+        query = prepare_fetch_incidents_query(fetch_time, fetch_severity, fetch_table,
+                                              fetch_subtype, fetch_fields, "1", fetch_query)
+    else:
         # fetch params not to be tested (won't be used)
         fetch_fields = '*'
         fetch_table = 'firewall.traffic'
-    query = f'SELECT {fetch_fields} FROM `{fetch_table}` limit 1'
+        query = f'SELECT {fetch_fields} FROM `{fetch_table}` limit 1'  # noqa: S608
     client.query_loggings(query)
     return_outputs('ok')
 
 
-def query_logs_command(args: dict, client: Client) -> Tuple[str, Dict[str, List[dict]], List[Dict[str, Any]]]:
+def query_logs_command(args: dict, client: Client) -> tuple[str, dict[str, list[dict]], list[dict[str, Any]]]:
     """
     Return the result of querying the Logging service
     """
@@ -897,13 +970,17 @@ def query_logs_command(args: dict, client: Client) -> Tuple[str, Dict[str, List[
     limit = args.get('limit', '')
     transform_results = argToBoolean(args.get('transform_results', 'true'))
 
-    if 'limit' not in query.lower():
+    if not args.get('page') and 'limit' not in query.lower():
         query += f' LIMIT {limit}'
 
-    records, raw_results = client.query_loggings(query)
+    records, raw_results = client.query_loggings(query, page_number=args.get('page'), page_size=args.get('page_size'))
 
     table_name = get_table_name(query)
-    output_results = records if not transform_results else [common_context_transformer(record) for record in records]
+    output_results = records
+    if transform_results:
+        output_results = [
+            system_log_context_transformer(record) if 'log.system' in query else common_context_transformer(record) for
+            record in records]
     human_readable = tableToMarkdown('Logs ' + table_name + ' table', output_results, removeNull=True)
     ec = {
         'CDL.Logging': output_results
@@ -927,7 +1004,7 @@ def get_table_name(query: str) -> str:
     return "Unrecognized table name"
 
 
-def get_critical_logs_command(args: dict, client: Client) -> Tuple[str, Dict[str, List[dict]], List[Dict[str, Any]]]:
+def get_critical_logs_command(args: dict, client: Client) -> tuple[str, dict[str, list[dict]], list[dict[str, Any]]]:
     """
     Queries Cortex Logging according to a pre-set query
     """
@@ -935,9 +1012,12 @@ def get_critical_logs_command(args: dict, client: Client) -> Tuple[str, Dict[str
     query_start_time, query_end_time = query_timestamp(args)
     query = 'SELECT * FROM `firewall.threat` WHERE severity = "Critical" '  # guardrails-disable-line
     query += f'AND time_generated BETWEEN TIMESTAMP("{query_start_time}") AND ' \
-             f'TIMESTAMP("{query_end_time}") LIMIT {logs_amount}'
+             f'TIMESTAMP("{query_end_time}")'
 
-    records, raw_results = client.query_loggings(query)
+    if not args.get('page'):
+        query += f' LIMIT {logs_amount}'
+
+    records, raw_results = client.query_loggings(query, page_number=args.get('page'), page_size=args.get('page_size'))
 
     transformed_results = [threat_context_transformer(record) for record in records]
 
@@ -948,7 +1028,7 @@ def get_critical_logs_command(args: dict, client: Client) -> Tuple[str, Dict[str
     return human_readable, ec, raw_results
 
 
-def query_timestamp(args: dict) -> Tuple[datetime, datetime]:
+def query_timestamp(args: dict) -> tuple[datetime, datetime]:
     start_time = args.get('start_time', '')
     end_time = args.get('end_time', '')
     time_range = args.get('time_range', '')
@@ -963,15 +1043,18 @@ def query_timestamp(args: dict) -> Tuple[datetime, datetime]:
 
 
 def get_social_applications_command(args: dict,
-                                    client: Client) -> Tuple[str, Dict[str, List[dict]], List[Dict[str, Any]]]:
+                                    client: Client) -> tuple[str, dict[str, list[dict]], list[dict[str, Any]]]:
     """ Queries Cortex Logging according to a pre-set query """
     logs_amount = args.get('limit')
     query_start_time, query_end_time = query_timestamp(args)
     query = 'SELECT * FROM `firewall.traffic` WHERE app_sub_category = "social-networking" '  # guardrails-disable-line
     query += f' AND time_generated BETWEEN TIMESTAMP("{query_start_time}") AND ' \
-             f'TIMESTAMP("{query_end_time}") LIMIT {logs_amount}'
+             f'TIMESTAMP("{query_end_time}")'
 
-    records, raw_results = client.query_loggings(query)
+    if not args.get('page'):
+        query += f' LIMIT {logs_amount}'
+
+    records, raw_results = client.query_loggings(query, page_number=args.get('page'), page_size=args.get('page_size'))
 
     transformed_results = [traffic_context_transformer(record) for record in records]
 
@@ -982,7 +1065,7 @@ def get_social_applications_command(args: dict,
     return human_readable, ec, raw_results
 
 
-def search_by_file_hash_command(args: dict, client: Client) -> Tuple[str, Dict[str, List[dict]], List[Dict[str, Any]]]:
+def search_by_file_hash_command(args: dict, client: Client) -> tuple[str, dict[str, list[dict]], list[dict[str, Any]]]:
     """
     Queries Cortex Logging according to a pre-set query
     """
@@ -990,11 +1073,14 @@ def search_by_file_hash_command(args: dict, client: Client) -> Tuple[str, Dict[s
     file_hash = args.get('SHA256')
 
     query_start_time, query_end_time = query_timestamp(args)
-    query = f'SELECT * FROM `firewall.threat` WHERE file_sha_256 = "{file_hash}" '  # guardrails-disable-line
+    query = f'SELECT * FROM `firewall.threat` WHERE file_sha_256 = "{file_hash}" '  # guardrails-disable-line  # noqa: S608
     query += f'AND time_generated BETWEEN TIMESTAMP("{query_start_time}") AND ' \
-             f'TIMESTAMP("{query_end_time}") LIMIT {logs_amount}'
+             f'TIMESTAMP("{query_end_time}")'
 
-    records, raw_results = client.query_loggings(query)
+    if not args.get('page'):
+        query += f' LIMIT {logs_amount}'
+
+    records, raw_results = client.query_loggings(query, page_number=args.get('page'), page_size=args.get('page_size'))
 
     transformed_results = [threat_context_transformer(record) for record in records]
 
@@ -1005,7 +1091,7 @@ def search_by_file_hash_command(args: dict, client: Client) -> Tuple[str, Dict[s
     return human_readable, ec, raw_results
 
 
-def query_traffic_logs_command(args: dict, client: Client) -> Tuple[str, dict, List[Dict[str, Any]]]:
+def query_traffic_logs_command(args: dict, client: Client) -> tuple[str, dict, list[dict[str, Any]]]:
     """
     The function of the command that queries firewall.traffic table
 
@@ -1017,7 +1103,7 @@ def query_traffic_logs_command(args: dict, client: Client) -> Tuple[str, dict, L
     return query_table_logs(args, client, table_name, context_transformer_function, table_context_path)
 
 
-def query_threat_logs_command(args: dict, client: Client) -> Tuple[str, dict, List[Dict[str, Any]]]:
+def query_threat_logs_command(args: dict, client: Client) -> tuple[str, dict, list[dict[str, Any]]]:
     """
     The function of the command that queries firewall.threat table
 
@@ -1029,7 +1115,7 @@ def query_threat_logs_command(args: dict, client: Client) -> Tuple[str, dict, Li
     return query_table_logs(args, client, query_table_name, context_transformer_function, table_context_path)
 
 
-def query_url_logs_command(args: dict, client: Client) -> Tuple[str, dict, List[Dict[str, Any]]]:
+def query_url_logs_command(args: dict, client: Client) -> tuple[str, dict, list[dict[str, Any]]]:
     """
     The function of the command that queries firewall.url table
 
@@ -1041,7 +1127,7 @@ def query_url_logs_command(args: dict, client: Client) -> Tuple[str, dict, List[
     return query_table_logs(args, client, query_table_name, context_transformer_function, table_context_path)
 
 
-def query_file_data_command(args: dict, client: Client) -> Tuple[str, dict, List[Dict[str, Any]]]:
+def query_file_data_command(args: dict, client: Client) -> tuple[str, dict, list[dict[str, Any]]]:
     query_table_name: str = 'file_data'
     context_transformer_function = files_context_transformer
     table_context_path: str = 'CDL.Logging.File'
@@ -1052,7 +1138,7 @@ def query_table_logs(args: dict,
                      client: Client,
                      table_name: str,
                      context_transformer_function: Callable[[dict], dict],
-                     table_context_path: str) -> Tuple[str, dict, List[Dict[str, Any]]]:
+                     table_context_path: str) -> tuple[str, dict, list[dict[str, Any]]]:
     """
     This function is a generic function that get's all the data needed for a specific table of Cortex and acts as a
     regular command function
@@ -1065,7 +1151,7 @@ def query_table_logs(args: dict,
         table_context_path: the context path where the parsed data should be located
     """
     fields, query = build_query(args, table_name)
-    results, raw_results = client.query_loggings(query)
+    results, raw_results = client.query_loggings(query, page_number=args.get('page'), page_size=args.get('page_size'))
     outputs = [context_transformer_function(record) for record in results]
     human_readable = records_to_human_readable_output(fields, table_name, results)
 
@@ -1080,9 +1166,11 @@ def build_query(args, table_name):
     query_start_time, query_end_time = query_timestamp(args)
     timestamp_limitation = f'time_generated BETWEEN TIMESTAMP("{query_start_time}") AND ' \
                            f'TIMESTAMP("{query_end_time}") '
-    limit = args.get('limit', '5')
     where += f' AND {timestamp_limitation}' if where else timestamp_limitation
-    query = f'SELECT {fields} FROM `firewall.{table_name}` WHERE {where} LIMIT {limit}'
+    query = f'SELECT {fields} FROM `firewall.{table_name}` WHERE {where}'  # noqa: S608
+    if not args.get('page'):
+        limit = args.get('limit', '5')
+        query += f' LIMIT {limit}'
     return fields, query
 
 
@@ -1093,8 +1181,11 @@ def fetch_incidents(client: Client,
                     fetch_subtype: list,
                     fetch_fields: str,
                     fetch_limit: str,
-                    last_run: dict) -> Tuple[Dict[str, str], list]:
+                    last_run: dict,
+                    fetch_filter: str = '') -> tuple[dict[str, str], list]:
     last_fetched_event_timestamp = last_run.get('lastRun')
+    demisto.debug("CortexDataLake - Start fetching")
+    demisto.debug(f"CortexDataLake - Last run: {json.dumps(last_run)}")
 
     if last_fetched_event_timestamp:
         last_fetched_event_timestamp = parser.parse(last_fetched_event_timestamp)
@@ -1102,17 +1193,20 @@ def fetch_incidents(client: Client,
         last_fetched_event_timestamp, _ = parse_date_range(first_fetch_timestamp)
         last_fetched_event_timestamp = last_fetched_event_timestamp.replace(microsecond=0)
     query = prepare_fetch_incidents_query(last_fetched_event_timestamp, fetch_severity, fetch_table,
-                                          fetch_subtype, fetch_fields, fetch_limit)
-    demisto.debug('Query being fetched: {}'.format(query))
+                                          fetch_subtype, fetch_fields, fetch_limit, fetch_filter)
+    demisto.debug(f"CortexDataLake - Query sent to the server: {query}")
     records, _ = client.query_loggings(query)
     if not records:
         return {'lastRun': str(last_fetched_event_timestamp)}, []
 
     incidents = [convert_log_to_incident(record, fetch_table) for record in records]
-    max_fetched_event_timestamp = max(records, key=lambda record: record.get('time_generated', 0)).get('time_generated',
-                                                                                                       0)
+    time_filter = 'event_time' if 'log' in fetch_table else 'time_generated'
+    max_fetched_event_timestamp = max(records, key=lambda record: record.get(time_filter, 0)).get(time_filter, 0)
 
     next_run = {'lastRun': epoch_to_timestamp_and_add_milli(max_fetched_event_timestamp)}
+    demisto.debug(f'CortexDataLake - Next run after incidents fetching: {json.dumps(next_run)}')
+    demisto.debug(f"CortexDataLake- Number of incidents before filtering: {len(records)}")
+    demisto.debug(f"CortexDataLake - Number of incidents after filtering: {len(incidents)}")
     return next_run, incidents
 
 
@@ -1122,15 +1216,23 @@ def fetch_incidents(client: Client,
 def main():
     os.environ['PAN_CREDENTIALS_DBFILE'] = os.path.join(gettempdir(), 'pancloud_credentials.json')
     params = demisto.params()
-    registration_id_and_url = params.get(REGISTRATION_ID_CONST).split('@')
+    registration_id_and_url = params.get('credentials_reg_id', {}).get('password') or params.get('reg_id')
+    # If there's a stored token in integration context, it's newer than current
+    refresh_token = params.get('credentials_refresh_token', {}).get('password') or params.get('refresh_token')
+    enc_key = params.get('credentials_auth_key', {}).get('password') or params.get('auth_key')
+    if not enc_key or not refresh_token or not registration_id_and_url:
+        raise DemistoException('Key, Token and ID must be provided.')
+    is_fr = ('federal.paloaltonetworks.com' in demisto.getLicenseCustomField('Http_Connector.url'))
+    demisto.debug(f"working on tenant with {is_fr=}")
+    registration_id_and_url = registration_id_and_url.split('@')
     if len(registration_id_and_url) != 2:
-        token_retrieval_url = "https://oproxy.demisto.ninja"  # guardrails-disable-line
+        if is_fr:
+            token_retrieval_url = "https://cortex-gateway-federal.paloaltonetworks.com/api/xdr_gateway/external_services/cdl"
+        else:
+            token_retrieval_url = "https://oproxy.demisto.ninja"  # guardrails-disable-line
     else:
         token_retrieval_url = registration_id_and_url[1]
     registration_id = registration_id_and_url[0]
-    # If there's a stored token in integration context, it's newer than current
-    refresh_token = demisto.getIntegrationContext().get(REFRESH_TOKEN_CONST) or params.get(REFRESH_TOKEN_CONST)
-    enc_key = params.get(ENCRYPTION_KEY_CONST)
     use_ssl = not params.get('insecure', False)
     proxy = params.get('proxy', False)
     args = demisto.args()
@@ -1144,11 +1246,13 @@ def main():
         return_outputs(readable_output="Caching mechanism failure time counters have been successfully reset.")
         return
 
-    client = Client(token_retrieval_url, registration_id, use_ssl, proxy, refresh_token, enc_key)
+    client = Client(token_retrieval_url, registration_id, use_ssl, proxy, refresh_token, enc_key, is_fr)
 
     try:
         if command == 'test-module':
-            test_module(client, fetch_table, fetch_fields, params.get('isFetch'))
+            test_module(client, fetch_table, fetch_fields, params.get('isFetch'), params.get('filter_query', ''),
+                        params.get('firewall_subtype'), params.get('firewall_severity'),
+                        params.get('first_fetch_timestamp', '24 hours').strip())
         elif command == 'cdl-query-logs':
             return_outputs(*query_logs_command(args, client))
         elif command == 'cdl-get-critical-threat-logs':
@@ -1173,6 +1277,7 @@ def main():
             fetch_subtype = params.get('firewall_subtype')
             fetch_limit = params.get('limit')
             last_run = demisto.getLastRun()
+            fetch_filter = params.get('filter_query', '')
             next_run, incidents = fetch_incidents(client,
                                                   first_fetch_timestamp,
                                                   fetch_severity,
@@ -1180,7 +1285,8 @@ def main():
                                                   fetch_subtype,
                                                   fetch_fields,
                                                   fetch_limit,
-                                                  last_run)
+                                                  last_run,
+                                                  fetch_filter)
             demisto.setLastRun(next_run)
             demisto.incidents(incidents)
     except Exception as e:

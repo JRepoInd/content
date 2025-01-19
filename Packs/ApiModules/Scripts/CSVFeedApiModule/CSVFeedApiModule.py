@@ -6,19 +6,20 @@ from CommonServerUserPython import *
 import csv
 import gzip
 import urllib3
-from dateutil.parser import parse
 from typing import Optional, Pattern, Dict, Any, Tuple, Union, List
 
 # disable insecure warnings
 urllib3.disable_warnings()
 
 # Globals
+DATE_FORMAT = '%Y-%m-%dT%H:%M:%SZ'
+THRESHOLD_IN_SECONDS = 43200    # 12 hours in seconds
 
 
 class Client(BaseClient):
     def __init__(self, url: str, feed_url_to_config: Optional[Dict[str, dict]] = None, fieldnames: str = '',
                  insecure: bool = False, credentials: dict = None, ignore_regex: str = None, encoding: str = 'latin-1',
-                 delimiter: str = ',', doublequote: bool = True, escapechar: str = '',
+                 delimiter: str = ',', doublequote: bool = True, escapechar: Union[str, None] = None,
                  quotechar: str = '"', skipinitialspace: bool = False, polling_timeout: int = 20, proxy: bool = False,
                  feedTags: Optional[str] = None, tlp_color: Optional[str] = None, value_field: str = 'value', **kwargs):
         """
@@ -53,15 +54,15 @@ class Client(BaseClient):
         :param ignore_regex: python regular expression for lines that should be ignored. Default: *null*
         :param encoding: Encoding of the feed, latin-1 by default.
         :param delimiter: see `csv Python module
-            <https://docs.python.org/2/library/csv.html#dialects-and-formatting-parameters>`. Default: ,
+            <https://docs.python.org/3/library/csv.html#dialects-and-formatting-parameters>`. Default: ,
         :param doublequote: see `csv Python module
-            <https://docs.python.org/2/library/csv.html#dialects-and-formatting-parameters>`. Default: true
+            <https://docs.python.org/3/library/csv.html#dialects-and-formatting-parameters>`. Default: true
         :param escapechar: see `csv Python module
-            <https://docs.python.org/2/library/csv.html#dialects-and-formatting-parameters>`. Default null
+            <https://docs.python.org/3/library/csv.html#dialects-and-formatting-parameters>`. Default null
         :param quotechar: see `csv Python module
-            <https://docs.python.org/2/library/csv.html#dialects-and-formatting-parameters>`. Default "
+            <https://docs.python.org/3/library/csv.html#dialects-and-formatting-parameters>`. Default "
         :param skipinitialspace: see `csv Python module
-            <https://docs.python.org/2/library/csv.html#dialects-and-formatting-parameters>`. Default False
+            <https://docs.python.org/3/library/csv.html#dialects-and-formatting-parameters>`. Default False
         :param polling_timeout: timeout of the polling request in seconds. Default: 20
         :param proxy: Sets whether use proxy when sending requests
         :param tlp_color: Traffic Light Protocol color.
@@ -134,11 +135,35 @@ class Client(BaseClient):
             kwargs['verify'] = self._verify
             kwargs['timeout'] = self.polling_timeout
 
+            if is_demisto_version_ge('6.5.0'):
+                # Set the If-None-Match and If-Modified-Since headers if we have etag or
+                # last_modified values in the context.
+                last_run = demisto.getLastRun()
+                etag = last_run.get(url, {}).get('etag')
+                last_modified = last_run.get(url, {}).get('last_modified')
+                last_updated = last_run.get(url, {}).get('last_updated')
+                # To avoid issues with indicators expiring, if 'last_updated' is over X hours old,
+                # we'll refresh the indicators to ensure their expiration time is updated.
+                # For further details, refer to : https://confluence-dc.paloaltonetworks.com/display/DemistoContent/Json+Api+Module     # noqa: E501
+                if last_updated and has_passed_time_threshold(timestamp_str=last_updated, seconds_threshold=THRESHOLD_IN_SECONDS):
+                    last_modified = None
+                    etag = None
+                    demisto.debug("Since it's been a long time with no update, to make sure we are keeping the indicators alive, \
+                        we will refetch them from scratch")
+
+                if etag:
+                    self.headers['If-None-Match'] = etag
+
+                if last_modified:
+                    self.headers['If-Modified-Since'] = last_modified
+
+            # set request headers
+            if 'headers' in kwargs:
+                self.headers.update(kwargs['headers'])
+                del kwargs['headers']
+
             if self.headers:
-                if 'headers' in kwargs:
-                    kwargs['headers'].update(self.headers)
-                else:
-                    kwargs['headers'] = self.headers
+                prepreq.headers.update(self.headers)
 
             try:
                 r = _session.send(prepreq, **kwargs)
@@ -169,7 +194,7 @@ class Client(BaseClient):
             try:
                 r.raise_for_status()
             except Exception:
-                return_error('Exception in request: {} {}'.format(r.status_code, r.content))
+                return_error(f'Exception in request: {r.status_code} {r.content.decode("utf-8")}')
                 raise
 
             response = self.get_feed_content_divided_to_lines(url, r)
@@ -193,8 +218,8 @@ class Client(BaseClient):
 
             if skip_first_line:
                 next(csvreader)
-
-            results.append({url: csvreader})
+            no_update = get_no_update_value(r, url) if is_demisto_version_ge('6.5.0') else True
+            results.append({url: {'result': csvreader, 'no_update': no_update}})
 
         return results
 
@@ -214,6 +239,43 @@ class Client(BaseClient):
             response_content = raw_response.content
 
         return response_content.decode(self.encoding).split('\n')
+
+
+def get_no_update_value(response: requests.models.Response, url: str) -> bool:
+    """
+    detect if the feed response has been modified according to the headers etag and last_modified.
+    For more information, see this:
+    https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Last-Modified
+    https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/ETag
+    Args:
+        response: (requests.Response) The feed response.
+        url: (str) The feed URL (service).
+    Returns:
+        boolean with the value for noUpdate argument.
+        The value should be False if the response was modified.
+    """
+    if response.status_code == 304:
+        demisto.debug('No new indicators fetched, createIndicators will be executed with noUpdate=True.')
+        return True
+
+    etag = response.headers.get('ETag')
+    last_modified = response.headers.get('Last-Modified')
+    current_time = datetime.utcnow()
+    # Save the current time as the last updated time. This will be used to indicate the last time the feed was updated in XSOAR.
+    last_updated = current_time.strftime(DATE_FORMAT)
+
+    if not etag and not last_modified:
+        demisto.debug('Last-Modified and Etag headers are not exists,'
+                      'createIndicators will be executed with noUpdate=False.')
+        return False
+
+    last_run = demisto.getLastRun()
+    last_run[url] = {'last_modified': last_modified, 'etag': etag, 'last_updated': last_updated}
+    demisto.setLastRun(last_run)
+
+    demisto.debug('New indicators fetched - the Last-Modified value has been updated,'
+                  ' createIndicators will be executed with noUpdate=False.')
+    return False
 
 
 def determine_indicator_type(indicator_type, default_indicator_type, auto_detect, value):
@@ -240,17 +302,14 @@ def module_test_command(client: Client, args):
 
 
 def date_format_parsing(date_string):
-    formatted_date = parse(date_string).isoformat()
-    if "+" in formatted_date:
-        formatted_date = formatted_date.split('+')[0]
-
-    if "." in formatted_date:
-        formatted_date = formatted_date.split('.')[0]
-
-    if not formatted_date.endswith('Z'):
-        formatted_date = formatted_date + 'Z'
-
-    return formatted_date
+    """
+    formats a datestring to the ISO-8601 format which the server expects to recieve
+    :param date_string: Date represented as a tring
+    :return: ISO-8601 date string
+    """
+    formatted_date = dateparser.parse(date_string, settings={'TIMEZONE': 'UTC'})
+    assert formatted_date is not None, f"failed parsing {date_string}"
+    return formatted_date.strftime(DATE_FORMAT)
 
 
 def create_fields_mapping(raw_json: Dict[str, Any], mapping: Dict[str, Union[Tuple, str]]):
@@ -290,16 +349,20 @@ def create_fields_mapping(raw_json: Dict[str, Any], mapping: Dict[str, Union[Tup
     return fields_mapping
 
 
-def fetch_indicators_command(client: Client, default_indicator_type: str, auto_detect: bool, limit: int = 0,
-                             create_relationships: bool = False, **kwargs):
+def fetch_indicators_command(client: Client, default_indicator_type: str, auto_detect: Optional[bool], limit: int = 0,
+                             create_relationships: bool = False, enrichment_excluded: bool = False, **kwargs):
     iterator = client.build_iterator(**kwargs)
     relationships_of_indicator = []
     indicators = []
     config = client.feed_url_to_config or {}
+
+    # set noUpdate flag in createIndicators command True only when all the results from all the urls are True.
+    no_update = all(next(iter(item.values())).get('no_update', False) for item in iterator)
+
     for url_to_reader in iterator:
         for url, reader in url_to_reader.items():
             mapping = config.get(url, {}).get('mapping', {})
-            for item in reader:
+            for item in reader.get('result', []):
                 raw_json = dict(item)
                 fields_mapping = create_fields_mapping(raw_json, mapping) if mapping else {}
                 value = item.get(client.value_field) or fields_mapping.get('Value')
@@ -312,17 +375,18 @@ def fetch_indicators_command(client: Client, default_indicator_type: str, auto_d
                                                               value)
                     raw_json['type'] = indicator_type
                     # if relationships param is True and also the url returns relationships
-                    if create_relationships and config.get(url, {}).get('relationship_name'):
-                        if fields_mapping.get('relationship_entity_b'):
-                            relationships_lst = EntityRelationship(
-                                name=config.get(url, {}).get('relationship_name'),
-                                entity_a=value,
-                                entity_a_type=indicator_type,
-                                entity_b=fields_mapping.get('relationship_entity_b'),
-                                entity_b_type=FeedIndicatorType.indicator_type_by_server_version(
-                                    config.get(url, {}).get('relationship_entity_b_type')),
-                            )
-                            relationships_of_indicator = [relationships_lst.to_indicator()]
+                    if create_relationships \
+                            and config.get(url, {}).get('relationship_name') \
+                            and fields_mapping.get('relationship_entity_b'):
+                        relationships_lst = EntityRelationship(
+                            name=config.get(url, {}).get('relationship_name'),
+                            entity_a=value,
+                            entity_a_type=indicator_type,
+                            entity_b=fields_mapping.get('relationship_entity_b'),
+                            entity_b_type=FeedIndicatorType.indicator_type_by_server_version(
+                                config.get(url, {}).get('relationship_entity_b_type')),
+                        )
+                        relationships_of_indicator = [relationships_lst.to_indicator()]
 
                     indicator = {
                         'value': value,
@@ -336,12 +400,15 @@ def fetch_indicators_command(client: Client, default_indicator_type: str, auto_d
                     if client.tlp_color:
                         indicator['fields']['trafficlightprotocol'] = client.tlp_color
 
+                    if enrichment_excluded:
+                        indicator['enrichmentExcluded'] = enrichment_excluded
+
                     indicators.append(indicator)
                     # exit the loop if we have more indicators than the limit
                     if limit and len(indicators) >= limit:
-                        return indicators
+                        return indicators, no_update
 
-    return indicators
+    return indicators, no_update
 
 
 def get_indicators_command(client, args: dict, tags: Optional[List[str]] = None):
@@ -354,13 +421,14 @@ def get_indicators_command(client, args: dict, tags: Optional[List[str]] = None)
         raise ValueError('The limit argument must be a number.')
     auto_detect = demisto.params().get('auto_detect_type')
     relationships = demisto.params().get('create_relationships', False)
-    indicators_list = fetch_indicators_command(client, itype, auto_detect, limit, relationships)
+    enrichment_excluded = demisto.params().get('enrichmentExcluded', False)
+    indicators_list, _ = fetch_indicators_command(client, itype, auto_detect, limit, relationships, enrichment_excluded)
     entry_result = indicators_list[:limit]
     hr = tableToMarkdown('Indicators', entry_result, headers=['value', 'type', 'fields'])
     return hr, {}, indicators_list
 
 
-def feed_main(feed_name, params=None, prefix=''):
+def feed_main(feed_name, params=None, prefix=''):   # pragma: no cover
     if not params:
         params = {k: v for k, v in demisto.params().items() if v is not None}
     handle_proxy()
@@ -377,16 +445,31 @@ def feed_main(feed_name, params=None, prefix=''):
     }
     try:
         if command == 'fetch-indicators':
-            indicators = fetch_indicators_command(
+            indicators, no_update = fetch_indicators_command(
                 client,
                 params.get('indicator_type'),
                 params.get('auto_detect_type'),
                 params.get('limit'),
-                params.get('create_relationships')
+                params.get('create_relationships'),
+                params.get('enrichmentExcluded', False),
             )
-            # we submit the indicators in batches
-            for b in batch(indicators, batch_size=2000):
-                demisto.createIndicators(b)  # type: ignore
+
+            # check if the version is higher than 6.5.0 so we can use noUpdate parameter
+            if is_demisto_version_ge('6.5.0'):
+                if not indicators:
+                    demisto.createIndicators(indicators, noUpdate=no_update)  # type: ignore
+                else:
+                    # we submit the indicators in batches
+                    for b in batch(indicators, batch_size=2000):
+                        demisto.createIndicators(b, noUpdate=no_update)  # type: ignore
+            else:
+                # call createIndicators without noUpdate arg
+                if not indicators:
+                    demisto.createIndicators(indicators)  # type: ignore
+                else:
+                    for b in batch(indicators, batch_size=2000):  # type: ignore
+                        demisto.createIndicators(b)
+
         else:
             args = demisto.args()
             args['feed_name'] = feed_name

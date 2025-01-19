@@ -10,7 +10,7 @@ import pycef
 import hashlib
 import time
 import json
-from datetime import datetime, timezone
+from datetime import datetime, UTC
 from dateutil.parser import parse
 
 # Disable insecure warnings
@@ -186,8 +186,7 @@ class Client(BaseClient):
                    'iat': iat,
                    'version': version,
                    'checksum': checksum}
-
-        token = jwt.encode(payload, self.api_key, algorithm=algorithm).decode('utf-8')
+        token = jwt.encode(payload, self.api_key, algorithm=algorithm)
         return token
 
     def udso_list(self, list_type="", contentfilter=""):
@@ -230,6 +229,7 @@ class Client(BaseClient):
                 raise ValueError(f'Operation failed - {response.get("Meta", {}).get("ErrorMsg")}')
 
             return response
+        return None
 
     def udso_add_file(self, file_content_base64_string, file_name, file_scan_action, note: str = ""):
         payload = {
@@ -287,7 +287,7 @@ class Client(BaseClient):
     def verify_format_and_convert_to_timestamp(since_time: str):
         if since_time == '0':  # '0' is the default timestamp
             return since_time
-        if not (since_time.endswith('GMT+00:00') or since_time.endswith('Z')):
+        if not (since_time.endswith(('GMT+00:00', 'Z'))):
             raise ValueError("'since_time' argument should be in one of the following formats:"
                              "'2020-06-21T08:00:00Z', 'Jun 21 2020 08:00:00 GMT+00:00'")
 
@@ -327,7 +327,7 @@ class Client(BaseClient):
         for result in results_list:
             for time_key in time_keys:
                 if result.get(time_key):
-                    result[time_key] = datetime.fromtimestamp(result.get(time_key), timezone.utc).isoformat()
+                    result[time_key] = datetime.fromtimestamp(result.get(time_key), UTC).isoformat()
             for status_key in status_keys:
                 if result.get(status_key):
                     result[status_key] = INVESTIGATION_STATUS_NUM_TO_VALUE[result.get(status_key)]
@@ -481,7 +481,7 @@ class Client(BaseClient):
 
         # fix the keys to their correct name
         new_log = log.copy()
-        for key in log.keys():
+        for key in log:
             if key in keys_to_fix:
                 new_log[CEF_HEADERS_TO_TREND_MICRO_HEADERS[key]] = new_log.pop(key)
             if key == 'rt':  # this key is always referencing to 'Creation Time' header
@@ -504,7 +504,7 @@ class Client(BaseClient):
     def update_agents_info_in_payload(payload_data, agent_guids):
         agent_guids_dict = json.loads(agent_guids)  # this is a dict of { server_guids : [agent_guids] }
         payload_data["agentGuid"] = agent_guids_dict
-        payload_data["serverGuid"] = [server_guid for server_guid in agent_guids_dict.keys()]
+        payload_data["serverGuid"] = list(agent_guids_dict.keys())
 
         return payload_data
 
@@ -658,7 +658,7 @@ def udso_list_command(client: Client, args):
 
     response = client.udso_list(list_type, content_filter)
     list_data = response.get('Data', [])
-    readable_output = tableToMarkdown("Apex UDSO List", list_data)
+    readable_output = tableToMarkdown("Apex One UDSO List", list_data)
 
     context = {
         'TrendMicroApex.UDSO(val.content == obj.content)': list_data,
@@ -718,7 +718,7 @@ def prodagent_isolate_command(client: Client, args):
                                         prod=product)
     result_content = response.get('result_content', [])
     if result_content:
-        readable_output = tableToMarkdown("Apex ProductAgent Isolate", result_content)
+        readable_output = tableToMarkdown("Apex One ProductAgent Isolate", result_content)
 
     else:
         readable_output = '### No agents were affected.'
@@ -747,7 +747,7 @@ def prodagent_restore_command(client: Client, args):
                                         prod=product)
     result_content = response.get('result_content', [])
     if result_content:
-        readable_output = tableToMarkdown("Apex ProductAgent Restore", result_content)
+        readable_output = tableToMarkdown("Apex One ProductAgent Restore", result_content)
     else:
         readable_output = '### No agents were affected.'
 
@@ -765,14 +765,13 @@ def list_logs_command(client: Client, args):
     response = client.logs_list(**assign_params(**args))
     parsed_logs_list = []
 
-    if response:
-        if response.get('Data', {}).get('Logs'):
-            parsed_logs_list = client.parse_cef_logs_to_dict_logs(response)[:limit]
+    if response and response.get('Data', {}).get('Logs'):
+        parsed_logs_list = client.parse_cef_logs_to_dict_logs(response)[:limit]
 
     log_type = args.get('log_type')
     headers = ['EventName', 'EventID', 'CreationTime', 'LogVersion', 'ApplianceVersion', 'ApplianceProduct',
                'ApplianceVendor']
-    readable_output = tableToMarkdown(f'Trend Micro Apex - {log_type} Logs', parsed_logs_list, headers=headers,
+    readable_output = tableToMarkdown(f'Trend Micro Apex One - {log_type} Logs', parsed_logs_list, headers=headers,
                                       removeNull=True)
 
     return CommandResults(
@@ -808,12 +807,11 @@ def servers_list_command(client: Client, args):
         item['ip_address_list'] = item.get('ip_address_list', '').split(',')
 
     context = human_readable_table = []
-    if response:
-        if response.get('result_content'):
-            context = human_readable_table = response.get('result_content')
+    if response and response.get('result_content'):
+        context = human_readable_table = response.get('result_content')
 
     headers = ['entity_id', 'product', 'host_name', 'ip_address_list', 'capabilities']
-    readable_output = tableToMarkdown('Trend Micro Apex Servers List', human_readable_table, headers,
+    readable_output = tableToMarkdown('Trend Micro Apex One Servers List', human_readable_table, headers,
                                       headerTransform=string_to_table_header, removeNull=True)
     return CommandResults(
         readable_output=readable_output,
@@ -833,11 +831,10 @@ def agents_list_command(client: Client, args):
         item['ip_address_list'] = item.get('ip_address_list', '').split(',')
 
     context = human_readable_table = []
-    if response:
-        if response.get('result_content'):
-            context = human_readable_table = response.get('result_content')
+    if response and response.get('result_content'):
+        context = human_readable_table = response.get('result_content')
 
-    readable_output = tableToMarkdown('Trend Micro Apex Agents List', human_readable_table,
+    readable_output = tableToMarkdown('Trend Micro Apex One Agents List', human_readable_table,
                                       headerTransform=string_to_table_header,
                                       removeNull=True)
 
@@ -865,7 +862,7 @@ def endpoint_sensors_list_command(client: Client, args):
                     agent['isolateStatus'] = AGENT_ISOLATION_STATUS_NUM_TO_VALUE[agent['isolateStatus']]
                 human_readable_table.append(agent[0])
 
-    readable_output = tableToMarkdown('Trend Micro Apex Security Agents with Endpoint Sensor enabled',
+    readable_output = tableToMarkdown('Trend Micro Apex One Security Agents with Endpoint Sensor enabled',
                                       human_readable_table, removeNull=True)
 
     return CommandResults(
@@ -887,6 +884,8 @@ def create_historical_investigation(client: Client, args):
         headers = ['taskId', 'serverName', 'serverGuid']
         readable_output = tableToMarkdown('The historical investigation was created successfully',
                                           context, headers=headers, removeNull=True)
+    else:
+        readable_output = ''
 
     return CommandResults(
         readable_output=readable_output,
@@ -901,6 +900,7 @@ def investigation_result_list_command(client: Client, args):
     client.suffix = '/WebApp/OSCE_iES/OsceIes/ApiEntry'
     response = client.investigation_result_list(**assign_params(**args))
     context = {}
+    readable_output = ''
     if response:
         content_list = response.get('Data', {}).get('Data', {}).get('content', [])
         if content_list:
@@ -928,7 +928,9 @@ def main():
 
     params = demisto.params()
 
-    api_key = params.get('token')
+    api_key = params.get('credentials_api_token', {}).get('password') or params.get('token')
+    if not api_key:
+        return_error('API Key must be provided.')
     app_id = params.get('application_id')
 
     base_url = urljoin(params.get('url'), '')
@@ -980,7 +982,7 @@ def main():
             return_results(investigation_result_list_command(client, demisto.args()))
 
     except ValueError as e:
-        return_error(f'Error from TrendMicro Apex integration: {str(e)}', e)
+        return_error(f'Error from TrendMicro Apex One integration: {str(e)}', e)
 
 
 if __name__ in ['__main__', 'builtin', 'builtins']:

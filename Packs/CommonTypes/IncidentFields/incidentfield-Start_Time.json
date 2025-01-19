@@ -1,7 +1,20 @@
 {
     "associatedToAll": false,
     "associatedTypes": [
-        "Qradar Generic"
+        "Qradar Generic",
+        "Guardicore Incident",
+        "Tanium TR Incident",
+        "CrowdStrike Falcon Detection",
+        "CrowdStrike Falcon Incident",
+        "Microsoft Defender For Endpoint",
+        "Skyhigh Security Alert",
+        "Skyhigh Security Threat",
+        "Exabeam Incident",
+        "Microsoft Sentinel Incident",
+        "Graph Security Alert",
+        "CrowdStrike Falcon IDP Detection",
+        "Stamus Networks DoC",
+        "Exabeam Notable User"
     ],
     "breachScript": "",
     "caseInsensitive": true,
@@ -14,7 +27,6 @@
     "editForm": true,
     "extractIndicatorTypesIDs": [],
     "fieldCalcScript": "",
-    "fromServerVersion": "",
     "group": 0,
     "hidden": false,
     "id": "incident_starttime",

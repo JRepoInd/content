@@ -14,24 +14,21 @@ For more information see [the ThreatExchange API Overview](https://developers.fa
 
 For Cortex XSOAR versions 6.0 and below, the App Secret should be set in the *password* field.
 
-## Configure ThreatExchange v2 on Cortex XSOAR
+## Configure ThreatExchange v2 in Cortex
 
-1. Navigate to **Settings** > **Integrations** > **Servers & Services**.
-2. Search for ThreatExchange v2.
-3. Click **Add instance** to create and configure a new integration instance.
 
-    | **Parameter** | **Description** | **Required** |
-    | --- | --- | --- |
-    | App ID |  | True |
-    | App Secret | | True |
-    | Source Reliability | Reliability of the source providing the intelligence data | True |
-    | Use system proxy settings |  | False |
-    | Trust any certificate (not secure) |  | False |
-    | Malicious Threshold | If the percentage of 'Malicious' reported statuses is above this threshold the indicator will be defined as malicious, otherwise suspicious. | False |
-    | Suspicious Threshold | If the number of 'Suspicious' reported statuses is above this threshold the indicator will be defined as suspicious. | False |
-    | Non Malicious Threshold | If the percentage of 'Non Malicious' reported statuses is above this threshold the indicator will be defined as good, otherwise unknown. | False |
+| **Parameter** | **Description** | **Required** |
+| --- | -- | --- |
+| App ID |  | True |
+| App Secret | | True |
+| Source Reliability | Reliability of the source providing the intelligence data | True |
+| Share Level Type | A designation of how the indicator may be shared based on the US-CERT's Traffic Light Protocol | False |
+| Use system proxy settings |  | False |
+| Trust any certificate (not secure) |  | False |
+| Malicious Threshold | If the percentage of 'Malicious' reported statuses is above this threshold the indicator will be defined as malicious, otherwise suspicious. | False |
+| Suspicious Threshold | If the number of 'Suspicious' reported statuses is above this threshold the indicator will be defined as suspicious. | False |
+| Non Malicious Threshold | If the percentage of 'Non Malicious' reported statuses is above this threshold the indicator will be defined as good, otherwise unknown. | False |
 
-4. Click **Test** to validate the URLs, token, and connection.
  
 ## Changes compared to previous version
 1. Dbot score calculation is different. See [DBot Score / Reputation scores](#dbot-score-/-Reputation-scores) for details. 
@@ -60,7 +57,7 @@ the indicator will be defined as good.
 Otherwise, the indicator will be defined as unknown.
 
 ## Commands
-You can execute these commands from the Cortex XSOAR CLI, as part of an automation, or in a playbook.
+You can execute these commands from the CLI, as part of an automation, or in a playbook.
 After you successfully execute a command, a DBot message appears in the War Room with the command details.
 ### file
 ***
@@ -284,13 +281,14 @@ Checks URL Reputation
 `url`
 #### Input
 
-| **Argument Name** | **Description** | **Required** |
-| --- | --- | --- |
-| url | URL to be checked. | Required | 
-| limit | The maximum number of results per page. The maximum is 1000. Default is 20. | Optional | 
-| headers | A comma-separated list of headers to display in human-readable format. For example: header1,header2,header3. | Optional | 
-| since | The start timestamp for collecting malware. Supported time formats: epoch time (e.g., 1619870400), ISO 8601 (e.g., 2021-05-01T12:00:00), and free text (e.g., 24 hours ago). | Optional | 
-| until | The end timestamp for collecting malware. Supported time formats: epoch time (e.g., 1619870400), ISO 8601 (e.g., 2021-05-01T12:00:00), and free text (e.g., 24 hours ago). | Optional | 
+| **Argument Name** | **Description**                                                                                                                                                              | **Required** |
+|-------------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------| --- |
+| url               | URL to be checked.                                                                                                                                                           | Required | 
+| limit             | The maximum number of results per page. The maximum is 1000. Default is 20.                                                                                                  | Optional | 
+| headers           | A comma-separated list of headers to display in human-readable format. For example: header1,header2,header3.                                                                 | Optional | 
+| since             | The start timestamp for collecting malware. Supported time formats: epoch time (e.g., 1619870400), ISO 8601 (e.g., 2021-05-01T12:00:00), and free text (e.g., 24 hours ago). | Optional | 
+| until             | The end timestamp for collecting malware. Supported time formats: epoch time (e.g., 1619870400), ISO 8601 (e.g., 2021-05-01T12:00:00), and free text (e.g., 24 hours ago).   | Optional | 
+| share_level       | A designation of how the indicator may be shared, based on the US-CERT's Traffic Light Protocol. Default is RED.                                                             | Optional | 
 
 
 #### Context Output
@@ -421,7 +419,7 @@ Checks domain reputation.
 | headers | A comma-separated list of headers to display in human-readable format. For example: header1,header2,header3. | Optional | 
 | since | The start timestamp for collecting malware. Supported time formats: epoch time (e.g., 1619870400), ISO 8601 (e.g., 2021-05-01T12:00:00), and free text (e.g., 24 hours ago). | Optional | 
 | until | The end timestamp for collecting malware. Supported time formats: epoch time (e.g., 1619870400), ISO 8601 (e.g., 2021-05-01T12:00:00), and free text (e.g., 24 hours ago). | Optional | 
-
+| share_level       | A designation of how the indicator may be shared, based on the US-CERT's Traffic Light Protocol. Default is RED.                                                             | Optional | 
 
 #### Context Output
 
@@ -643,9 +641,9 @@ Searches for subjective opinions on indicators of compromise stored in ThreatExc
 >### ThreatExchange Query Result:
 >|added_on|confidence|id|indicator|last_updated|owner|privacy_type|raw_indicator|review_status|severity|share_level|status|type|
 >|---|---|---|---|---|---|---|---|---|---|---|---|---|
->| 2018-08-30T07:12:28+0000 | 50 | 2036544083043163 | id: 2036543926376512<br/>indicator: http://www.geektime.co.il/wp-content/uploads/2016/09/<br/>type: URI | 2021-03-03T02:41:06+0000 | id: 820763734618599<br/>email: threatexchange@support.facebook.com<br/>name: Facebook Administrator | VISIBLE | http://www.geektime.co.il/wp-content/uploads/2016/09/ | REVIEWED_AUTOMATICALLY | INFO | GREEN | UNKNOWN | URI |
->| 2018-08-28T14:59:24+0000 | 50 | 1799344580151062 | id: 1799344400151080<br/>indicator: http://www.geektime.co.il/wp-content/uploads/2016/05/<br/>type: URI | 2020-07-24T20:12:26+0000 | id: 820763734618599<br/>email: threatexchange@support.facebook.com<br/>name: Facebook Administrator | VISIBLE | http://www.geektime.co.il/wp-content/uploads/2016/05/ | REVIEWED_AUTOMATICALLY | INFO | GREEN | UNKNOWN | URI |
->| 2018-08-24T20:16:16+0000 | 50 | 2265237266824665 | id: 2265236920158033<br/>indicator: http://www.geektime.co.il/wp-content/uploads/2016/07/<br/>type: URI | 2020-07-24T18:45:09+0000 | id: 820763734618599<br/>email: threatexchange@support.facebook.com<br/>name: Facebook Administrator | VISIBLE | http://www.geektime.co.il/wp-content/uploads/2016/07/ | REVIEWED_AUTOMATICALLY | INFO | GREEN | UNKNOWN | URI |
+>| 2018-08-30T07:12:28+0000 | 50 | 2036544083043163 | id: 2036543926376512<br/>indicator: `http://www.geektime.co.il/wp-content/uploads/2016/09/`<br/>type: URI | 2021-03-03T02:41:06+0000 | id: 820763734618599<br/>email: threatexchange@support.facebook.com<br/>name: Facebook Administrator | VISIBLE | `http://www.geektime.co.il/wp-content/uploads/2016/09/` | REVIEWED_AUTOMATICALLY | INFO | GREEN | UNKNOWN | URI |
+>| 2018-08-28T14:59:24+0000 | 50 | 1799344580151062 | id: 1799344400151080<br/>indicator: `http://www.geektime.co.il/wp-content/uploads/2016/05/`<br/>type: URI | 2020-07-24T20:12:26+0000 | id: 820763734618599<br/>email: threatexchange@support.facebook.com<br/>name: Facebook Administrator | VISIBLE | `http://www.geektime.co.il/wp-content/uploads/2016/05/` | REVIEWED_AUTOMATICALLY | INFO | GREEN | UNKNOWN | URI |
+>| 2018-08-24T20:16:16+0000 | 50 | 2265237266824665 | id: 2265236920158033<br/>indicator: `http://www.geektime.co.il/wp-content/uploads/2016/07/`<br/>type: URI | 2020-07-24T18:45:09+0000 | id: 820763734618599<br/>email: threatexchange@support.facebook.com<br/>name: Facebook Administrator | VISIBLE | `http://www.geektime.co.il/wp-content/uploads/2016/07/` | REVIEWED_AUTOMATICALLY | INFO | GREEN | UNKNOWN | URI |
 >### Pagination:
 >|after|before|
 >|---|---|

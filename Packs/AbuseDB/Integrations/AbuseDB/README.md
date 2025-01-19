@@ -1,7 +1,7 @@
 <!-- HTML_DOC -->
 <p>Use the AbuseIPDB integration to report and identify IP addresses that have been associated with malicious activity online.</p>
 <h2>Use Cases</h2>
-<p>Check, Report, and get Blacklist of top malicious IPs.</p>
+<p>Check, Report, and get block list of top malicious IPs.</p>
 <h2>Configure AbuseIPDB on Cortex XSOAR</h2>
 <ol>
 <li>Navigate to <strong>Settings</strong> &gt; <strong>Integrations</strong> &gt; <strong>Servers &amp; Services</strong>.</li>
@@ -14,6 +14,7 @@
 <li><strong>Source Reliability</strong>: Reliability of the source providing the intelligence data.</li>
 <li><strong>IP Threshold. Minimum score from AbuseIPDB analysis to consider the IP malicious. (&gt;20).</strong></li>
 <li><strong>Max reports age.</strong></li>
+<li><strong>Disable reputation lookups for private IP addresses</strong>: To reduce the number of lookups made to the AbuseIPDB API.</li>
 <li><strong>Disregard quota errors.</strong></li>
 </ul>
 </li>
@@ -63,6 +64,11 @@
 <td style="width: 532px;">Minimum score from AbuseIPDB to consider the IP malicious (must be greater than 20), default is 80</td>
 <td style="width: 71px;">Optional</td>
 </tr>
+<tr>
+<td style="width: 137px;">override_private_lookup</td>
+<td style="width: 532px;">Enrichment of private IP addresses will be conducted even if it has been disabled at the integration level, default is "false"</td>
+<td style="width: 71px;">Optional</td>
+</tr>
 </tbody>
 </table>
 <p> </p>
@@ -93,8 +99,48 @@
 </tr>
 <tr>
 <td style="width: 268px;">AbuseIPDB.IP.Geo.Country</td>
-<td style="width: 58px;">unknown</td>
+<td style="width: 58px;">String</td>
 <td style="width: 414px;">Country associated with this IP Address</td>
+</tr>
+<tr>
+<td style="width: 268px;">AbuseIPDB.IP.Geo.CountryCode</td>
+<td style="width: 58px;">String</td>
+<td style="width: 414px;">Country code associated with this IP Address</td>
+</tr>
+<tr>
+<td style="width: 268px;">AbuseIPDB.IP.Hostnames</td>
+<td style="width: 58px;">String</td>
+<td style="width: 414px;">The hostame(s) of the IP address.</td>
+</tr>
+<tr>
+<td style="width: 268px;">AbuseIPDB.IP.IpVersion</td>
+<td style="width: 58px;">String</td>
+<td style="width: 414px;">The version of the IP address.</td>
+</tr>
+<tr>
+<td style="width: 268px;">AbuseIPDB.IP.IsPublic</td>
+<td style="width: 58px;">String</td>
+<td style="width: 414px;">Is the IP address public.</td>
+</tr>
+<tr>
+<td style="width: 268px;">AbuseIPDB.IP.IsTor</td>
+<td style="width: 58px;">String</td>
+<td style="width: 414px;">Is the IP address a Tor IP.</td>
+</tr>
+<tr>
+<td style="width: 268px;">AbuseIPDB.IP.IsWhitelisted</td>
+<td style="width: 58px;">String</td>
+<td style="width: 414px;">Is the IP address whitelisted.</td>
+</tr>
+<tr>
+<td style="width: 268px;">AbuseIPDB.IP.LastReportedAt</td>
+<td style="width: 58px;">String</td>
+<td style="width: 414px;">When the IP address was last reported.</td>
+</tr>
+<tr>
+<td style="width: 268px;">AbuseIPDB.IP.NumDistinctUsers</td>
+<td style="width: 58px;">String</td>
+<td style="width: 414px;">The distinct number of users.</td>
 </tr>
 <tr>
 <td style="width: 268px;">AbuseIPDB.IP.Address.Reports</td>
@@ -131,6 +177,16 @@
 <td style="width: 58px;">unknown</td>
 <td style="width: 414px;">The Detections that led to the verdict</td>
 </tr>
+<tr>
+<td style="width: 271px;">AbuseIPDB.IP.UsageType</td>
+<td style="width: 55px;">String</td>
+<td style="width: 414px;">Usage type of the IP.</td>
+</tr>
+<tr>
+<td style="width: 271px;">AbuseIPDB.IP.Domain</td>
+<td style="width: 55px;">String</td>
+<td style="width: 414px;">Domain of the IP.</td>
+</tr>
 </tbody>
 </table>
 <p> </p>
@@ -138,7 +194,7 @@
 <p><code>!ip ip=8.8.8.8 days=30 verbose=true</code></p>
 <h5>Context Example</h5>
 <h5>Human Readable Output</h5>
-<p><a href="https://user-images.githubusercontent.com/44546251/50418178-b89a0780-0832-11e9-86ee-8b206273ca11.png" target="_blank" rel="noopener noreferrer"><img src="https://user-images.githubusercontent.com/44546251/50418178-b89a0780-0832-11e9-86ee-8b206273ca11.png" alt="image"></a></p>
+<p><a href="../../doc_files/50418178-b89a0780-0832-11e9-86ee-8b206273ca11.png" target="_blank" rel="noopener noreferrer"><img src="../../doc_files/50418178-b89a0780-0832-11e9-86ee-8b206273ca11.png" alt="image"></a></p>
 <h3 id="h_130633879481545911083799">2. Query a block of IP addresses</h3>
 <hr>
 <p>Queries a block of IPs to check against the database</p>
@@ -198,9 +254,49 @@
 <td style="width: 414px;">Confidence score fetched from AbuseIPDB</td>
 </tr>
 <tr>
-<td style="width: 271px;">AbuseIPDB.IP.Geo.Country</td>
-<td style="width: 55px;">unknown</td>
+<td style="width: 268px;">AbuseIPDB.IP.Geo.Country</td>
+<td style="width: 58px;">String</td>
 <td style="width: 414px;">Country associated with this IP Address</td>
+</tr>
+<tr>
+<td style="width: 268px;">AbuseIPDB.IP.Geo.CountryCode</td>
+<td style="width: 58px;">String</td>
+<td style="width: 414px;">Country code associated with this IP Address</td>
+</tr>
+<tr>
+<td style="width: 268px;">AbuseIPDB.IP.Hostnames</td>
+<td style="width: 58px;">String</td>
+<td style="width: 414px;">The hostame(s) of the IP address.</td>
+</tr>
+<tr>
+<td style="width: 268px;">AbuseIPDB.IP.IpVersion</td>
+<td style="width: 58px;">String</td>
+<td style="width: 414px;">The version of the IP address.</td>
+</tr>
+<tr>
+<td style="width: 268px;">AbuseIPDB.IP.IsPublic</td>
+<td style="width: 58px;">String</td>
+<td style="width: 414px;">Is the IP address public.</td>
+</tr>
+<tr>
+<td style="width: 268px;">AbuseIPDB.IP.IsTor</td>
+<td style="width: 58px;">String</td>
+<td style="width: 414px;">Is the IP address a Tor IP.</td>
+</tr>
+<tr>
+<td style="width: 268px;">AbuseIPDB.IP.IsWhitelisted</td>
+<td style="width: 58px;">String</td>
+<td style="width: 414px;">Is the IP address whitelisted.</td>
+</tr>
+<tr>
+<td style="width: 268px;">AbuseIPDB.IP.LastReportedAt</td>
+<td style="width: 58px;">String</td>
+<td style="width: 414px;">When the IP address was last reported.</td>
+</tr>
+<tr>
+<td style="width: 268px;">AbuseIPDB.IP.NumDistinctUsers</td>
+<td style="width: 58px;">String</td>
+<td style="width: 414px;">The distinct number of users.</td>
 </tr>
 <tr>
 <td style="width: 271px;">AbuseIPDB.IP.TotalReports</td>
@@ -237,6 +333,16 @@
 <td style="width: 55px;">unknown</td>
 <td style="width: 414px;">The Detections that led to the verdict</td>
 </tr>
+<tr>
+<td style="width: 271px;">AbuseIPDB.IP.UsageType</td>
+<td style="width: 55px;">String</td>
+<td style="width: 414px;">Usage type of the IP.</td>
+</tr>
+<tr>
+<td style="width: 271px;">AbuseIPDB.IP.Domain</td>
+<td style="width: 55px;">String</td>
+<td style="width: 414px;">Domain of the IP.</td>
+</tr>
 </tbody>
 </table>
 <p> </p>
@@ -244,7 +350,7 @@
 <p><code>!abuseipdb-check-cidr-block network="127.0.0.2/24" days="30" limit="40" threshold="80"</code></p>
 <p> </p>
 <h5>Human Readable Output</h5>
-<p><a href="https://user-images.githubusercontent.com/44546251/50418320-70c7b000-0833-11e9-8c4d-8f24735aa127.png" target="_blank" rel="noopener noreferrer"><img src="https://user-images.githubusercontent.com/44546251/50418320-70c7b000-0833-11e9-8c4d-8f24735aa127.png" alt="image"></a></p>
+<p><a href="../../doc_files/50418320-70c7b000-0833-11e9-8c4d-8f24735aa127.png" target="_blank" rel="noopener noreferrer"><img src="../../doc_files/50418320-70c7b000-0833-11e9-8c4d-8f24735aa127.png" alt="image"></a></p>
 <h3 id="h_720330259911545911111279">3. Report an IP address</h3>
 <hr>
 <p>Report an IP address to AbuseIPDB</p>
@@ -278,7 +384,7 @@
 <h5>Command Example</h5>
 <p><code>!abuseipdb-report-ip ip=8.8.8.8 categories="18,22,23"</code></p>
 <h5>Human Readable Output</h5>
-<p><a href="https://user-images.githubusercontent.com/44546251/50419024-44ae2e00-0837-11e9-926a-2e7084b547ab.png" target="_blank" rel="noopener noreferrer"><img src="https://user-images.githubusercontent.com/44546251/50419024-44ae2e00-0837-11e9-926a-2e7084b547ab.png" alt="image"></a></p>
+<p><a href="../../doc_files/50419024-44ae2e00-0837-11e9-926a-2e7084b547ab.png" target="_blank" rel="noopener noreferrer"><img src="../../doc_files/50419024-44ae2e00-0837-11e9-926a-2e7084b547ab.png" alt="image"></a></p>
 <h3 id="h_5900568011321545911147791">4. Get a list of the most reported IP addresses</h3>
 <hr>
 <p>Returns a list of the most reported IP addresses</p>
@@ -325,7 +431,7 @@
 <tr>
 <td style="width: 288px;">AbuseIPDB.Blacklist</td>
 <td style="width: 141px;">unknown</td>
-<td style="width: 311px;">List of blacklisted IPs</td>
+<td style="width: 311px;">List of IPs on block list</td>
 </tr>
 </tbody>
 </table>
@@ -334,7 +440,7 @@
 <p><code>!abuseipdb-get-blacklist days=30 limit=5</code></p>
 <h5>Context Example</h5>
 <h5>Human Readable Output</h5>
-<p><a href="https://user-images.githubusercontent.com/44546251/50419051-6d362800-0837-11e9-9f8c-8a9577c8cfad.png" target="_blank" rel="noopener noreferrer"><img src="https://user-images.githubusercontent.com/44546251/50419051-6d362800-0837-11e9-9f8c-8a9577c8cfad.png" alt="image"></a></p>
+<p><a href="../../doc_files/50419051-6d362800-0837-11e9-9f8c-8a9577c8cfad.png" target="_blank" rel="noopener noreferrer"><img src="../../doc_files/50419051-6d362800-0837-11e9-9f8c-8a9577c8cfad.png" alt="image"></a></p>
 <h3 id="h_7763511091731545911176964">5. Get a list of report categories</h3>
 <hr>
 <p>Returns a list of report categories from AbuseIPDB</p>
@@ -364,7 +470,7 @@
 <p><code>!abuseipdb-get-categories</code></p>
 <p> </p>
 <h5>Human Readable Output</h5>
-<p><a href="https://user-images.githubusercontent.com/44546251/50474306-2d9f4580-09c9-11e9-8d74-82b22fedb185.png" target="_blank" rel="noopener noreferrer"><img src="https://user-images.githubusercontent.com/44546251/50474306-2d9f4580-09c9-11e9-8d74-82b22fedb185.png" alt="image"></a></p>
+<p><a href="../../doc_files/50474306-2d9f4580-09c9-11e9-8d74-82b22fedb185.png" target="_blank" rel="noopener noreferrer"><img src="../../doc_files/50474306-2d9f4580-09c9-11e9-8d74-82b22fedb185.png" alt="image"></a></p>
 <h2>Additional Information</h2>
 <ul>
 <li>

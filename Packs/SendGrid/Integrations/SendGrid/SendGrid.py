@@ -1,12 +1,12 @@
+import demistomock as demisto  # noqa: F401
+from CommonServerPython import *  # noqa: F401
 import json
 import mimetypes
 import time
 
 import dateutil.parser
-import demistomock as demisto  # noqa: F401
-from CommonServerPython import *  # noqa: F401
 from sendgrid import SendGridAPIClient
-from sendgrid.helpers.mail import *
+from sendgrid.helpers.mail import *  # nopycln: import
 
 # IMPORTS
 
@@ -36,7 +36,7 @@ def process_attachments(message, attachIDs="", attachNames=""):
         try:
             res = demisto.getFilePath(entry_id)
         except Exception as ex:
-            raise Exception("entry {} does not contain a file: {}".format(entry_id, str(ex)))
+            raise Exception(f"entry {entry_id} does not contain a file: {str(ex)}")
         file_path = res["path"]
         with open(file_path, 'rb') as f:
             f_data = f.read()
@@ -60,6 +60,37 @@ def test_module(sg):
         raise DemistoException(
             f"Test failed. Please check your parameters. \n {e}")
     return 'ok'
+
+
+"""Retrieve an Email list based on the query"""
+
+
+def get_email_activity_list(args: dict, sg):
+    params = {}
+    limit = args.get('limit')
+    query = args.get('query')
+    headers = args.get('headers')
+    if limit:
+        params['limit'] = int(limit)
+    if query:
+        params['query'] = query
+    response = sg.client.messages.get(query_params=params)
+    if response.status_code == 200:
+        rBody = response.body
+        body = json.loads(rBody.decode("utf-8"))
+        ec = {'Sendgrid.EmailList': body['messages']}
+        if headers and isinstance(headers, str):
+            headers = headers.split(",")
+        md = tableToMarkdown('Email List: ', body['messages'], headers)
+        return {
+            'ContentsFormat': formats['json'],
+            'Type': entryTypes['note'],
+            'Contents': body,
+            'HumanReadable': md,
+            'EntryContext': ec
+        }
+    else:
+        return 'Email list fetch is failed: ' + str(response.body)
 
 
 """Create a Batch ID"""
@@ -206,6 +237,7 @@ def get_global_email_stats(args: dict, sg):
     end_date = args.get('end_date')
     if end_date:
         params['end_date'] = end_date
+    headers = args.get('headers')
 
     response = sg.client.stats.get(query_params=params)
     if response.status_code == 200:
@@ -234,13 +266,9 @@ def get_global_email_stats(args: dict, sg):
             res['unsubscribes'] = metrics['unsubscribes']
             mail_stats.append(res)
 
-        md = tableToMarkdown("Global Email Statistics", mail_stats, ['date', 'blocks',
-                                                                     'bounce_drops', 'bounces', 'clicks', 'deferred',
-                                                                     'delivered', 'invalid_emails',
-                                                                     'opens', 'processed', 'requests',
-                                                                     'spam_report_drops', 'spam_reports',
-                                                                     'unique_clicks', 'unique_opens',
-                                                                     'unsubscribe_drops', 'unsubscribes'])
+        if headers and isinstance(headers, str):
+            headers = headers.split(",")
+        md = tableToMarkdown("Global Email Statistics", mail_stats, headers)
         ec = {'Sendgrid.GlobalEmailStats': mail_stats}
         return {
             'ContentsFormat': formats['json'],
@@ -277,6 +305,7 @@ def get_category_stats(args: dict, sg):
     category = args.get('category')
     if category:
         params['categories'] = category
+    headers = args.get('headers')
 
     response = sg.client.categories.stats.get(query_params=params)
     if response.status_code == 200:
@@ -306,19 +335,9 @@ def get_category_stats(args: dict, sg):
             res['unsubscribes'] = metrics['unsubscribes']
             cat_stats.append(res)
 
-        md = tableToMarkdown("Statistics for the Category: " + res['category'], cat_stats, ['date',
-                                                                                            'blocks', 'bounce_drops',
-                                                                                            'bounces', 'clicks',
-                                                                                            'deferred', 'delivered',
-                                                                                            'invalid_emails',
-                                                                                            'opens', 'processed',
-                                                                                            'requests',
-                                                                                            'spam_report_drops',
-                                                                                            'spam_reports',
-                                                                                            'unique_clicks',
-                                                                                            'unique_opens',
-                                                                                            'unsubscribe_drops',
-                                                                                            'unsubscribes'])
+        if headers and isinstance(headers, str):
+            headers = headers.split(",")
+        md = tableToMarkdown("Statistics for the Category: " + res['category'], cat_stats, headers)
         ec = {'Sendgrid.CategoryStats': cat_stats}
         return {
             'ContentsFormat': formats['json'],
@@ -358,6 +377,7 @@ def get_all_categories_stats(args: dict, sg):
     sort_by_metric = args.get('sort_by_metric')
     if sort_by_metric:
         params['sort_by_metric'] = sort_by_metric
+    headers = args.get('headers')
 
     response = sg.client.categories.stats.sums.get(query_params=params)
     if response.status_code == 200:
@@ -390,23 +410,9 @@ def get_all_categories_stats(args: dict, sg):
                 res['unsubscribes'] = metrics['unsubscribes']
                 cat_stats.append(res)
 
-            md = tableToMarkdown("Sum of All Categories Statistics from " + body['date'], cat_stats, ['category',
-                                                                                                      'blocks',
-                                                                                                      'bounce_drops',
-                                                                                                      'bounces',
-                                                                                                      'clicks',
-                                                                                                      'deferred',
-                                                                                                      'delivered',
-                                                                                                      'invalid_emails',
-                                                                                                      'opens',
-                                                                                                      'processed',
-                                                                                                      'requests',
-                                                                                                      'spam_report_drops',
-                                                                                                      'spam_reports',
-                                                                                                      'unique_clicks',
-                                                                                                      'unique_opens',
-                                                                                                      'unsubscribe_drops',
-                                                                                                      'unsubscribes'])
+            if headers and isinstance(headers, str):
+                headers = headers.split(",")
+            md = tableToMarkdown("Sum of All Categories Statistics from " + body['date'], cat_stats, headers)
             ec = {'Sendgrid.AllCategoriesStats': body}
             return {
                 'ContentsFormat': formats['json'],
@@ -501,14 +507,14 @@ def send_mail(args: dict, sg_from_email: str, sg_sender_name: str, sg):
     click_tracking = args.get('ClickTracking')
     if click_tracking:
         click_tracking = click_tracking if type(click_tracking) is dict else json.loads(click_tracking)
-        is_enable = False if click_tracking["enable"] == 'False' else True
+        is_enable = click_tracking["enable"] != "False"
         tracking_settings.click_tracking = ClickTracking(is_enable,  # type: ignore[name-defined]
                                                          click_tracking["enable_text"])
 
     open_tracking = args.get('OpenTracking')
     if open_tracking:
         open_tracking = open_tracking if type(open_tracking) is dict else json.loads(open_tracking)
-        is_enable = False if open_tracking["enable"] == 'False' else True
+        is_enable = open_tracking["enable"] != "False"
         tracking_settings.open_tracking = OpenTracking(  # type: ignore[name-defined]
             is_enable,
             OpenTrackingSubstitutionTag(open_tracking["substitution_tag"]))  # type: ignore[name-defined]
@@ -516,7 +522,7 @@ def send_mail(args: dict, sg_from_email: str, sg_sender_name: str, sg):
     sub_tracking = args.get('SubscriptionTracking')
     if sub_tracking:
         sub_tracking = sub_tracking if type(sub_tracking) is dict else json.loads(sub_tracking)
-        is_enable = False if sub_tracking["enable"] == 'False' else True
+        is_enable = sub_tracking["enable"] != "False"
         tracking_settings.subscription_tracking = SubscriptionTracking(  # type: ignore[name-defined]
             is_enable,
             SubscriptionText(sub_tracking["text"]),  # type: ignore[name-defined]
@@ -526,7 +532,7 @@ def send_mail(args: dict, sg_from_email: str, sg_sender_name: str, sg):
     ganalytics = args.get('GAnalytics')
     if ganalytics:
         ganalytics = ganalytics if type(ganalytics) is dict else json.loads(ganalytics)
-        is_enable = False if ganalytics["enable"] == 'False' else True
+        is_enable = ganalytics["enable"] != "False"
         tracking_settings.ganalytics = Ganalytics(  # type: ignore[name-defined]
             is_enable,
             UtmSource(ganalytics["utm_source"]),  # type: ignore[name-defined]
@@ -542,7 +548,7 @@ def send_mail(args: dict, sg_from_email: str, sg_sender_name: str, sg):
     bcc_mail_set = args.get('BccSettings')
     if bcc_mail_set:
         bcc_mail_set = bcc_mail_set if type(bcc_mail_set) is dict else json.loads(bcc_mail_set)
-        is_enable = False if bcc_mail_set["enable"] == 'False' else True
+        is_enable = bcc_mail_set["enable"] != "False"
         mail_settings.bcc_settings = BccSettings(  # type: ignore[name-defined]
             is_enable,
             BccSettingsEmail(bcc_mail_set["email"]))  # type: ignore[name-defined]
@@ -550,7 +556,7 @@ def send_mail(args: dict, sg_from_email: str, sg_sender_name: str, sg):
     footer = args.get('Footer')
     if footer:
         footer = footer if type(footer) is dict else json.loads(footer)
-        is_enable = False if footer["enable"] == 'False' else True
+        is_enable = footer["enable"] != "False"
         mail_settings.footer_settings = FooterSettings(  # type: ignore[name-defined]
             is_enable,
             FooterText(footer["text"]),  # type: ignore[name-defined]
@@ -559,7 +565,7 @@ def send_mail(args: dict, sg_from_email: str, sg_sender_name: str, sg):
     spam_check = args.get('SpamCheck')
     if spam_check:
         spam_check = spam_check if type(spam_check) is dict else json.loads(spam_check)
-        is_enable = False if spam_check["enable"] == 'False' else True
+        is_enable = spam_check["enable"] != "False"
         mail_settings.spam_check = SpamCheck(  # type: ignore[name-defined]
             is_enable,
             SpamThreshold(spam_check["threshold"]),  # type: ignore[name-defined]
@@ -567,12 +573,12 @@ def send_mail(args: dict, sg_from_email: str, sg_sender_name: str, sg):
 
     sandbox_mode = args.get('SandboxMode')
     if sandbox_mode:
-        sandbox_mode = False if sandbox_mode == 'False' else True
+        sandbox_mode = sandbox_mode != "False"
         mail_settings.sandbox_mode = SandBoxMode(sandbox_mode)  # type: ignore[name-defined]
 
     bypass_list_management = args.get('BypassListManagement')
     if bypass_list_management:
-        bypass_list_management = False if bypass_list_management == 'False' else True
+        bypass_list_management = bypass_list_management != "False"
         mail_settings.bypass_list_management = BypassListManagement(bypass_list_management)  # type: ignore[name-defined]
 
     message.mail_settings = mail_settings
@@ -628,6 +634,148 @@ def send_mail(args: dict, sg_from_email: str, sg_sender_name: str, sg):
         return "Failed to send email " + response.status_code
 
 
+def get_all_lists(args: dict, sg):
+    params = {}
+    pageSize = args.get('page_size')
+    if pageSize:
+        params['page_size'] = int(pageSize)
+    pageToken = args.get('page_token')
+    if pageToken:
+        params['page_token'] = pageToken
+    headers = args.get('headers')
+
+    response = sg.client.marketing.lists.get(query_params=params)
+    if response.status_code == 200:
+        rBody = response.body
+        body = json.loads(rBody.decode("utf-8"))
+        ec = {'Sendgrid.Lists.Result': body['result'], 'Sendgrid.Lists.Metadata': body['_metadata']}
+        if headers and isinstance(headers, str):
+            headers = headers.split(",")
+        md = tableToMarkdown('Lists information was fetched successfully: ', body['result'], headers)
+        return {
+            'ContentsFormat': formats['json'],
+            'Type': entryTypes['note'],
+            'Contents': body,
+            'HumanReadable': md,
+            'EntryContext': ec
+        }
+    else:
+        return 'Failed to fetch lists information: ' + str(response.body)
+
+
+def get_list_by_id(args: dict, sg):
+    listID = args.get('list_id')
+    params = {}
+    contactSample = args.get('contact_sample')
+    if contactSample:
+        params['contact_sample'] = contactSample != "False"
+
+    response = sg.client.marketing.lists._(listID).get(query_params=params)
+    if response.status_code == 200:
+        rBody = response.body
+        body = json.loads(rBody.decode("utf-8"))
+        ec = {'Sendgrid.List': body}
+        md = tableToMarkdown('List details ', body)
+        return {
+            'ContentsFormat': formats['json'],
+            'Type': entryTypes['note'],
+            'Contents': body,
+            'HumanReadable': md,
+            'EntryContext': ec
+        }
+    else:
+        return 'Failed to retrieve list information: ' + str(response.body)
+
+
+def create_list(args: dict, sg):
+    listName = args.get('list_name')
+    data = {"name": listName}
+
+    response = sg.client.marketing.lists.post(request_body=data)
+    if response.status_code == 201:
+        rBody = response.body
+        body = json.loads(rBody.decode("utf-8"))
+        ec = {'Sendgrid.NewList': body}
+        md = tableToMarkdown('New List has been successfully created ', body)
+        return {
+            'ContentsFormat': formats['json'],
+            'Type': entryTypes['note'],
+            'Contents': body,
+            'HumanReadable': md,
+            'EntryContext': ec
+        }
+    else:
+        return 'Failed to create new list: ' + str(response.body)
+
+
+def get_list_contact_count_by_id(args: dict, sg):
+    listID = args.get('list_id')
+    response = sg.client.marketing.lists._(listID).contacts.count.get()
+    if response.status_code == 200:
+        rBody = response.body
+        body = json.loads(rBody.decode("utf-8"))
+        ec = {'Sendgrid.ListCount': body}
+        md = tableToMarkdown('List contact count details ', body)
+        return {
+            'ContentsFormat': formats['json'],
+            'Type': entryTypes['note'],
+            'Contents': body,
+            'HumanReadable': md,
+            'EntryContext': ec
+        }
+    else:
+        return 'Failed to retrieve contact list count information: ' + str(response.body)
+
+
+def update_list_name(args: dict, sg):
+    listID = args.get('list_id')
+    listName = args.get('updated_list_name')
+    data = {"name": listName}
+
+    response = sg.client.marketing.lists._(listID).patch(request_body=data)
+    if response.status_code == 200:
+        rBody = response.body
+        body = json.loads(rBody.decode("utf-8"))
+        ec = {'Sendgrid.updatedList': body}
+        md = tableToMarkdown('List Name has been updated successfully ', body)
+        return {
+            'ContentsFormat': formats['json'],
+            'Type': entryTypes['note'],
+            'Contents': body,
+            'HumanReadable': md,
+            'EntryContext': ec
+        }
+    else:
+        return 'Failed to update list name: ' + str(response.body)
+
+
+def delete_list(args: dict, sg):
+    listID = args.get('list_id')
+    params = {}
+    deleteContacts = args.get('delete_contacts')
+    if deleteContacts:
+        params['delete_contacts'] = deleteContacts != "False"
+
+    response = sg.client.marketing.lists._(listID).delete(query_params=params)
+    if response.status_code == 200:
+        rBody = response.body
+        body = json.loads(rBody.decode("utf-8"))
+        ec = {'Sendgrid.DeleteListJobId': body['job_id']}
+        md = tableToMarkdown('The delete has been accepted and is processing. \
+                You can check the status using the Job ID: ', body['job_id'])
+        return {
+            'ContentsFormat': formats['json'],
+            'Type': entryTypes['note'],
+            'Contents': body,
+            'HumanReadable': md,
+            'EntryContext': ec
+        }
+    elif response.status_code == 204:
+        return 'Deletion completed successfully'
+    else:
+        return 'Failed to delete list: ' + str(response.body)
+
+
 def main():
     """
         PARSE AND VALIDATE INTEGRATION PARAMS
@@ -643,6 +791,7 @@ def main():
 
         command = demisto.command()
         args = demisto.args()
+        result = ""
 
         if command == 'test-module':
             result = test_module(sg)
@@ -680,11 +829,35 @@ def main():
         elif demisto.command() == 'sg-delete-scheduled-send':
             result = delete_scheduled_send(args, sg)
 
+        elif demisto.command() == 'sg-get-email-activity-list':
+            result = get_email_activity_list(args, sg)
+
+        elif demisto.command() == 'sg-get-all-lists':
+            result = get_all_lists(args, sg)
+
+        elif demisto.command() == 'sg-get-list-by-id':
+            result = get_list_by_id(args, sg)
+
+        elif demisto.command() == 'sg-create-list':
+            result = create_list(args, sg)
+
+        elif demisto.command() == 'sg-get-list-contact-count-by-id':
+            result = get_list_contact_count_by_id(args, sg)
+
+        elif demisto.command() == 'sg-update-list-name':
+            result = update_list_name(args, sg)
+
+        elif demisto.command() == 'sg-delete-list':
+            result = delete_list(args, sg)
+
         demisto.results(result)
 
     # Log exceptions
     except Exception as e:
-        return_error(f'Failed to execute {demisto.command()} command. Error: {str(e)}')
+        if repr(e) == "KeyError('email')":
+            return_error(f"Failed to execute {demisto.command()} command. Please provide a valid email.")
+        else:
+            return_error(f'Failed to execute {demisto.command()} command. Error: {str(e)}')
 
 
 if __name__ in ('__main__', 'builtins'):

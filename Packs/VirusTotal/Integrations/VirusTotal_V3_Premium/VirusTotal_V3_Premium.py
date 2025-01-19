@@ -1,9 +1,9 @@
 """
 VirusTotal V3 - Premium API
-Difference: https://developers.virustotal.com/v3.0/reference#public-vs-premium-api
+Difference: https://docs.virustotal.com/reference/public-vs-premium-api
 """
 import copy
-from typing import Tuple, Iterable
+from collections.abc import Iterable
 
 import urllib3
 from dateparser import parse
@@ -38,9 +38,8 @@ def convert_epoch_to_readable(
         epoch time in readable output
     """
     for date_ in keys:
-        if creation_date := readable_inputs.get(date_):
-            if creation_date := parse(str(creation_date)):
-                readable_inputs[date_] = creation_date.replace(microsecond=0).isoformat()
+        if (creation_date := readable_inputs.get(date_)) and (creation_date := parse(str(creation_date))):
+            readable_inputs[date_] = creation_date.replace(microsecond=0).isoformat()
     return readable_inputs
 
 
@@ -97,16 +96,16 @@ def get_last_run_time(params: Optional[dict] = None, last_run: Optional[dict] = 
     if params is None:
         params = demisto.params()
     if last_run:
-        last_run_date = parse(last_run.get('date'))
+        last_run_date = parse(last_run.get('date'))  # type: ignore
     else:  # first run
         first_fetch = params.get('first_fetch')
         try:
-            last_run_date = parse(first_fetch)
+            last_run_date = parse(first_fetch)  # type: ignore
             if not last_run_date:
                 raise TypeError
         except TypeError:
             raise DemistoException(f'The first fetch time is invalid "{first_fetch=}"')
-
+    assert last_run_date is not None
     return last_run_date
 
 
@@ -131,9 +130,9 @@ def get_time_range_object(start_time: Optional[str] = None, end_time: Optional[s
     start_date: datetime
     end_date: datetime
     if start_time and end_time:
-        start_date = parse(start_time)
+        start_date = parse(start_time)  # type: ignore
         assert start_date, f'Could not parse start_date argument. {start_time=}'
-        end_date = parse(end_time)
+        end_date = parse(end_time)  # type: ignore
         assert end_date, f'Could not parse end_time argument. {end_time=}'
 
         time_range = {
@@ -141,7 +140,7 @@ def get_time_range_object(start_time: Optional[str] = None, end_time: Optional[s
             'end': int(end_date.timestamp())
         }
     elif start_time:
-        start_date, end_date = parse(start_time), datetime.now()
+        start_date, end_date = parse(start_time), datetime.now()  # type: ignore
         assert start_date, f'Could not parse start_date argument. {start_time=}'
         assert end_date, f'Could not parse end_time argument. {end_time=}'
 
@@ -185,7 +184,7 @@ def raise_if_hash_not_valid(
         >>> raise_if_hash_not_valid('7e641f6b9706d860baf09fe418b6cc87')
     """
     if isinstance(valid_hashes, str):
-        valid_hashes = tuple([valid_hashes])
+        valid_hashes = (valid_hashes,)
     if get_hash_type(file_hash) not in valid_hashes:
         raise ValueError(f'Hash "{file_hash}" is not of type {", ".join(valid_hashes)}')
 
@@ -215,14 +214,17 @@ class Client(BaseClient):
             'https://www.virustotal.com/api/v3/',
             verify=not params.get('insecure'),
             proxy=params.get('proxy'),
-            headers={'x-apikey': self.api_key}
+            headers={
+                'x-apikey': self.api_key,
+                'x-tool': 'CortexVirusTotalV3Premium'
+            }
         )
 
     def download_file(self, file: str) -> requests.Response:
         """Download a file.
 
         See Also:
-            https://developers.virustotal.com/v3.0/reference#files-download
+            https://docs.virustotal.com/reference/files-download
         """
         return self._http_request(
             'GET',
@@ -235,7 +237,7 @@ class Client(BaseClient):
         """Creates a password-protected ZIP file containing files from VirusTotal.
 
         See Also:
-            https://developers.virustotal.com/v3.0/reference#zip_files
+            https://docs.virustotal.com/reference/zip_files
         """
         body: dict = {
             'hashes': hashes
@@ -252,7 +254,7 @@ class Client(BaseClient):
         """Retrieve information about a ZIP file
 
         See Also:
-            https://developers.virustotal.com/v3.0/reference#get-zip-file
+            https://docs.virustotal.com/reference/get-zip-file
         """
         return self._http_request(
             'GET',
@@ -263,7 +265,7 @@ class Client(BaseClient):
         """Download a ZIP file.
 
         See Also:
-            https://developers.virustotal.com/v3.0/reference#zip-files-download
+            https://docs.virustotal.com/reference/zip-files-download
         """
         return self._http_request(
             'GET',
@@ -276,7 +278,7 @@ class Client(BaseClient):
         """Extracted PCAP from a sandbox analysis.
 
         See Also:
-            https://developers.virustotal.com/v3.0/reference#file_behaviours_pcap
+            https://docs.virustotal.com/reference/file_behaviours_pcap
         """
         return self._http_request(
             'GET',
@@ -295,7 +297,7 @@ class Client(BaseClient):
         """Search for files.
 
         See Also:
-            https://developers.virustotal.com/v3.0/reference#intelligence-search
+            https://docs.virustotal.com/reference/intelligence-search
         """
         return self._http_request(
             'GET',
@@ -313,7 +315,7 @@ class Client(BaseClient):
         """Retrieve a VT Hunting Livehunt ruleset.
 
         See Also:
-            https://developers.virustotal.com/v3.0/reference#get-hunting-ruleset.
+            https://docs.virustotal.com/reference/get-hunting-ruleset
         """
         return self._http_request(
             'GET',
@@ -332,7 +334,7 @@ class Client(BaseClient):
         """Retrieve a VT Hunting Livehunt rulesets.
 
         See Also:
-            https://developers.virustotal.com/v3.0/reference#list-hunting-rulesets
+            https://docs.virustotal.com/reference/list-hunting-rulesets
         """
         filter_ = ''
         if name:
@@ -361,7 +363,7 @@ class Client(BaseClient):
     ) -> dict:
         """Create a new VT Hunting Livehunt ruleset.
         See Also:
-            https://developers.virustotal.com/v3.0/reference#create-hunting-ruleset
+            https://docs.virustotal.com/reference/create-hunting-ruleset
         """
         return self._http_request(
             'POST',
@@ -391,7 +393,7 @@ class Client(BaseClient):
         """Update a VT Hunting Livehunt ruleset.
 
         See Also:
-            https://developers.virustotal.com/v3.0/reference#create-hunting-ruleset
+            https://docs.virustotal.com/reference/create-hunting-ruleset
         """
         params = assign_params(
             enabled=enabled,
@@ -416,7 +418,7 @@ class Client(BaseClient):
         """Delete a VT Hunting Livehunt ruleset.
 
         See Also:
-            https://developers.virustotal.com/v3.0/reference#delete-hunting-ruleset
+            https://docs.virustotal.com/reference/delete-hunting-ruleset
         """
         self._http_request(
             'DELETE',
@@ -435,7 +437,7 @@ class Client(BaseClient):
         """Retrieve VT Hunting Livehunt notifications.
 
         See Also:
-            https://developers.virustotal.com/v3.0/reference#list-hunting-notifications
+            https://docs.virustotal.com/reference/list-hunting-notifications
         """
         time_format = "%Y-%m-%dT%H:%M:%S"
         filter_ = ''
@@ -460,7 +462,7 @@ class Client(BaseClient):
         """Retrieve file objects for VT Hunting Livehunt notifications.
 
         See Also:
-            https://developers.virustotal.com/v3.0/reference#hunting_notification_files
+            https://docs.virustotal.com/reference/hunting_notification_files
         """
         return self._http_request(
             'GET',
@@ -476,7 +478,7 @@ class Client(BaseClient):
         """Get a VT Hunting Livehunt ruleset by hunting notification files relationship.
 
         See Also:
-            https://developers.virustotal.com/v3.0/reference#get-hunting-ruleset-relationship
+            https://docs.virustotal.com/reference/get-hunting-ruleset-relationship
         """
         return self._http_request(
             'GET',
@@ -496,7 +498,7 @@ class Client(BaseClient):
         """Retrieve retrohunt jobs.
 
         See Also:
-            https://developers.virustotal.com/v3.0/reference#get-retrohunt-jobs
+            https://docs.virustotal.com/reference/get-retrohunt-jobs
         """
         return self._http_request(
             'GET',
@@ -518,7 +520,7 @@ class Client(BaseClient):
         """Create a new retrohunt job.
 
         See Also:
-            https://developers.virustotal.com/v3.0/reference#create-retrohunt-job
+            https://docs.virustotal.com/reference/create-retrohunt-job
         """
         return self._http_request(
             'POST',
@@ -540,7 +542,7 @@ class Client(BaseClient):
         """Retrieve a retrohunt job.
 
         See Also:
-            https://developers.virustotal.com/v3.0/reference#get-retrohunt-job
+            https://docs.virustotal.com/reference/get-retrohunt-job
         """
         return self._http_request(
             'GET',
@@ -551,7 +553,7 @@ class Client(BaseClient):
         """Retrieve matches for a retrohunt job matching file relationship..
 
         See Also:
-            https://developers.virustotal.com/v3.0/reference#get-retrohunt-jobs-relationships
+            https://docs.virustotal.com/reference/get-retrohunt-job-relationships
         """
         return self._http_request(
             'GET',
@@ -562,7 +564,7 @@ class Client(BaseClient):
         """Retrieve user's API usage.
 
         See Also:
-            https://developers.virustotal.com/v3.0/reference#user-api-usage
+            https://docs.virustotal.com/reference/user-api-usage
         """
         return self._http_request(
             'GET',
@@ -646,7 +648,7 @@ def get_pcap_behaviour(client: Client, args: dict) -> dict:
     """Extracted PCAP from a sandbox analysis"""
     report_id = args['report_id']
     content = client.get_pcap_beaviour(report_id)
-    assert isinstance(content, (bytes, str)), 'Response from PCAP Behavior is not a bytes-like object.'
+    assert isinstance(content, bytes | str), 'Response from PCAP Behavior is not a bytes-like object.'
     return fileResult(f'{report_id}.pcap', content)
 
 
@@ -783,9 +785,8 @@ def list_notifications(client: Client, args: dict) -> CommandResults:
         to_time = parse(to_time)
     if from_time := args.get('from_time'):
         from_time = parse(from_time)
-    if from_time and to_time:
-        if from_time > to_time:
-            raise DemistoException(f'The from_time argument is later then to_time. {from_time} > {to_time}')
+    if from_time and to_time and from_time > to_time:
+        raise DemistoException(f'The from_time argument is later then to_time. {from_time} > {to_time}')
     cursor = args.get('cursor')
     tag = args.get('tag')
     outputs = raw_response = client.list_notifications(from_time, to_time, tag, cursor, limit)
@@ -833,7 +834,7 @@ def list_notifications_files_list_by_hash(client: Client, args: dict) -> List[Co
     """Retrieve file objects for VT Hunting Livehunt notifications by hash."""
     hashes_only = [hash_ for hash_ in argToList(args.get('hash')) if get_hash_type(hash_) != 'Unknown']
     cursor = args.get('cursor')
-    results = list()
+    results = []
     for hash_ in hashes_only:
         try:
             outputs = raw_response = client.list_notifications_files(hash_, cursor, limit=1)
@@ -995,11 +996,11 @@ def get_quota_limits(client: Client, args: dict) -> CommandResults:
     )
 
 
-def fetch_incidents(client: Client, params: dict, last_run_date: datetime) -> Tuple[List[dict], datetime]:
+def fetch_incidents(client: Client, params: dict, last_run_date: datetime) -> tuple[List[dict], datetime]:
     tag = params.get('tag')
     max_fetch = arg_to_number_must_int(params.get('max_fetch', 10))
     raw_response = client.list_notifications(from_time=last_run_date, tag=tag, limit=max_fetch)
-    incidents = list()
+    incidents = []
     for notification in raw_response.get('data', []):
         attributes = notification.get('attributes', {})
         date = parse(str(attributes.get('date')))  # epoch int to str

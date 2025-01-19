@@ -66,7 +66,7 @@ def test_list_quarantined_messages(requests_mock, client):
         'rcpt': recipient
     }
     api_response = load_test_data('./test_data/quarantined_messages_response.json')
-    matcher = re.compile(SERVER_URL + '/quarantine\?' + urlencode(url_query_args))
+    matcher = re.compile(SERVER_URL + r'/quarantine\?' + urlencode(url_query_args))
     requests_mock.get(matcher, json=api_response)
     result = list_quarantined_messages(client=client, args=args)
     assert result.outputs == api_response.get('records')
@@ -213,7 +213,8 @@ def test_download_message_positive(mocker, request, requests_mock, client):
     args = {
         'guid': guid
     }
-    api_response = open('./test_data/download_message_response').read().encode('utf8')
+    with open('./test_data/download_message_response') as _file:
+        api_response = _file.read().encode('utf8')
     requests_mock.get(SERVER_URL + '/quarantine?' + urlencode(args), content=api_response)
     result = download_message(client=client, args=args)
     assert result['File'] == guid + '.eml'
@@ -236,3 +237,21 @@ def test_download_message_negative(requests_mock, client):
     requests_mock.get(SERVER_URL + '/quarantine?' + urlencode(args), status_code=404)
     result = download_message(client=client, args=args)
     assert result.readable_output == 'No message found.'
+
+
+def test_test_module_without_health_check(requests_mock, client):
+    """
+    Given:
+        - client
+    When:
+        - Running test-module command
+    Then:
+        - Ensure there is only one http call being made
+    """
+    from ProofpointProtectionServerV2 import test_module
+
+    args = {
+        'subject': 'Test'
+    }
+    requests_mock.get(SERVER_URL + '/quarantine?' + urlencode(args), json={'id': '1'})
+    test_module(client)

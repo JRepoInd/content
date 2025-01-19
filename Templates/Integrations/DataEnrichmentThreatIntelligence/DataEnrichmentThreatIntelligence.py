@@ -1,6 +1,6 @@
-from CommonServerPython import *
+import demistomock as demisto  # noqa: F401
+from CommonServerPython import *  # noqa: F401
 from CommonServerUserPython import *
-import demistomock as demisto
 
 ''' IMPORTS '''
 from typing import Dict, Tuple, Optional, List, Union
@@ -342,7 +342,7 @@ def main():  # pragma: no cover
     params = demisto.params()
     base_url = urljoin(params.get('url'), '/api/v2')
     verify = not params.get('insecure', False)
-    proxy = params.get('proxy') == 'true'
+    proxy = params.get('proxy')
     threshold = int(params.get('threshold', DEFAULT_THRESHOLD))
     client = Client(
         base_url,

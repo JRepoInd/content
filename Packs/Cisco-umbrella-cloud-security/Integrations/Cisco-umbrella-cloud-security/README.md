@@ -1,20 +1,18 @@
 
 This integration was integrated and tested with version 1.0 of Cisco Umbrella Cloud Security.
-## Configure Cisco Umbrella Cloud Security on Cortex XSOAR
+## Configure Cisco Umbrella Cloud Security in Cortex
 
-1. Navigate to **Settings** > **Integrations** > **Servers & Services**.
-2. Search for Cisco Umbrella Cloud Security.
-3. Click **Add instance** to create and configure a new integration instance.
 
-    | **Parameter** | **Required** |
-    | --- | --- |
-    | Organization ID | True |
-    | API Key | True |
-    | API Secret | False |
+| **Parameter** | **Required** |
+| --- | --- |
+| Organization ID | True |
+| API Key | True |
+| API Secret | False |
+| Trust any certificate (not secure) | False |
+| Use system proxy settings | False |
 
-4. Click **Test** to validate the URLs, token, and connection.
 ## Commands
-You can execute these commands from the Cortex XSOAR CLI, as part of an automation, or in a playbook.
+You can execute these commands from the CLI, as part of an automation, or in a playbook.
 After you successfully execute a command, a DBot message appears in the War Room with the command details.
 ### umbrella-get-destination-lists
 ***
@@ -36,13 +34,6 @@ Get's all destination lists in organization
 | **Path** | **Type** | **Description** |
 | --- | --- | --- |
 | Umbrella.DestinationLists | Unknown |  | 
-
-
-#### Command Example
-``` ```
-
-#### Human Readable Output
-
 
 
 ### umbrella-add-domain
@@ -67,11 +58,6 @@ Adds domains to given destination list
 
 There is no context output for this command.
 
-#### Command Example
-``` ```
-
-#### Human Readable Output
-
 
 
 ### umbrella-get-destination-domains
@@ -92,14 +78,13 @@ Get's the domains listed in a destination list
 
 #### Context Output
 
-There is no context output for this command.
-
-#### Command Example
-``` ```
-
-#### Human Readable Output
-
-
+| **Path** | **Type** | **Description** |
+| --- | --- | --- |
+| Umbrella.Destinations.createdAt | Unknown | When the domain within destination list was created | 
+| Umbrella.Destinations.type | Unknown | Type of destination within destination list | 
+| Umbrella.Destinations.destination | Unknown | Domain within destination list | 
+| Umbrella.Destinations.id | Unknown | ID of domain within destination list | 
+| Umbrella.Destinations.comment | Unknown | Comment associated with domain within destination list | 
 
 ### umbrella-remove-domain
 ***
@@ -122,9 +107,55 @@ Removes domains to given destination list
 
 There is no context output for this command.
 
-#### Command Example
-``` ```
+### umbrella-get-destination-domain
+***
+Gets the domain from a destination list
 
-#### Human Readable Output
+
+#### Base Command
+
+`umbrella-get-destination-domain`
+#### Input
+
+| **Argument Name** | **Description** | **Required** |
+| --- | --- | --- |
+| orgId | Optional orgId, by default uses the one set in the instance configuration. | Optional | 
+| destId | Destination list ID to get domains from. Use umbrella-get-destination-lists to get the list ID. | Required | 
 
 
+#### Context Output
+
+| **Path** | **Type** | **Description** |
+| --- | --- | --- |
+| Umbrella.Destinations.createdAt | Unknown | When the domain within destination list was created | 
+| Umbrella.Destinations.type | Unknown | Type of destination within destination list | 
+| Umbrella.Destinations.destination | Unknown | Domain within destination list | 
+| Umbrella.Destinations.id | Unknown | ID of domain within destination list | 
+| Umbrella.Destinations.comment | Unknown | Comment associated with domain within destination list | 
+
+### umbrella-search-destination-domains
+***
+Search for multiple domains in a destination list
+
+
+#### Base Command
+
+`umbrella-search-destination-domains`
+#### Input
+
+| **Argument Name** | **Description** | **Required** |
+| --- | --- | --- |
+| orgId | Optional orgId, by default uses the one set in the instance configuration. | Optional | 
+| destId | Destination list ID to get domains from. Use umbrella-get-destination-lists to get the list ID. | Required | 
+| domains | Domains to search for in a destination list. | Required | 
+
+
+#### Context Output
+
+| **Path** | **Type** | **Description** |
+| --- | --- | --- |
+| Umbrella.Destinations.createdAt | date | When the domain within destination list was created | 
+| Umbrella.Destinations.type | string | Type of destination within destination list | 
+| Umbrella.Destinations.destination | string | Domain within destination list | 
+| Umbrella.Destinations.id | number | ID of domain within destination list | 
+| Umbrella.Destinations.comment | string | Comment associated with domain within destination list | 

@@ -1,10 +1,8 @@
 Darktrace is a Cyber AI platform for threat detection and response across cloud, email, industrial, and the network.
 This integration was integrated and tested with version 4.1.0 of Darktrace
-## Configure Darktrace on Cortex XSOAR
 
-1. Navigate to **Settings** > **Integrations** > **Servers & Services**.
-2. Search for Darktrace.
-3. Click **Add instance** to create and configure a new integration instance.
+## Configure Darktrace in Cortex
+
 
 | **Parameter** | **Description** | **Required** |
 | --- | --- | --- |
@@ -18,11 +16,14 @@ This integration was integrated and tested with version 4.1.0 of Darktrace
 | max_alerts | Maximum Model Breaches per Fetch | False |
 | first_fetch | First fetch time | False |
 
-4. Click **Test** to validate the URLs, token, and connection.
+
 ## Commands
-You can execute these commands from the Cortex XSOAR CLI, as part of an automation, or in a playbook.
+
+You can execute these commands from the CLI, as part of an automation, or in a playbook.
 After you successfully execute a command, a DBot message appears in the War Room with the command details.
+
 ### darktrace-get-breach
+
 ***
 Darktrace-get-breach returns a model breach based on its model breach id (pbid)
 
@@ -30,6 +31,7 @@ Darktrace-get-breach returns a model breach based on its model breach id (pbid)
 #### Base Command
 
 `darktrace-get-breach`
+
 #### Input
 
 | **Argument Name** | **Description** | **Required** |
@@ -60,9 +62,11 @@ Darktrace-get-breach returns a model breach based on its model breach id (pbid)
 
 
 #### Command Example
+
 ```!darktrace-get-breach pbid=95```
 
 #### Context Example
+
 ```
 {
     "Darktrace": {
@@ -95,12 +99,14 @@ Darktrace-get-breach returns a model breach based on its model breach id (pbid)
 #### Human Readable Output
 
 >### Darktrace Model Breach 95
+
 >|commentCount|device|model|pbid|score|time|
 >|---|---|---|---|---|---|
 >| 0 | did: 823<br/>macaddress: 0a:df:4b:52:64:7a<br/>vendor: HP<br/>ip: 172.31.32.146<br/>hostname: ip-172-31-32-146<br/>devicelabel: Kelly's Laptop | name: Compromise::Watched Domain<br/>pid: 762<br/>uuid: 3338210a-8979-4a1b-8039-63ca8addf166<br/>tags: \[AP: C2 Comms\]<br/>priority: 5<br/>description: A device is connecting to watched domains or IP addresses. The watch list can be edited from the main GUI menu, Intel sub-menu, under the icon Watched Domains. | 95 | 1 | 2020-10-08T21:11:21.000Z |
 
 
 ### darktrace-get-comments
+
 ***
 Returns the comments on a model breach based on its model breach id (pbid)
 
@@ -108,6 +114,7 @@ Returns the comments on a model breach based on its model breach id (pbid)
 #### Base Command
 
 `darktrace-get-comments`
+
 #### Input
 
 | **Argument Name** | **Description** | **Required** |
@@ -123,9 +130,11 @@ Returns the comments on a model breach based on its model breach id (pbid)
 
 
 #### Command Example
+
 ```!darktrace-get-comments pbid=46```
 
 #### Context Example
+
 ```
 {
     "Darktrace": {
@@ -154,6 +163,7 @@ Returns the comments on a model breach based on its model breach id (pbid)
 #### Human Readable Output
 
 >### Darktrace Model Breach 46 Comments
+
 >|message|pbid|pid|time|username|
 >|---|---|---|---|---|
 >| Flag for follow-up | 46 | 210 | 2020-10-08T21:11:21.000Z | user.one |
@@ -161,6 +171,7 @@ Returns the comments on a model breach based on its model breach id (pbid)
 
 
 ### darktrace-acknowledge
+
 ***
 Acknowledge a model breach as specified by Model Breach ID
 
@@ -168,6 +179,7 @@ Acknowledge a model breach as specified by Model Breach ID
 #### Base Command
 
 `darktrace-acknowledge`
+
 #### Input
 
 | **Argument Name** | **Description** | **Required** |
@@ -184,9 +196,11 @@ Acknowledge a model breach as specified by Model Breach ID
 
 
 #### Command Example
+
 ```!darktrace-acknowledge pbid=111```
 
 #### Context Example
+
 ```
 {
     "Darktrace": {
@@ -201,12 +215,14 @@ Acknowledge a model breach as specified by Model Breach ID
 #### Human Readable Output
 
 >### Model Breach 111 Acknowledged
+
 >|response|
 >|---|
 >| Successfully acknowledged. |
 
 
 ### darktrace-unacknowledge
+
 ***
 Unacknowledges a model breach as specified by Model Breach ID
 
@@ -214,6 +230,7 @@ Unacknowledges a model breach as specified by Model Breach ID
 #### Base Command
 
 `darktrace-unacknowledge`
+
 #### Input
 
 | **Argument Name** | **Description** | **Required** |
@@ -230,9 +247,11 @@ Unacknowledges a model breach as specified by Model Breach ID
 
 
 #### Command Example
+
 ```!darktrace-unacknowledge pbid=111```
 
 #### Context Example
+
 ```
 {
     "Darktrace": {
@@ -247,12 +266,81 @@ Unacknowledges a model breach as specified by Model Breach ID
 #### Human Readable Output
 
 >### Model Breach 111 Unacknowledged
+
 >|response|
 >|---|
 >| Successfully unacknowledged. |
 
+### darktrace-get-breach-details
+
+***
+Returns details on a modelbreach
+
+#### Base Command
+
+`darktrace-get-breach-details`
+
+#### Input
+
+| **Argument Name** | **Description** | **Required** |
+| --- | --- | --- |
+| pbid | Darktrace model breach ID | Required | 
+| endtime | Endtime of data retrieved | Not Required | 
+| count | The amount of lines returned | Not Required | 
+| offset | The offset of data pulled | Not Required | 
+
+#### Context Output
+
+| **Path** | **Type** | **Description** |
+| --- | --- | --- |
+| Darktrace.ModelBreach| Dictionary | Details of the model breach |
+
+### darktrace-get-model
+
+***
+Returns a model given a UUID
+
+#### Base Command
+
+`darktrace-get-model`
+
+#### Input
+
+| **Argument Name** | **Description** | **Required** |
+| --- | --- | --- |
+| uuid | Darktrace model ID | Required | 
+
+#### Context Output
+
+| **Path** | **Type** | **Description** |
+| --- | --- | --- |
+| Darktrace.Model | Dictionary | Details of the model |
+
+
+### darktrace-get-component
+
+***
+Returns the details of a component given a CID
+
+#### Base Command
+
+`darktrace-get-component`
+
+#### Input
+
+| **Argument Name** | **Description** | **Required** |
+| --- | --- | --- |
+| cid | Darktrace components ID | Required | 
+
+#### Context Output
+
+| **Path** | **Type** | **Description** |
+| --- | --- | --- |
+| Darktrace.Component | Dictionary | Details of the component |
+
 
 ### darktrace-list-similar-devices
+
 ***
 Returns a list of similar devices to a device specified by Darktrace DID
 
@@ -260,6 +348,7 @@ Returns a list of similar devices to a device specified by Darktrace DID
 #### Base Command
 
 `darktrace-list-similar-devices`
+
 #### Input
 
 | **Argument Name** | **Description** | **Required** |
@@ -277,9 +366,11 @@ Returns a list of similar devices to a device specified by Darktrace DID
 
 
 #### Command Example
+
 ```!darktrace-list-similar-devices did=1 max_results=2```
 
 #### Context Example
+
 ```
 {
     "Darktrace": {
@@ -334,6 +425,7 @@ Returns a list of similar devices to a device specified by Darktrace DID
 #### Human Readable Output
 
 >### List of similar devices to device:1:
+
 >|did|firstSeen|hostname|ip|ips|lastSeen|macaddress|score|sid|typelabel|typename|vendor|
 >|---|---|---|---|---|---|---|---|---|---|---|---|
 >| 823 | 2020-08-07T00:06:40.000Z | ip-172-31-32-146 | 172.31.32.146 | {'ip': '172.31.32.146', 'timems': 1600063200000, 'time': '2020-09-14 06:00:00', 'sid': 114} | 2020-09-14T06:23:38.000Z | 0a:df:4b:52:64:7a | 99 | 114 | Server | server |  |
@@ -341,6 +433,7 @@ Returns a list of similar devices to a device specified by Darktrace DID
 
 
 ### darktrace-get-external-endpoint-details
+
 ***
 Returns details collected by Darktrace about external IP addresses or hostnames.
 
@@ -348,6 +441,7 @@ Returns details collected by Darktrace about external IP addresses or hostnames.
 #### Base Command
 
 `darktrace-get-external-endpoint-details`
+
 #### Input
 
 | **Argument Name** | **Description** | **Required** |
@@ -367,9 +461,11 @@ Returns details collected by Darktrace about external IP addresses or hostnames.
 
 
 #### Command Example
+
 ```!darktrace-get-external-endpoint-details endpoint_type=hostname endpoint_value=cats.com additional_info=true devices=true score=true```
 
 #### Context Example
+
 ```
 {
     "Darktrace": {
@@ -389,19 +485,22 @@ Returns details collected by Darktrace about external IP addresses or hostnames.
 #### Human Readable Output
 
 >### Hostname: cats.com details
+
 >|devices|dgascore|firsttime|hostname|ips|locations|popularity|
 >|---|---|---|---|---|---|---|
 >|  | 0 | 2020-08-07T04:47:23.000Z | cats.com |  |  | 0 |
 
 
 ### darktrace-get-device-connection-info
+
 ***
-Returns the graphable data used in the "Connections Data" view for a specific device that can be accessed from the Threat Visualizer omnisearch in Darktrace. Data returned covers a 4 week period. Parameters are further documented at https://customerportal.darktrace.com/product-guides/main/api-deviceinfo-request. It is recommended to run the command to check the relevant fields in context.
+Returns the graphable data used in the "Connections Data" view for a specific device that can be accessed from the Threat Visualizer omnisearch in Darktrace. Data returned covers a 4 week period. Parameters are further documented at <https://customerportal.darktrace.com/product-guides/main/api-deviceinfo-request>. It is recommended to run the command to check the relevant fields in context.
 
 
 #### Base Command
 
 `darktrace-get-device-connection-info`
+
 #### Input
 
 | **Argument Name** | **Description** | **Required** |
@@ -419,13 +518,15 @@ Returns the graphable data used in the "Connections Data" view for a specific de
 
 | **Path** | **Type** | **Description** |
 | --- | --- | --- |
-| Darktrace.DeviceConnectionInfo | Unknown | Graphable data used in the "Connections Data" view for a specific device that can be accessed from the Threat Visualizer omnisearch in Darktrace. Data returned covers a 4 week period. Parameters are further documented at https://customerportal.darktrace.com/product-guides/main/api-deviceinfo-request. It is recommended to run the command to check the relevant fields in context. | 
+| Darktrace.DeviceConnectionInfo | Unknown | Graphable data used in the "Connections Data" view for a specific device that can be accessed from the Threat Visualizer omnisearch in Darktrace. Data returned covers a 4 week period. Parameters are further documented at <https://customerportal.darktrace.com/product-guides/main/api-deviceinfo-request>. It is recommended to run the command to check the relevant fields in context. | 
 
 
 #### Command Example
+
 ```!darktrace-get-device-connection-info did=1 data_type=co```
 
 #### Context Example
+
 ```
 {
     "Darktrace": {
@@ -906,12 +1007,14 @@ Returns the graphable data used in the "Connections Data" view for a specific de
 #### Human Readable Output
 
 >### Results for device id: 1
+
 >|deviceInfo|
 >|---|
 >| {'did': 1, 'similarityScore': 100, 'graphData': [{'time': 1598302800000, 'count': 390}, {'time': 1598306400000, 'count': 7}, {'time': 1598652000000, 'count': 94}, {'time': 1598990400000, 'count': 88}, {'time': 1598994000000, 'count': 25}, {'time': 1598997600000, 'count': 16}, {'time': 1599001200000, 'count': 15}, {'time': 1599004800000, 'count': 25}, {'time': 1599008400000, 'count': 13}, {'time': 1599012000000, 'count': 14}, {'time': 1599015600000, 'count': 13}, {'time': 1599019200000, 'count': 14}, {'time': 1599022800000, 'count': 18}, {'time': 1599026400000, 'count': 14}, {'time': 1599030000000, 'count': 13}, {'time': 1599033600000, 'count': 14}, {'time': 1599037200000, 'count': 13}, {'time': 1599040800000, 'count': 19}, {'time': 1599044400000, 'count': 13}, {'time': 1599048000000, 'count': 14}, {'time': 1599051600000, 'count': 624}, {'time': 1599055200000, 'count': 187}, {'time': 1599663600000, 'count': 169}, {'time': 1599667200000, 'count': 363}, {'time': 1599670800000, 'count': 329}, {'time': 1599674400000, 'count': 324}, {'time': 1599678000000, 'count': 332}, {'time': 1599681600000, 'count': 340}, {'time': 1599685200000, 'count': 334}, {'time': 1599688800000, 'count': 328}, {'time': 1599692400000, 'count': 340}, {'time': 1599696000000, 'count': 330}, {'time': 1599699600000, 'count': 332}, {'time': 1599703200000, 'count': 325}, {'time': 1599706800000, 'count': 344}, {'time': 1599710400000, 'count': 328}, {'time': 1599714000000, 'count': 338}, {'time': 1599750000000, 'count': 76}, {'time': 1599753600000, 'count': 336}, {'time': 1599757200000, 'count': 334}, {'time': 1599760800000, 'count': 334}, {'time': 1599764400000, 'count': 329}, {'time': 1599768000000, 'count': 342}, {'time': 1599771600000, 'count': 329}, {'time': 1599775200000, 'count': 336}, {'time': 1599778800000, 'count': 332}, {'time': 1599782400000, 'count': 332}, {'time': 1599786000000, 'count': 329}, {'time': 1599789600000, 'count': 328}, {'time': 1599793200000, 'count': 332}, {'time': 1599796800000, 'count': 341}, {'time': 1599800400000, 'count': 326}, {'time': 1599804000000, 'count': 330}, {'time': 1599807600000, 'count': 332}, {'time': 1599811200000, 'count': 334}, {'time': 1599814800000, 'count': 335}, {'time': 1599818400000, 'count': 333}, {'time': 1599822000000, 'count': 326}, {'time': 1599825600000, 'count': 328}, {'time': 1599829200000, 'count': 333}, {'time': 1599832800000, 'count': 335}, {'time': 1599836400000, 'count': 339}, {'time': 1599840000000, 'count': 351}, {'time': 1599843600000, 'count': 325}, {'time': 1599847200000, 'count': 329}, {'time': 1599850800000, 'count': 328}], 'info': {'totalUsed': 1589, 'totalServed': 0, 'totalDevicesAndPorts': 1589, 'devicesAndPorts': [{'deviceAndPort': {'direction': 'out', 'device': 2, 'port': 53}, 'size': 24}, {'deviceAndPort': {'direction': 'out', 'device': 0, 'port': 53}, 'size': 19}, {'deviceAndPort': {'direction': 'out', 'device': -5, 'port': 80}, 'size': 12}, {'deviceAndPort': {'direction': 'out', 'device': 0, 'port': 123}, 'size': 11}, {'deviceAndPort': {'direction': 'out', 'device': -3, 'port': '5001 - 10000'}, 'size': 10}, {'deviceAndPort': {'direction': 'out', 'device': 3, 'port': 67}, 'size': 9}, {'deviceAndPort': {'direction': 'out', 'device': 0, 'port': 443}, 'size': 4}, {'deviceAndPort': {'direction': 'out', 'device': -6, 'port': 1514}, 'size': 4}, {'deviceAndPort': {'direction': 'out', 'device': 0, 'port': 80}, 'size': 3}, {'deviceAndPort': {'direction': 'out', 'device': -4, 'port': '5001 - 10000'}, 'size': 1}, {'deviceAndPort': {'direction': 'out', 'device': -4, 'port': 3289}, 'size': 1}, {'deviceAndPort': {'direction': 'out', 'device': -4, 'port': 1124}, 'size': 1}, {'deviceAndPort': 'others', 'size': 1}], 'portsUsed': [{'port': 53, 'size': 44, 'firstTime': 1591729360000}, {'port': 80, 'size': 15, 'firstTime': 1591729360000}, {'port': '5001 - 10000', 'size': 11, 'firstTime': 1592496475000}, {'port': 123, 'size': 11, 'firstTime': 1591730311000}, {'port': 67, 'size': 9, 'firstTime': 1591730311000}, {'port': 1514, 'size': 4, 'firstTime': 1592952598000}, {'port': 443, 'size': 4, 'firstTime': 1591729361000}, {'port': 3289, 'size': 1, 'firstTime': 1592497916000}, {'port': 'others', 'size': 1}], 'portsServed': [], 'devicesUsed': [{'did': 0, 'size': 37, 'firstTime': 1591729360000}, {'did': 2, 'size': 25, 'firstTime': 1591729360000}, {'did': -5, 'size': 12, 'firstTime': 1591730027000}, {'did': -3, 'size': 10, 'firstTime': 1591729360000}, {'did': 3, 'size': 9, 'firstTime': 1591730311000}, {'did': -6, 'size': 4, 'firstTime': 1591730311000}, {'did': -4, 'size': 2, 'firstTime': 1591729360000}, {'did': 'others', 'size': 1}], 'devicesServed': []}} |
 
 
 ### darktrace-get-device-identity-info
+
 ***
 Gets device identity information based on label, tag, type, hostname, ip, mac, vendor and os. It is recommended to run the command to check the relevant fields in context.
 
@@ -919,6 +1022,7 @@ Gets device identity information based on label, tag, type, hostname, ip, mac, v
 #### Base Command
 
 `darktrace-get-device-identity-info`
+
 #### Input
 
 | **Argument Name** | **Description** | **Required** |
@@ -937,9 +1041,11 @@ Gets device identity information based on label, tag, type, hostname, ip, mac, v
 
 
 #### Command Example
+
 ```!darktrace-get-device-identity-info query=osSensor```
 
 #### Context Example
+
 ```
 {
     "Darktrace": {
@@ -1007,12 +1113,14 @@ Gets device identity information based on label, tag, type, hostname, ip, mac, v
 #### Human Readable Output
 
 >### Results for query: osSensor (1 results displayed of 1 which match the query)
+
 >|devicelabel|did|firstSeen|hostname|ip|ips|lastSeen|macaddress|sid|tags|typelabel|typename|vendor|
 >|---|---|---|---|---|---|---|---|---|---|---|---|---|
 >| Kelly's Laptop | 10 | 2020-06-09T19:02:50.000Z | ip-172-31-17-246 | 172.31.17.246 | {'ip': '172.31.17.246', 'timems': 1599850800000, 'time': '2020-09-11 19:00:00', 'sid': 1} | 2020-09-11T18:22:30.000Z | 06:39:01:c2:b0:48 | 1 | {'tid': 54, 'expiry': 0, 'thid': 54, 'name': 'Internet Facing System', 'restricted': False, 'data': {'auto': False, 'color': 110, 'description': '', 'visibility': 'Public'}, 'isReferenced': True},<br/>{'tid': 90, 'expiry': 0, 'thid': 90, 'name': 'SF Office', 'restricted': False, 'data': {'auto': False, 'color': 181, 'description': '', 'visibility': 'Public'}, 'isReferenced': False} | Server | server |  |
 
 
 ### darktrace-get-entity-details
+
 ***
 Returns a time sorted list of connections and events for a device or an entity such as a user credential.
 
@@ -1020,6 +1128,7 @@ Returns a time sorted list of connections and events for a device or an entity s
 #### Base Command
 
 `darktrace-get-entity-details`
+
 #### Input
 
 | **Argument Name** | **Description** | **Required** |
@@ -1037,9 +1146,11 @@ Returns a time sorted list of connections and events for a device or an entity s
 
 
 #### Command Example
+
 ```!darktrace-get-entity-details query=did=1,count=10 offset=5```
 
 #### Context Example
+
 ```
 {
     "Darktrace": {
@@ -1290,6 +1401,7 @@ Returns a time sorted list of connections and events for a device or an entity s
 #### Human Readable Output
 
 >### Results:
+
 >|action|applicationprotocol|ddid|destination|destinationDevice|destinationPort|direction|eventType|port|protocol|source|sourceDevice|sourcePort|status|time|timems|uid|
 >|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
 >| connection | SSH | 10 | Kelly's Laptop | id: 1<br/>did: 1<br/>macaddress: 06:39:01:c2:b0:48<br/>ip: 172.31.17.246<br/>ips: {'ip': '172.31.17.246', 'timems': 1599850800000, 'time': '2020-09-11 19:00:00', 'sid': 1}<br/>sid: 1<br/>hostname: ip-172-31-17-246<br/>time: 1591729370000<br/>devicelabel: Kelly's Laptop<br/>typename: server<br/>typelabel: Server | 22 | in | connection | 22 | TCP | 222.186.15.62 | longitude: 113.727<br/>latitude: 34.772<br/>country: China<br/>countrycode: CN<br/>asn: AS23650 AS Number for CHINANET jiangsu province backbone<br/>region: Asia<br/>ip: 222.186.15.62<br/>ippopularity: 0<br/>connectionippopularity: 0 | 17815 | ongoing | 2020-09-11 19:42:21 | 1599853341264 | CJDfGwAT7fVxNJd01 |
@@ -1297,4 +1409,3 @@ Returns a time sorted list of connections and events for a device or an entity s
 >| connection | Unknown | 10 | Kelly's Laptop | id: 1<br/>did: 1<br/>macaddress: 06:39:01:c2:b0:48<br/>ip: 172.31.17.246<br/>ips: {'ip': '172.31.17.246', 'timems': 1599850800000, 'time': '2020-09-11 19:00:00', 'sid': 1}<br/>sid: 1<br/>hostname: ip-172-31-17-246<br/>time: 1591729370000<br/>devicelabel: Kelly's Laptop<br/>typename: server<br/>typelabel: Server | 443 | in | connection | 443 | TCP | 62.113.227.26 | longitude: 9.491<br/>latitude: 51.299<br/>country: Germany<br/>countrycode: DE<br/>asn: AS47447 23media GmbH<br/>region: Europe<br/>ip: 62.113.227.26<br/>ippopularity: 0<br/>connectionippopularity: 0 | 28228 | failed | 2020-09-11 19:41:23 | 1599853283240 | CQ4hu824CoXul9KV01 |
 >| connection | Unknown | 10 | Kelly's Laptop | id: 1<br/>did: 1<br/>macaddress: 06:39:01:c2:b0:48<br/>ip: 172.31.17.246<br/>ips: {'ip': '172.31.17.246', 'timems': 1599850800000, 'time': '2020-09-11 19:00:00', 'sid': 1}<br/>sid: 1<br/>hostname: ip-172-31-17-246<br/>time: 1591729370000<br/>devicelabel: Kelly's Laptop<br/>typename: server<br/>typelabel: Server | 443 | in | connection | 443 | TCP | 62.113.227.26 | longitude: 9.491<br/>latitude: 51.299<br/>country: Germany<br/>countrycode: DE<br/>asn: AS47447 23media GmbH<br/>region: Europe<br/>ip: 62.113.227.26<br/>ippopularity: 0<br/>connectionippopularity: 0 | 54518 | failed | 2020-09-11 19:41:03 | 1599853263230 | CWYWpz2KmHrsjNGO01 |
 >| notice |  |  | Kelly's Laptop | id: 1<br/>did: 1<br/>macaddress: 06:39:01:c2:b0:48<br/>ip: 172.31.17.246<br/>ips: {'ip': '172.31.17.246', 'timems': 1599850800000, 'time': '2020-09-11 19:00:00', 'sid': 1}<br/>sid: 1<br/>hostname: ip-172-31-17-246<br/>time: 1591729370000<br/>devicelabel: Kelly's Laptop<br/>typename: server<br/>typelabel: Server | 22 | in | notice |  |  | 13.85.152.27 | longitude: -98.493<br/>latitude: 29.422<br/>city: San Antonio<br/>country: United States<br/>countrycode: US<br/>asn: AS8075 MICROSOFT-CORP-MSN-AS-BLOCK<br/>region: North America<br/>ip: 13.85.152.27<br/>ippopularity: 0 |  |  | 2020-09-11 19:40:48 | 1599853248000 | CMEAtvytG16vv0X01 |
-

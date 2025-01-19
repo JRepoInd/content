@@ -1,14 +1,24 @@
 {
     "name": "Cisco WebEx Feed",
-    "description": "Whitelist feed for Cisco WebEx using a screen scrape of the website.",
-    "support": "community",
-    "currentVersion": "1.1.2",
-    "author": "scottbrumley",
-    "url": "",
+    "description": "Whitelist feed for Cisco Webex using a screen scrape of the website.",
+    "support": "xsoar",
+    "currentVersion": "1.2.16",
+    "author": "Cortex XSOAR",
+    "url": "https://www.paloaltonetworks.com/cortex",
     "email": "",
     "created": "2020-10-11T15:40:43Z",
-    "categories": [],
-    "tags": [],
+    "categories": [
+        "Data Enrichment & Threat Intelligence"
+    ],
+    "tags": [
+        "Threat Intelligence Management",
+        "Getting Started",
+        "Allow List"
+    ],
     "useCases": [],
-    "keywords": []
+    "keywords": [],
+    "marketplaces": [
+        "xsoar",
+        "marketplacev2"
+    ]
 }

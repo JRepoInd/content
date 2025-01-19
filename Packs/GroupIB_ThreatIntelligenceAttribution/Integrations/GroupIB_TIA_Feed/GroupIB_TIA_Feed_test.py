@@ -11,7 +11,7 @@ COLLECTION_NAMES = [
     'compromised/mule', 'compromised/imei', 'attacks/ddos', 'attacks/deface',
     'attacks/phishing', 'attacks/phishing_kit', 'apt/threat',
     'suspicious_ip/tor_node', 'suspicious_ip/open_proxy', 'suspicious_ip/socks_proxy',
-    'malware/cnc', 'osi/vulnerability'
+    'malware/cnc', 'osi/vulnerability', 'ioc/common'
 ]
 
 
@@ -23,6 +23,12 @@ def session_fixture(request):
 def test_fetch_indicators_command(mocker, session_fixture):
     collection_name, client = session_fixture
     mocker.patch.object(client, 'create_update_generator', return_value=[[RAW_JSON[collection_name]]])
-    result = fetch_indicators_command(client=client, last_run={}, first_fetch_time='3 days',
-                                      indicator_collections=[collection_name], requests_count=1)
-    assert result == tuple(RESULTS[collection_name])
+    next_run, indicators = fetch_indicators_command(client=client, last_run={}, first_fetch_time='3 days',
+                                                    indicator_collections=[collection_name], requests_count=1,
+                                                    common_fields={})
+    expected_next_run, expected_indicators = RESULTS[collection_name]
+    assert next_run == expected_next_run
+    for i in range(len(expected_indicators)):
+        raw_json = indicators[i].get("rawJSON")
+        expected_raw_json = expected_indicators[i].get("rawJSON")
+        assert sorted(raw_json.items()) == sorted(expected_raw_json.items())

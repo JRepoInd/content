@@ -10,24 +10,24 @@
 <h2>Configure Threat Grid on Cortex XSOAR</h2>
 <hr>
 <ol>
-<li>Navigate to <strong>Settings</strong> &gt; <strong>Integrations</strong> &gt; <strong>Servers &amp; Services</strong>.</li>
+<li>Navigate to <strong>Settings</strong> &gt; <strong>Integrations</strong> &gt; <strong>Servers &amp; Services</strong>.</li>
 <li>Search for Threat Grid.</li>
-<li>Click <strong>Add instance</strong> to create and configure a new integration instance.<br>You should configure the following settings:</li>
+<li>Click <strong>Add instance</strong> to create and configure a new integration instance.<br>You should configure the following settings:</li>
 </ol>
 <ul>
 <li>
 <strong>Name</strong>: a textual name for the integration instance.</li>
-<li><strong>Server URL (e.g. <a href="https://192.168.0.1/" rel="nofollow">https://192.168.0.1</a>)</strong></li>
+<li><strong>Server URL (e.g. <a href="https://192.168.0.1/" rel="nofollow">https://192.168.0.1</a>)</strong></li>
 <li><strong>API token</strong></li>
 <li><strong>Trust any certificate (not secure)</strong></li>
 <li><strong>Use system proxy settings</strong></li>
 </ul>
 <ol start="4">
-<li>Click <strong>Test</strong> to validate the URLs, token, and connection.</li>
+<li>Click <strong>Test</strong> to validate the URLs, token, and connection.</li>
 </ol>
 <h2>Commands</h2>
 <hr>
-<p>You can execute these commands from the Cortex XSOAR CLI, as part of an automation, or in a playbook. After you successfully execute a command, a DBot message appears in the War Room with the command details.</p>
+<p>You can execute these commands from the Cortex XSOAR CLI, as part of an automation, or in a playbook. After you successfully execute a command, a DBot message appears in the War Room with the command details.</p>
 <ol>
 <li><a href="#h_16996161761540718403094">Get samples: threat-grid-get-samples</a></li>
 <li><a href="#h_1561995056331540718972103">Get a sample by sample ID: threat-grid-get-sample-by-id</a></li>
@@ -68,10 +68,12 @@
 <li><a href="#h_805126484175651540728192194">Get the analysis for a threat stream: threat-grid-get-analysis-network-streams</a></li>
 <li><a href="#h_462852935181201540728608321">Get data for a process ID in an analysis: threat-grid-get-analysis-process</a></li>
 <li><a href="#h_601161801186731540728863204">Get data for an analysis process: threat-grid-get-analysis-processes</a></li>
+<li><a href="#h_601161801186731540728863304">Submit URL for analysis: threat-grid-submit-urls</a></li>
+<li><a href="#h_601161801186731540728863404">Run advanced search using the ThreatGrid search query: threat-grid-advanced-search</a></li>
 </ol>
 <h3 id="h_16996161761540718403094">1. Get samples</h3>
 <hr>
-<p>Get samples on the Threat Grid platform. Input parameters are combined with <em>AND</em> statements. Only finished samples can be searched. Finished samples have a status of <em>succ</em> or <em>fail</em>.</p>
+<p>Get samples on the Threat Grid platform. Input parameters are combined with <em>AND</em> statements. Only finished samples can be searched. Finished samples have a status of <em>succ</em> or <em>fail</em>.</p>
 <h5>Base Command</h5>
 <pre><code>threat-grid-get-samples</code></pre>
 <h5>Input</h5>
@@ -146,7 +148,7 @@
 </tr>
 </tbody>
 </table>
-<h5> </h5>
+<h5> </h5>
 <h5>Context Output</h5>
 <table style="width: 748px;" border="2" cellpadding="6">
 <thead>
@@ -202,7 +204,7 @@
 </tr>
 </tbody>
 </table>
-<h5> </h5>
+<h5> </h5>
 <h5>Command Example</h5>
 <pre>!threat-grid-feeds-ip after=2018-01-18T00:00:00 before=2018-01-18T01:00:00 confidence=75 severity=75</pre>
 <h5>Context Output</h5>
@@ -240,7 +242,7 @@
 }
 </code></pre>
 <h5>Human Readable Output</h5>
-<p><a href="https://user-images.githubusercontent.com/20818773/47485524-e79df800-d846-11e8-8a55-d4ae00888c44.png" target="_blank" rel="noopener noreferrer"><img src="https://user-images.githubusercontent.com/20818773/47485524-e79df800-d846-11e8-8a55-d4ae00888c44.png" alt="image" width="752" height="110"></a></p>
+<p><a href="../../doc_files/47485524-e79df800-d846-11e8-8a55-d4ae00888c44.png" target="_blank" rel="noopener noreferrer"><img src="../../doc_files/47485524-e79df800-d846-11e8-8a55-d4ae00888c44.png" alt="image" width="752" height="110"></a></p>
 <h3 id="h_1561995056331540718972103">2. Get a sample by sample ID</h3>
 <hr>
 <p>Get a Threat Grid sample by sample ID.</p>
@@ -263,7 +265,7 @@
 </tr>
 </tbody>
 </table>
-<h5> </h5>
+<h5> </h5>
 <h5>Context Output</h5>
 <table style="width: 748px;" border="2" cellpadding="6">
 <thead>
@@ -319,7 +321,7 @@
 </tr>
 </tbody>
 </table>
-<h5> </h5>
+<h5> </h5>
 <h5>Command Example</h5>
 <pre>!threat-grid-get-sample-by-id id=052de338e02c4e013a4e9f5da8a87d5b</pre>
 <h5>Context Example</h5>
@@ -342,7 +344,7 @@
 }
 </code></pre>
 <h5>Human Readable Output</h5>
-<p><a href="https://user-images.githubusercontent.com/20818773/47431026-a6084100-d7a3-11e8-93ba-595783320aed.png" target="_blank" rel="noopener noreferrer"><img src="https://user-images.githubusercontent.com/20818773/47431026-a6084100-d7a3-11e8-93ba-595783320aed.png" alt="image" width="751" height="243"></a></p>
+<p><a href="../../doc_files/47431026-a6084100-d7a3-11e8-93ba-595783320aed.png" target="_blank" rel="noopener noreferrer"><img src="../../doc_files/47431026-a6084100-d7a3-11e8-93ba-595783320aed.png" alt="image" width="751" height="243"></a></p>
 <h3 id="h_19882953012581540720706470">3. Get the states of samples by sample ID</h3>
 <hr>
 <p>Get threat grid sample state by id</p>
@@ -370,7 +372,7 @@
 </tr>
 </tbody>
 </table>
-<h5> </h5>
+<h5> </h5>
 <h5>Context Output</h5>
 <table style="width: 748px;" border="2" cellpadding="6">
 <thead>
@@ -390,7 +392,7 @@
 </tr>
 </tbody>
 </table>
-<h5> </h5>
+<h5> </h5>
 <h5>Command Example</h5>
 <pre>!threat-grid-get-sample-state-by-id id=052de338e02c4e013a4e9f5da8a87d5b</pre>
 <h5>Context Example</h5>
@@ -404,7 +406,7 @@
 }
 </code></pre>
 <h5>Human Readable Output</h5>
-<p><a href="https://user-images.githubusercontent.com/20818773/47431109-d3ed8580-d7a3-11e8-8d5e-1733cfea7209.png" target="_blank" rel="noopener noreferrer"><img src="https://user-images.githubusercontent.com/20818773/47431109-d3ed8580-d7a3-11e8-8d5e-1733cfea7209.png" alt="image" width="754" height="100"></a></p>
+<p><a href="../../doc_files/47431109-d3ed8580-d7a3-11e8-8d5e-1733cfea7209.png" target="_blank" rel="noopener noreferrer"><img src="../../doc_files/47431109-d3ed8580-d7a3-11e8-8d5e-1733cfea7209.png" alt="image" width="754" height="100"></a></p>
 <h3 id="h_19278147818811540720826262">4. Submit a sample for analysis</h3>
 <hr>
 <p>Submits a sample to Threat Grid for analysis.</p>
@@ -422,7 +424,7 @@
 <tbody>
 <tr>
 <td style="width: 161px;">file-id</td>
-<td style="width: 476px;">The sample file. Click the chain icon after you upload a file in Cortex XSOAR to find the file-id. </td>
+<td style="width: 476px;">The sample file. Click the chain icon after you upload a file in Cortex XSOAR to find the file-id. </td>
 <td style="width: 71px;">Required</td>
 </tr>
 <tr>
@@ -452,7 +454,7 @@
 </tr>
 </tbody>
 </table>
-<h5> </h5>
+<h5> </h5>
 <h5>Context Output</h5>
 <table style="width: 748px;" border="2" cellpadding="6">
 <thead>
@@ -500,7 +502,7 @@
 </tr>
 </tbody>
 </table>
-<h5> </h5>
+<h5> </h5>
 <h5>Command Example</h5>
 <pre>!threat-grid-upload-sample file-id=98@16 filename=Suspicious_File_To_Be_Scanned</pre>
 <h5>Context Example</h5>
@@ -535,7 +537,7 @@
 }
 </code></pre>
 <h5>Human Readable Output</h5>
-<p><a href="https://user-images.githubusercontent.com/20818773/47432202-48c1bf00-d7a6-11e8-8aa2-d86296c48e80.png" target="_blank" rel="noopener noreferrer"><img src="https://user-images.githubusercontent.com/20818773/47432202-48c1bf00-d7a6-11e8-8aa2-d86296c48e80.png" alt="image" width="755" height="63"></a></p>
+<p><a href="../../doc_files/47432202-48c1bf00-d7a6-11e8-8aa2-d86296c48e80.png" target="_blank" rel="noopener noreferrer"><img src="../../doc_files/47432202-48c1bf00-d7a6-11e8-8aa2-d86296c48e80.png" alt="image" width="755" height="63"></a></p>
 <h3 id="h_94143499121961540721013239">5. Search submissions</h3>
 <hr>
 <p>Search Threat Grid submissions.</p>
@@ -618,7 +620,7 @@
 </tr>
 </tbody>
 </table>
-<h5> </h5>
+<h5> </h5>
 <h5>Context Output</h5>
 <table style="width: 750px;" border="2" cellpadding="6">
 <thead>
@@ -666,7 +668,7 @@
 </tr>
 </tbody>
 </table>
-<h5> </h5>
+<h5> </h5>
 <h5>Command Example</h5>
 <pre>!threat-grid-search-submissions limit=2</pre>
 <h5>Context Example</h5>
@@ -706,7 +708,7 @@
 }
 </code></pre>
 <h5>Human Readable Output</h5>
-<p><a href="https://user-images.githubusercontent.com/20818773/47432285-7e66a800-d7a6-11e8-9077-477d92bc0710.png" target="_blank" rel="noopener noreferrer"><img src="https://user-images.githubusercontent.com/20818773/47432285-7e66a800-d7a6-11e8-9077-477d92bc0710.png" alt="image" width="751" height="117"></a></p>
+<p><a href="../../doc_files/47432285-7e66a800-d7a6-11e8-9077-477d92bc0710.png" target="_blank" rel="noopener noreferrer"><img src="../../doc_files/47432285-7e66a800-d7a6-11e8-9077-477d92bc0710.png" alt="image" width="751" height="117"></a></p>
 <h3 id="h_81304179325101540721063469">6. Get a sample analysis video by ID</h3>
 <hr>
 <p>Get the sample analysis video by ID.</p>
@@ -729,7 +731,7 @@
 </tr>
 </tbody>
 </table>
-<h5> </h5>
+<h5> </h5>
 <h5>Context Output</h5>
 <table style="width: 748px;" border="2" cellpadding="6">
 <thead>
@@ -747,7 +749,7 @@
 </tr>
 </tbody>
 </table>
-<h5> </h5>
+<h5> </h5>
 <h5>Command Example</h5>
 <pre>!threat-grid-get-video-by-id id=9798717402a40970a2d043014d9a6170</pre>
 <h5>Context Example</h5>
@@ -772,7 +774,7 @@
 }
 </code></pre>
 <h5>Human Readable Output</h5>
-<p><a href="https://user-images.githubusercontent.com/20818773/47432696-78bd9200-d7a7-11e8-9d31-7309e77f97df.png" target="_blank" rel="noopener noreferrer"><img src="https://user-images.githubusercontent.com/20818773/47432696-78bd9200-d7a7-11e8-9d31-7309e77f97df.png" alt="image" width="751" height="237"></a></p>
+<p><a href="../../doc_files/47432696-78bd9200-d7a7-11e8-9d31-7309e77f97df.png" target="_blank" rel="noopener noreferrer"><img src="../../doc_files/47432696-78bd9200-d7a7-11e8-9d31-7309e77f97df.png" alt="image" width="751" height="237"></a></p>
 <h3 id="h_50927995434311540721171927">7. Get a detailed overview of a sample</h3>
 <hr>
 <p>The detailed overview of dynamic and static analysis results for the sample.</p>
@@ -800,8 +802,8 @@
 </tr>
 </tbody>
 </table>
-<h5> </h5>
-<h5> </h5>
+<h5> </h5>
+<h5> </h5>
 <h5>Context Output</h5>
 <table style="width: 748px;" border="2" cellpadding="6">
 <thead>
@@ -933,14 +935,14 @@
 </tr>
 </tbody>
 </table>
-<h5> </h5>
+<h5> </h5>
 <h5>Command Example</h5>
 <pre>!threat-grid-get-analysis-by-id id=9798717402a40970a2d043014d9a6170</pre>
 <h5>Context Example</h5>
 <pre><code>{<br> "ThreatGrid": {<br> "Sample": {<br> "Id": "9798717402a40970a2d043014d9a6170"<br> }<br> }, <br> "InfoFile": {<br> "Info": "application/json", <br> "Name": "9798717402a40970a2d043014d9a6170-analysis.json", <br> "Extension": "json", <br> "EntryID": "124@16", <br> "Type": "ASCII text, with very long lines\n", <br> "Size": 132549<br> }
 </code></pre>
 <h5>Human Readable Output</h5>
-<p><img src="https://raw.githubusercontent.com/demisto/content/ca13780e216a39751600dcb1e386d12f52fc8f25/docs/images/Integrations/integration-Threat_Grid_mceclip0.png" width="750" height="377"></p>
+<p><img src="../../doc_files/integration-Threat_Grid_mceclip0.png" width="750" height="377"></p>
 <h3 id="h_72983432240461540721271350">8. Get processes by ID</h3>
 <hr>
 <p>Returns a JSON object that contains a timeline of all process activities as determined by the dynamic analysis engine.</p>
@@ -963,7 +965,7 @@
 </tr>
 </tbody>
 </table>
-<h5> </h5>
+<h5> </h5>
 <h5>Context Output</h5>
 <table style="width: 748px;" border="2" cellpadding="6">
 <thead>
@@ -981,7 +983,7 @@
 </tr>
 </tbody>
 </table>
-<h5> </h5>
+<h5> </h5>
 <h5>Command Example</h5>
 <pre>!threat-grid-get-processes-by-id id=9798717402a40970a2d043014d9a6170</pre>
 <h5>Context Example</h5>
@@ -1006,7 +1008,7 @@
 }
 </code></pre>
 <h5>Human Readable Output</h5>
-<p><a href="https://user-images.githubusercontent.com/20818773/47433069-4ceedc00-d7a8-11e8-9369-91f808bd5565.png" target="_blank" rel="noopener noreferrer"><img src="https://user-images.githubusercontent.com/20818773/47433069-4ceedc00-d7a8-11e8-9369-91f808bd5565.png" alt="image" width="752" height="236"></a></p>
+<p><a href="../../doc_files/47433069-4ceedc00-d7a8-11e8-9369-91f808bd5565.png" target="_blank" rel="noopener noreferrer"><img src="../../doc_files/47433069-4ceedc00-d7a8-11e8-9369-91f808bd5565.png" alt="image" width="752" height="236"></a></p>
 <h3 id="h_39054092746591540721396205">9. Get a PCAP file for a sample by sample ID</h3>
 <hr>
 <p>Get the tcpdump PCAP file for a specific sample ID, with all the network activity of the sample.</p>
@@ -1029,7 +1031,7 @@
 </tr>
 </tbody>
 </table>
-<h5> </h5>
+<h5> </h5>
 <h5>Context Output</h5>
 <table style="width: 748px;" border="2" cellpadding="6">
 <thead>
@@ -1047,7 +1049,7 @@
 </tr>
 </tbody>
 </table>
-<h5> </h5>
+<h5> </h5>
 <h5>Command Example</h5>
 <pre>!threat-grid-get-pcap-by-id id=a6cc7ae4e3318e98d94e8a053dd72c47</pre>
 <h5>Context Example</h5>
@@ -1072,7 +1074,7 @@
 }
 </code></pre>
 <h5>Human Readable Output</h5>
-<p><a href="https://user-images.githubusercontent.com/20818773/47433233-afe07300-d7a8-11e8-8cfb-79f8bf08941e.png" target="_blank" rel="noopener noreferrer"><img src="https://user-images.githubusercontent.com/20818773/47433233-afe07300-d7a8-11e8-8cfb-79f8bf08941e.png" alt="image" width="750" height="236"></a></p>
+<p><a href="../../doc_files/47433233-afe07300-d7a8-11e8-8cfb-79f8bf08941e.png" target="_blank" rel="noopener noreferrer"><img src="../../doc_files/47433233-afe07300-d7a8-11e8-8cfb-79f8bf08941e.png" alt="image" width="750" height="236"></a></p>
 <h3 id="h_63774004052701540721494707">10. Get warnings for a sample by sample ID</h3>
 <hr>
 <p>Returns a JSON structure that describes warnings that occurred during the analysis.</p>
@@ -1095,7 +1097,7 @@
 </tr>
 </tbody>
 </table>
-<h5> </h5>
+<h5> </h5>
 <h5>Context Output</h5>
 <table style="width: 748px;" border="2" cellpadding="6">
 <thead>
@@ -1113,7 +1115,7 @@
 </tr>
 </tbody>
 </table>
-<h5> </h5>
+<h5> </h5>
 <h5>Command Example</h5>
 <pre>!threat-grid-get-warnings-by-id id=9798717402a40970a2d043014d9a6170</pre>
 <h5>Context Example</h5>
@@ -1138,7 +1140,7 @@
 }
 </code></pre>
 <h5>Human Readable Output</h5>
-<p><a href="https://user-images.githubusercontent.com/20818773/47433444-241b1680-d7a9-11e8-8055-c335ec4df33a.png" target="_blank" rel="noopener noreferrer"><img src="https://user-images.githubusercontent.com/20818773/47433444-241b1680-d7a9-11e8-8055-c335ec4df33a.png" alt="image" width="754" height="236"></a></p>
+<p><a href="../../doc_files/47433444-241b1680-d7a9-11e8-8055-c335ec4df33a.png" target="_blank" rel="noopener noreferrer"><img src="../../doc_files/47433444-241b1680-d7a9-11e8-8055-c335ec4df33a.png" alt="image" width="754" height="236"></a></p>
 <h3 id="h_2190211961791540721645652">11. Get a summary analysis for a sample by sample ID</h3>
 <hr>
 <p>Returns summary analysis information.</p>
@@ -1161,7 +1163,7 @@
 </tr>
 </tbody>
 </table>
-<h5> </h5>
+<h5> </h5>
 <h5>Context Output</h5>
 <table style="width: 748px;" border="2" cellpadding="6">
 <thead>
@@ -1209,7 +1211,7 @@
 </tr>
 </tbody>
 </table>
-<h5> </h5>
+<h5> </h5>
 <h5>Command Example</h5>
 <pre>!threat-grid-get-summary-by-id id=9798717402a40970a2d043014d9a6170</pre>
 <h5>Context Example</h5>
@@ -1236,7 +1238,7 @@
 }
 </code></pre>
 <h5>Human Readable Output</h5>
-<p><a href="https://user-images.githubusercontent.com/20818773/47433625-7d834580-d7a9-11e8-90c5-887dc34186f3.png" target="_blank" rel="noopener noreferrer"><img src="https://user-images.githubusercontent.com/20818773/47433625-7d834580-d7a9-11e8-90c5-887dc34186f3.png" alt="image" width="751" height="277"></a></p>
+<p><a href="../../doc_files/47433625-7d834580-d7a9-11e8-90c5-887dc34186f3.png" target="_blank" rel="noopener noreferrer"><img src="../../doc_files/47433625-7d834580-d7a9-11e8-90c5-887dc34186f3.png" alt="image" width="751" height="277"></a></p>
 <h3 id="h_3510202267861540721749733">12. Get a summary of threats detected during an analysis</h3>
 <hr>
 <p>Returns a summary of the threats detected during analysis</p>
@@ -1259,7 +1261,7 @@
 </tr>
 </tbody>
 </table>
-<h5> </h5>
+<h5> </h5>
 <h5>Context Output</h5>
 <table style="width: 748px;" border="2" cellpadding="6">
 <thead>
@@ -1322,7 +1324,7 @@
 </tr>
 </tbody>
 </table>
-<h5> </h5>
+<h5> </h5>
 <h5>Command Example</h5>
 <pre>!threat-grid-get-threat-summary-by-id id=58e5e66b31484a8529b80a18a33e0814</pre>
 <h5>Context Example</h5>
@@ -1346,7 +1348,7 @@
 }
 </code></pre>
 <h5>Human Readable Output</h5>
-<p><a href="https://user-images.githubusercontent.com/20818773/47433917-131ed500-d7aa-11e8-8cd8-a2964f31d24e.png" target="_blank" rel="noopener noreferrer"><img src="https://user-images.githubusercontent.com/20818773/47433917-131ed500-d7aa-11e8-8cd8-a2964f31d24e.png" alt="image" width="752" height="266"></a></p>
+<p><a href="../../doc_files/47433917-131ed500-d7aa-11e8-8cd8-a2964f31d24e.png" target="_blank" rel="noopener noreferrer"><img src="../../doc_files/47433917-131ed500-d7aa-11e8-8cd8-a2964f31d24e.png" alt="image" width="752" height="266"></a></p>
 <h3 id="h_64622853270931540721845547">13. Get the HTML report for a sample by sample ID</h3>
 <hr>
 <p>Get the <em>report.html</em> file for a specific sample ID. This is a stand-alone file with a complete report on the sample run. It is designed to be emailed or printed.</p>
@@ -1369,7 +1371,7 @@
 </tr>
 </tbody>
 </table>
-<h5> </h5>
+<h5> </h5>
 <h5>Context Output</h5>
 <table style="width: 748px;" border="2" cellpadding="6">
 <thead>
@@ -1387,7 +1389,7 @@
 </tr>
 </tbody>
 </table>
-<h5> </h5>
+<h5> </h5>
 <h5>Command Example</h5>
 <pre>!threat-grid-get-html-report-by-id id=6712d1b712dda4aa63d6073477c367c4</pre>
 <h5>Context Example</h5>
@@ -1408,7 +1410,7 @@
 }
 </code></pre>
 <h5>Human Readable Output</h5>
-<p><a href="https://user-images.githubusercontent.com/20818773/47435252-e61ff180-d7ac-11e8-8565-4a41610e3693.png" target="_blank" rel="noopener noreferrer"><img src="https://user-images.githubusercontent.com/20818773/47435252-e61ff180-d7ac-11e8-8565-4a41610e3693.png" alt="image" width="749" height="75"></a></p>
+<p><a href="../../doc_files/47435252-e61ff180-d7ac-11e8-8565-4a41610e3693.png" target="_blank" rel="noopener noreferrer"><img src="../../doc_files/47435252-e61ff180-d7ac-11e8-8565-4a41610e3693.png" alt="image" width="749" height="75"></a></p>
 <h3 id="h_98022694076961540722069916">14. Download a sample as a ZIP file</h3>
 <hr>
 <p>Download a sample by using its ID. The downloaded file is an archive of the sample itself, in a zip format as a form of quarantine.</p>
@@ -1431,7 +1433,7 @@
 </tr>
 </tbody>
 </table>
-<h5> </h5>
+<h5> </h5>
 <h5>Context Output</h5>
 <table style="width: 748px;" border="2" cellpadding="6">
 <thead>
@@ -1449,7 +1451,7 @@
 </tr>
 </tbody>
 </table>
-<h5> </h5>
+<h5> </h5>
 <h5>Command Example</h5>
 <pre>!threat-grid-download-sample-by-id id=6712d1b712dda4aa63d6073477c367c4</pre>
 <h5>Context Example</h5>
@@ -1474,7 +1476,7 @@
 }
 </code></pre>
 <h5>Human Readable Output</h5>
-<p><a href="https://user-images.githubusercontent.com/20818773/47435410-3dbe5d00-d7ad-11e8-9daf-d6d1ecb91dad.png" target="_blank" rel="noopener noreferrer"><img src="https://user-images.githubusercontent.com/20818773/47435410-3dbe5d00-d7ad-11e8-9daf-d6d1ecb91dad.png" alt="image" width="751" height="236"></a></p>
+<p><a href="../../doc_files/47435410-3dbe5d00-d7ad-11e8-9daf-d6d1ecb91dad.png" target="_blank" rel="noopener noreferrer"><img src="../../doc_files/47435410-3dbe5d00-d7ad-11e8-9daf-d6d1ecb91dad.png" alt="image" width="751" height="236"></a></p>
 <h3 id="h_22118886180011540722965084">15. Get a list of IOCs found during a sample run</h3>
 <hr>
 <p>Returns a JSON list of the Indicators of Compromise identified in this sample run.</p>
@@ -1502,12 +1504,12 @@
 </tr>
 <tr>
 <td>limit</td>
-<td>Limit the number of indicators you would like to see. The list is sorted by indicator severity in descending order. </td>
+<td>Limit the number of indicators you would like to see. The list is sorted by indicator severity in descending order. </td>
 <td>Optional</td>
 </tr>
 </tbody>
 </table>
-<h5> </h5>
+<h5> </h5>
 <h5>Context Output</h5>
 <table style="width: 746px;" border="2" cellpadding="6">
 <thead>
@@ -1579,7 +1581,7 @@
 </tr>
 </tbody>
 </table>
-<h5> </h5>
+<h5> </h5>
 <h5>Command Example</h5>
 <pre>!threat-grid-get-analysis-iocs id=a6cc7ae4e3318e98d94e8a053dd72c47</pre>
 <h5>Context Example</h5>
@@ -2098,7 +2100,7 @@
 }
 </code></pre>
 <h5>Human Readable Output</h5>
-<p><a href="https://user-images.githubusercontent.com/20818773/47436037-62670480-d7ae-11e8-8328-7f69151fff1b.png" target="_blank" rel="noopener noreferrer"><img src="https://user-images.githubusercontent.com/20818773/47436037-62670480-d7ae-11e8-8328-7f69151fff1b.png" alt="image" width="751" height="373"></a></p>
+<p><a href="../../doc_files/47436037-62670480-d7ae-11e8-8328-7f69151fff1b.png" target="_blank" rel="noopener noreferrer"><img src="../../doc_files/47436037-62670480-d7ae-11e8-8328-7f69151fff1b.png" alt="image" width="751" height="373"></a></p>
 <h3 id="h_86250776383051540723048488">16. Get information for the logged in user</h3>
 <hr>
 <p>Return information for the logged in user.</p>
@@ -2137,7 +2139,7 @@
 </tr>
 </tbody>
 </table>
-<h5> </h5>
+<h5> </h5>
 <h5>Command Example</h5>
 <pre>!threat-grid-who-am-i</pre>
 <h5>Context Example</h5>
@@ -2154,10 +2156,10 @@
 }
 </code></pre>
 <h5>Human Readable Output</h5>
-<p><a href="https://user-images.githubusercontent.com/20818773/47437441-43b63d00-d7b1-11e8-916b-41bb5a119b1a.png" target="_blank" rel="noopener noreferrer"><img src="https://user-images.githubusercontent.com/20818773/47437441-43b63d00-d7b1-11e8-916b-41bb5a119b1a.png" alt="screen shot 2018-10-24 at 17 19 31" width="750" height="134"></a></p>
+<p><a href="../../doc_files/47437441-43b63d00-d7b1-11e8-916b-41bb5a119b1a.png" target="_blank" rel="noopener noreferrer"><img src="../../doc_files/47437441-43b63d00-d7b1-11e8-916b-41bb5a119b1a.png" alt="screen shot 2018-10-24 at 17 19 31" width="750" height="134"></a></p>
 <h3 id="h_14456317689011540723175792">17. Get the rate limit for a specified user</h3>
 <hr>
-<p>Get rate limit for a specific user name. ThreatGrid employs a simple rate limiting method for sample submissions by specifying the number of samples which can be submitted within some variable time period by a user. Multiple rate limits can be employed to form overlapping submission limits. For example, 20 submissions per hour AND 400 per day.</p>
+<p>Get rate limit for a specific user name. ThreatGrid employs a simple rate limiting method for sample submissions by specifying the number of samples which can be submitted within some variable time period by a user. Multiple rate limits can be employed to form overlapping submission limits. For example, 20 submissions per hour AND 400 per day.</p>
 <h5>Base Command</h5>
 <pre><code>threat-grid-user-get-rate-limit</code></pre>
 <h5>Input</h5>
@@ -2177,7 +2179,7 @@
 </tr>
 </tbody>
 </table>
-<h5> </h5>
+<h5> </h5>
 <h5>Context Output</h5>
 <table style="width: 748px;" border="2" cellpadding="6">
 <thead>
@@ -2210,7 +2212,7 @@
 </tr>
 </tbody>
 </table>
-<h5> </h5>
+<h5> </h5>
 <h5>Command Example</h5>
 <pre>!threat-grid-user-get-rate-limit login="user_name"</pre>
 <h5>Context Example</h5>
@@ -2228,7 +2230,7 @@
 }
 </code></pre>
 <h5>Human Readable Output</h5>
-<p><a href="https://user-images.githubusercontent.com/20818773/47438632-82e58d80-d7b3-11e8-962b-f5ec7b8e6bf1.png" target="_blank" rel="noopener noreferrer"><img src="https://user-images.githubusercontent.com/20818773/47438632-82e58d80-d7b3-11e8-962b-f5ec7b8e6bf1.png" alt="screen shot 2018-10-24 at 17 36 51" width="756" height="81"></a></p>
+<p><a href="../../doc_files/47438632-82e58d80-d7b3-11e8-962b-f5ec7b8e6bf1.png" target="_blank" rel="noopener noreferrer"><img src="../../doc_files/47438632-82e58d80-d7b3-11e8-962b-f5ec7b8e6bf1.png" alt="screen shot 2018-10-24 at 17 36 51" width="756" height="81"></a></p>
 <h3 id="h_54946164292031540723340792">18. Get a specific threat feed</h3>
 <hr>
 <p>Gets a specific threat feed.</p>
@@ -2261,13 +2263,13 @@
 </tr>
 </tbody>
 </table>
-<h5> </h5>
+<h5> </h5>
 <h5>Context Output</h5>
 <p>There is no context output for this command.</p>
 <h5>Command Example</h5>
 <pre>!threat-grid-get-specific-feed feed-name=rat-dns output-type=csv</pre>
 <h5>Human Readable Output</h5>
-<p><a href="https://user-images.githubusercontent.com/20818773/47441386-b971d700-d7b8-11e8-9caa-e55eae2b0932.png" target="_blank" rel="noopener noreferrer"><img src="https://user-images.githubusercontent.com/20818773/47441386-b971d700-d7b8-11e8-9caa-e55eae2b0932.png" alt="image" width="750" height="223"></a></p>
+<p><a href="../../doc_files/47441386-b971d700-d7b8-11e8-9caa-e55eae2b0932.png" target="_blank" rel="noopener noreferrer"><img src="../../doc_files/47441386-b971d700-d7b8-11e8-9caa-e55eae2b0932.png" alt="image" width="750" height="223"></a></p>
 <h3 id="h_808021630100861540723744274">19. Convert a URL to a file for detonation</h3>
 <hr>
 <p>Convert a URL into a file for Threat Grid file detonation.</p>
@@ -2290,16 +2292,16 @@
 </tr>
 </tbody>
 </table>
-<h5> </h5>
+<h5> </h5>
 <h5>Context Output</h5>
 <p>There is no context output for this command.</p>
 <h5>Command Example</h5>
 <pre>!threat-grid-url-to-file urls=www.google.com</pre>
 <h5>Human Readable Output</h5>
-<p><a href="https://user-images.githubusercontent.com/20818773/47480262-82dba100-d838-11e8-9e4b-9c7d2c9bb643.png" target="_blank" rel="noopener noreferrer"><img src="https://user-images.githubusercontent.com/20818773/47480262-82dba100-d838-11e8-9e4b-9c7d2c9bb643.png" alt="image" width="749" height="186"></a></p>
+<p><a href="../../doc_files/47480262-82dba100-d838-11e8-9e4b-9c7d2c9bb643.png" target="_blank" rel="noopener noreferrer"><img src="../../doc_files/47480262-82dba100-d838-11e8-9e4b-9c7d2c9bb643.png" alt="image" width="749" height="186"></a></p>
 <h3 id="h_677431094103841540723877811">20. Get rate limits for an organization</h3>
 <hr>
-<p>Get rate limits applied to an organization. ThreatGrid employs a simple rate limiting method for sample submissions by specifying the number of samples which can be submitted within some variable time period by an entire organization and/or per a license basis. Multiple rate limits can be employed to form overlapping submission limits. For example, 20 submissions per hour AND 400 per day.</p>
+<p>Get rate limits applied to an organization. ThreatGrid employs a simple rate limiting method for sample submissions by specifying the number of samples which can be submitted within some variable time period by an entire organization and/or per a license basis. Multiple rate limits can be employed to form overlapping submission limits. For example, 20 submissions per hour AND 400 per day.</p>
 <h5>Base Command</h5>
 <pre><code>threat-grid-organization-get-rate-limit</code></pre>
 <h5>Input</h5>
@@ -2319,7 +2321,7 @@
 </tr>
 </tbody>
 </table>
-<h5> </h5>
+<h5> </h5>
 <h5>Context Output</h5>
 <table style="width: 748px;" border="2" cellpadding="6">
 <thead>
@@ -2352,7 +2354,7 @@
 </tr>
 </tbody>
 </table>
-<h5> </h5>
+<h5> </h5>
 <h5>Command Example</h5>
 <pre>!threat-grid-organization-get-rate-limit adminLogin="admin"</pre>
 <h5>Context Example</h5>
@@ -2372,7 +2374,7 @@
 }
 </code></pre>
 <h5>Human Readable Output</h5>
-<p><a href="https://user-images.githubusercontent.com/20818773/47480951-c3d4b500-d83a-11e8-899c-908d7c24a5a4.png" target="_blank" rel="noopener noreferrer"><img src="https://user-images.githubusercontent.com/20818773/47480951-c3d4b500-d83a-11e8-899c-908d7c24a5a4.png" alt="screen shot 2018-10-25 at 9 43 53" width="752" height="119"></a></p>
+<p><a href="../../doc_files/47480951-c3d4b500-d83a-11e8-899c-908d7c24a5a4.png" target="_blank" rel="noopener noreferrer"><img src="../../doc_files/47480951-c3d4b500-d83a-11e8-899c-908d7c24a5a4.png" alt="screen shot 2018-10-25 at 9 43 53" width="752" height="119"></a></p>
 <h3 id="h_777805090106831540723972186">21. Search IP addresses</h3>
 <hr>
 <p>Search IPs.</p>
@@ -2440,13 +2442,13 @@
 </tr>
 </tbody>
 </table>
-<h5> </h5>
+<h5> </h5>
 <h5>Context Output</h5>
 <p>There is no context output for this command.</p>
 <h5>Command Example</h5>
 <pre>!threat-grid-search-ips tag=malicious</pre>
 <h5>Human Readable Output</h5>
-<p><a href="https://user-images.githubusercontent.com/20818773/47481818-7c9bf380-d83d-11e8-9a7b-582e42a856fd.png" target="_blank" rel="noopener noreferrer"><img src="https://user-images.githubusercontent.com/20818773/47481818-7c9bf380-d83d-11e8-9a7b-582e42a856fd.png" alt="image" width="753" height="48"></a></p>
+<p><a href="../../doc_files/47481818-7c9bf380-d83d-11e8-9a7b-582e42a856fd.png" target="_blank" rel="noopener noreferrer"><img src="../../doc_files/47481818-7c9bf380-d83d-11e8-9a7b-582e42a856fd.png" alt="image" width="753" height="48"></a></p>
 <h3 id="h_260594164112681540724110178">22. Get annotation data for an analysis</h3>
 <hr>
 <p>Returns data about the annotations of the analysis.</p>
@@ -2469,7 +2471,7 @@
 </tr>
 </tbody>
 </table>
-<h5> </h5>
+<h5> </h5>
 <h5>Context Output</h5>
 <table style="width: 748px;" border="2" cellpadding="6">
 <thead>
@@ -2509,7 +2511,7 @@
 </tr>
 </tbody>
 </table>
-<h5> </h5>
+<h5> </h5>
 <h5>Command Example</h5>
 <pre>!threat-grid-get-analysis-annotations id=9798717402a40970a2d043014d9a6170</pre>
 <h5>Context Example</h5>
@@ -2572,7 +2574,7 @@
 }
 </code></pre>
 <h5>Human Readable Output</h5>
-<p><a href="https://user-images.githubusercontent.com/20818773/47482519-7e66b680-d83f-11e8-81c0-1953bc691ce5.png" target="_blank" rel="noopener noreferrer"><img src="https://user-images.githubusercontent.com/20818773/47482519-7e66b680-d83f-11e8-81c0-1953bc691ce5.png" alt="image" width="748" height="157"></a></p>
+<p><a href="../../doc_files/47482519-7e66b680-d83f-11e8-81c0-1953bc691ce5.png" target="_blank" rel="noopener noreferrer"><img src="../../doc_files/47482519-7e66b680-d83f-11e8-81c0-1953bc691ce5.png" alt="image" width="748" height="157"></a></p>
 <h3 id="h_59168991115651540724258610">23. Search samples</h3>
 <hr>
 <p>Searches samples.</p>
@@ -2675,7 +2677,7 @@
 </tr>
 </tbody>
 </table>
-<h5> </h5>
+<h5> </h5>
 <h5>Context Output</h5>
 <table style="width: 748px;" border="2" cellpadding="6">
 <thead>
@@ -2695,7 +2697,7 @@
 </tr>
 </tbody>
 </table>
-<h5> </h5>
+<h5> </h5>
 <h5>Command Example</h5>
 <pre>!threat-grid-search-samples checksum=d3c852ed16a7e4a4cde88266c060ee064ed047a8a43685ae52ce6c82f40e5b3f</pre>
 <h5>Context Example</h5>
@@ -2709,7 +2711,7 @@
 }
 </code></pre>
 <h5>Human Readable Output</h5>
-<p><a href="https://user-images.githubusercontent.com/20818773/47482806-4449e480-d840-11e8-8f0b-d73bd18a09a4.png" target="_blank" rel="noopener noreferrer"><img src="https://user-images.githubusercontent.com/20818773/47482806-4449e480-d840-11e8-8f0b-d73bd18a09a4.png" alt="image" width="751" height="98"></a></p>
+<p><a href="../../doc_files/47482806-4449e480-d840-11e8-8f0b-d73bd18a09a4.png" target="_blank" rel="noopener noreferrer"><img src="../../doc_files/47482806-4449e480-d840-11e8-8f0b-d73bd18a09a4.png" alt="image" width="751" height="98"></a></p>
 <h3 id="h_507961918121481540724544988">24. Search URLs</h3>
 <hr>
 <p>Search URLs.</p>
@@ -2802,7 +2804,7 @@
 </tr>
 </tbody>
 </table>
-<h5> </h5>
+<h5> </h5>
 <h5>Context Output</h5>
 <p>There is no context output for this command.</p>
 <h5>Command Example</h5>
@@ -2829,7 +2831,7 @@
 </tr>
 </tbody>
 </table>
-<h5> </h5>
+<h5> </h5>
 <h5>Context Output</h5>
 <table style="width: 746px;" border="2" cellpadding="6">
 <thead>
@@ -2849,7 +2851,7 @@
 </tr>
 </tbody>
 </table>
-<h5> </h5>
+<h5> </h5>
 <h5>Command Example</h5>
 <pre>!threat-grid-get-samples-state ids=9798717402a40970a2d043014d9a6170</pre>
 <h5>Context Example</h5>
@@ -2863,7 +2865,7 @@
 }
 </code></pre>
 <h5>Human Readable Output</h5>
-<p><a href="https://user-images.githubusercontent.com/20818773/47483865-f2ef2480-d842-11e8-924c-69ff668f83c1.png" target="_blank" rel="noopener noreferrer"><img src="https://user-images.githubusercontent.com/20818773/47483865-f2ef2480-d842-11e8-924c-69ff668f83c1.png" alt="image" width="753" height="86"></a></p>
+<p><a href="../../doc_files/47483865-f2ef2480-d842-11e8-924c-69ff668f83c1.png" target="_blank" rel="noopener noreferrer"><img src="../../doc_files/47483865-f2ef2480-d842-11e8-924c-69ff668f83c1.png" alt="image" width="753" height="86"></a></p>
 <h3 id="h_218579845127351540724864745">26. Get the threat feed for artifacts</h3>
 <hr>
 <p>Get the threat feed for artifacts.</p>
@@ -2941,11 +2943,11 @@
 </tr>
 </tbody>
 </table>
-<h5> </h5>
+<h5> </h5>
 <h5>Command Example</h5>
 <pre>!threat-grid-feeds-artifacts after=2018-01-18T00:00:00 before=2018-01-18T00:02:07 confidence=75 severity=75</pre>
 <h5>Human Readable Output</h5>
-<p><a href="https://user-images.githubusercontent.com/20818773/47484658-faafc880-d844-11e8-805f-fbe2530872ed.png" target="_blank" rel="noopener noreferrer"><img src="https://user-images.githubusercontent.com/20818773/47484658-faafc880-d844-11e8-805f-fbe2530872ed.png" alt="image" width="750" height="212"></a></p>
+<p><a href="../../doc_files/47484658-faafc880-d844-11e8-805f-fbe2530872ed.png" target="_blank" rel="noopener noreferrer"><img src="../../doc_files/47484658-faafc880-d844-11e8-805f-fbe2530872ed.png" alt="image" width="750" height="212"></a></p>
 <h3 id="h_917414666130261540724994579">27. Get the threat feed for a domain</h3>
 <hr>
 <p>Get the threat feed for a domain.</p>
@@ -3008,11 +3010,11 @@
 </tr>
 </tbody>
 </table>
-<h5> </h5>
+<h5> </h5>
 <h5>Command Example</h5>
 <pre>!threat-grid-feeds-domain after=2018-01-18T00:00:00 before=2018-01-18T00:10:00 confidence=75 severity=75</pre>
 <h5>Human Readable Output</h5>
-<p><a href="https://user-images.githubusercontent.com/20818773/47484718-1a46f100-d845-11e8-8b11-bcbce534db95.png" target="_blank" rel="noopener noreferrer"><img src="https://user-images.githubusercontent.com/20818773/47484718-1a46f100-d845-11e8-8b11-bcbce534db95.png" alt="image" width="753" height="216"></a></p>
+<p><a href="../../doc_files/47484718-1a46f100-d845-11e8-8b11-bcbce534db95.png" target="_blank" rel="noopener noreferrer"><img src="../../doc_files/47484718-1a46f100-d845-11e8-8b11-bcbce534db95.png" alt="image" width="753" height="216"></a></p>
 <h3 id="h_582901469136001540725233399">28. Get the threat feed for an IP address</h3>
 <hr>
 <p>Returns the threat feed for an IP address.</p>
@@ -3075,11 +3077,11 @@
 </tr>
 </tbody>
 </table>
-<h5> </h5>
+<h5> </h5>
 <h5>Command Example</h5>
 <pre>!threat-grid-feeds-ip after=2018-01-18T00:00:00 before=2018-01-18T01:00:00 confidence=75 severity=75</pre>
 <h5>Human Readable Output</h5>
-<p><a href="https://user-images.githubusercontent.com/20818773/47430682-be2b9080-d7a2-11e8-87b8-9749ee4c22f2.png" target="_blank" rel="noopener noreferrer"><img src="https://user-images.githubusercontent.com/20818773/47430682-be2b9080-d7a2-11e8-87b8-9749ee4c22f2.png" alt="image" width="750" height="223"></a></p>
+<p><a href="../../doc_files/47430682-be2b9080-d7a2-11e8-87b8-9749ee4c22f2.png" target="_blank" rel="noopener noreferrer"><img src="../../doc_files/47430682-be2b9080-d7a2-11e8-87b8-9749ee4c22f2.png" alt="image" width="750" height="223"></a></p>
 <h3 id="h_863465308141721540725372444">29. Get the threat feed for a network stream</h3>
 <hr>
 <p>Get network stream threat feed</p>
@@ -3147,11 +3149,11 @@
 </tr>
 </tbody>
 </table>
-<h5> </h5>
+<h5> </h5>
 <h5>Command Example</h5>
 <pre>!threat-grid-feeds-network-stream after=2018-01-18T00:00:00 before=2018-01-18T00:02:10 confidence=75 severity=75</pre>
 <h5>Human Readable Output</h5>
-<p><a href="https://user-images.githubusercontent.com/20818773/47486140-56c81c00-d848-11e8-8a49-abe9bb7184fa.png" target="_blank" rel="noopener noreferrer"><img src="https://user-images.githubusercontent.com/20818773/47486140-56c81c00-d848-11e8-8a49-abe9bb7184fa.png" alt="image" width="751" height="212"></a></p>
+<p><a href="../../doc_files/47486140-56c81c00-d848-11e8-8a49-abe9bb7184fa.png" target="_blank" rel="noopener noreferrer"><img src="../../doc_files/47486140-56c81c00-d848-11e8-8a49-abe9bb7184fa.png" alt="image" width="751" height="212"></a></p>
 <h3 id="h_443858322147421540725717694">30. Get the threat feed for a path</h3>
 <hr>
 <p>Returns the threat feed for a path.</p>
@@ -3214,13 +3216,13 @@
 </tr>
 </tbody>
 </table>
-<h5> </h5>
+<h5> </h5>
 <h5>Context Output</h5>
 <p>There is no context output for this command.</p>
 <h5>Command Example</h5>
 <pre>!threat-grid-feeds-path after=2018-01-18T00:00:00 before=2018-01-18T00:03:00 confidence=75 severity=75</pre>
 <h5>Human Readable Output</h5>
-<p><a href="https://user-images.githubusercontent.com/20818773/47486645-7e6bb400-d849-11e8-84bc-ccf5aa070ebd.png" target="_blank" rel="noopener noreferrer"><img src="https://user-images.githubusercontent.com/20818773/47486645-7e6bb400-d849-11e8-84bc-ccf5aa070ebd.png" alt="image" width="750" height="210"></a></p>
+<p><a href="../../doc_files/47486645-7e6bb400-d849-11e8-84bc-ccf5aa070ebd.png" target="_blank" rel="noopener noreferrer"><img src="../../doc_files/47486645-7e6bb400-d849-11e8-84bc-ccf5aa070ebd.png" alt="image" width="750" height="210"></a></p>
 <h3 id="h_15540268150301540725757215">31. Get the threat feed for URL</h3>
 <hr>
 <p>Returns the threat feed for a URL.</p>
@@ -3283,13 +3285,13 @@
 </tr>
 </tbody>
 </table>
-<h5> </h5>
+<h5> </h5>
 <h5>Context Output</h5>
 <p>There is no context output for this command.</p>
 <h5>Command Example</h5>
 <pre>!threat-grid-feeds-url after=2018-01-18T00:00:00 before=2018-01-18T00:05:00 confidence=75 severity=75</pre>
 <h5>Human Readable Output</h5>
-<p><a href="https://user-images.githubusercontent.com/20818773/47486691-98a59200-d849-11e8-8178-f8bdf5842b68.png" target="_blank" rel="noopener noreferrer"><img src="https://user-images.githubusercontent.com/20818773/47486691-98a59200-d849-11e8-8178-f8bdf5842b68.png" alt="image" width="755" height="213"></a></p>
+<p><a href="../../doc_files/47486691-98a59200-d849-11e8-8178-f8bdf5842b68.png" target="_blank" rel="noopener noreferrer"><img src="../../doc_files/47486691-98a59200-d849-11e8-8178-f8bdf5842b68.png" alt="image" width="755" height="213"></a></p>
 <h3 id="h_119905262158771540726200222">32. Get the artifact for a sample ID by artifact ID</h3>
 <hr>
 <p>Returns the sample ID artifact with artifact id</p>
@@ -3317,11 +3319,11 @@
 </tr>
 </tbody>
 </table>
-<h5> </h5>
+<h5> </h5>
 <h5>Command Example</h5>
 <pre>!threat-grid-get-analysis-artifact id=a6cc7ae4e3318e98d94e8a053dd72c47 aid=1</pre>
 <h5>Human Readable Output</h5>
-<p><a href="https://user-images.githubusercontent.com/20818773/47486902-0d78cc00-d84a-11e8-9015-ad05ee52f4b3.png" target="_blank" rel="noopener noreferrer"><img src="https://user-images.githubusercontent.com/20818773/47486902-0d78cc00-d84a-11e8-9015-ad05ee52f4b3.png" alt="image" width="751" height="222"></a></p>
+<p><a href="../../doc_files/47486902-0d78cc00-d84a-11e8-9015-ad05ee52f4b3.png" target="_blank" rel="noopener noreferrer"><img src="../../doc_files/47486902-0d78cc00-d84a-11e8-9015-ad05ee52f4b3.png" alt="image" width="751" height="222"></a></p>
 <h3 id="h_545682989156031540726070486">33. Get artifacts for a sample ID</h3>
 <hr>
 <p>Returns the sample id artifacts</p>
@@ -3344,13 +3346,13 @@
 </tr>
 </tbody>
 </table>
-<h5> </h5>
+<h5> </h5>
 <h5>Context Output</h5>
 <p>There is no context output for this command.</p>
 <h5>Command Example</h5>
 <pre>!threat-grid-get-analysis-artifacts id=a6cc7ae4e3318e98d94e8a053dd72c47</pre>
 <h5>Human Readable Output</h5>
-<p><a href="https://user-images.githubusercontent.com/20818773/47486756-bbd04180-d849-11e8-85a4-0622a22550fc.png" target="_blank" rel="noopener noreferrer"><img src="https://user-images.githubusercontent.com/20818773/47486756-bbd04180-d849-11e8-85a4-0622a22550fc.png" alt="image" width="748" height="222"></a></p>
+<p><a href="../../doc_files/47486756-bbd04180-d849-11e8-85a4-0622a22550fc.png" target="_blank" rel="noopener noreferrer"><img src="../../doc_files/47486756-bbd04180-d849-11e8-85a4-0622a22550fc.png" alt="image" width="748" height="222"></a></p>
 <h3 id="h_668049232161671540726279174">34. Get analysis data for an IOC</h3>
 <hr>
 <p>Returns data for the specified IOC.</p>
@@ -3373,16 +3375,16 @@
 </tr>
 <tr>
 <td style="width: 276px;">ioc</td>
-<td style="width: 270px;">The requested IOC</td>
+<td style="width: 270px;">The requested IOC</td>
 <td style="width: 162px;">Required</td>
 </tr>
 </tbody>
 </table>
-<h5> </h5>
+<h5> </h5>
 <h5>Command Example</h5>
 <pre>!threat-grid-get-analysis-ioc id=8ee72188b95b7d8f4e1a6c4842e98566 ioc=network-communications-http-get-url</pre>
 <h5>Human Readable Output</h5>
-<p><a href="https://user-images.githubusercontent.com/20818773/47496245-eb3d7900-d85e-11e8-9d8c-37359b7d999f.png" target="_blank" rel="noopener noreferrer"><img src="https://user-images.githubusercontent.com/20818773/47496245-eb3d7900-d85e-11e8-9d8c-37359b7d999f.png" alt="image" width="750" height="301"></a></p>
+<p><a href="../../doc_files/47496245-eb3d7900-d85e-11e8-9d8c-37359b7d999f.png" target="_blank" rel="noopener noreferrer"><img src="../../doc_files/47496245-eb3d7900-d85e-11e8-9d8c-37359b7d999f.png" alt="image" width="750" height="301"></a></p>
 <h3 id="h_682537753164501540726355577">35. Get metadata for an analysis</h3>
 <hr>
 <p>Returns metadata about the analysis.</p>
@@ -3405,11 +3407,11 @@
 </tr>
 </tbody>
 </table>
-<h5> </h5>
+<h5> </h5>
 <h5>Command Example</h5>
 <pre>!threat-grid-get-analysis-metadata id=58e5e66b31484a8529b80a18a33e0814</pre>
 <h5>Human Readable Output</h5>
-<p><a href="https://user-images.githubusercontent.com/20818773/47497034-5b4cfe80-d861-11e8-83af-34b7cea5b4b5.png" target="_blank" rel="noopener noreferrer"><img src="https://user-images.githubusercontent.com/20818773/47497034-5b4cfe80-d861-11e8-83af-34b7cea5b4b5.png" alt="image" width="751" height="220"></a></p>
+<p><a href="../../doc_files/47497034-5b4cfe80-d861-11e8-83af-34b7cea5b4b5.png" target="_blank" rel="noopener noreferrer"><img src="../../doc_files/47497034-5b4cfe80-d861-11e8-83af-34b7cea5b4b5.png" alt="image" width="751" height="220"></a></p>
 <h3 id="h_26151182170081540728061465">36. Get data for a network stream</h3>
 <hr>
 <p>Returns data regarding a specific network stream</p>
@@ -3437,13 +3439,13 @@
 </tr>
 </tbody>
 </table>
-<h5> </h5>
+<h5> </h5>
 <h5>Context Output</h5>
 <p>There is no context output for this command.</p>
 <h5>Command Example</h5>
 <pre>!threat-grid-get-analysis-network-stream id=a6cc7ae4e3318e98d94e8a053dd72c47 nsid=1</pre>
 <h5>Human Readable Output</h5>
-<p><a href="https://user-images.githubusercontent.com/20818773/47497188-d1516580-d861-11e8-953a-219bc6c965ef.png" target="_blank" rel="noopener noreferrer"><img src="https://user-images.githubusercontent.com/20818773/47497188-d1516580-d861-11e8-953a-219bc6c965ef.png" alt="image" width="750" height="221"></a></p>
+<p><a href="../../doc_files/47497188-d1516580-d861-11e8-953a-219bc6c965ef.png" target="_blank" rel="noopener noreferrer"><img src="../../doc_files/47497188-d1516580-d861-11e8-953a-219bc6c965ef.png" alt="image" width="750" height="221"></a></p>
 <h3 id="h_805126484175651540728192194">37. Get the analysis for a network stream</h3>
 <hr>
 <p>Returns the network stream analysis.</p>
@@ -3466,13 +3468,13 @@
 </tr>
 </tbody>
 </table>
-<h5> </h5>
+<h5> </h5>
 <h5>Context Output</h5>
 <p>There is no context output for this command.</p>
 <h5>Command Example</h5>
 <pre>!threat-grid-get-analysis-network-streams id=a6cc7ae4e3318e98d94e8a053dd72c47</pre>
 <h5>Human Readable Output</h5>
-<p><a href="https://user-images.githubusercontent.com/20818773/47497213-e75f2600-d861-11e8-96c5-b3257fe22e98.png" target="_blank" rel="noopener noreferrer"><img src="https://user-images.githubusercontent.com/20818773/47497213-e75f2600-d861-11e8-96c5-b3257fe22e98.png" alt="image" width="751" height="219"></a></p>
+<p><a href="../../doc_files/47497213-e75f2600-d861-11e8-96c5-b3257fe22e98.png" target="_blank" rel="noopener noreferrer"><img src="../../doc_files/47497213-e75f2600-d861-11e8-96c5-b3257fe22e98.png" alt="image" width="751" height="219"></a></p>
 <h3 id="h_462852935181201540728608321">38. Get data for a process ID in an analysis</h3>
 <hr>
 <p>Returns data regarding the specific process ID in the analysis.</p>
@@ -3500,13 +3502,13 @@
 </tr>
 </tbody>
 </table>
-<h5> </h5>
+<h5> </h5>
 <h5>Context Output</h5>
 <p>There is no context output for this command.</p>
 <h5>Command Example</h5>
 <pre>!threat-grid-get-analysis-process id=9798717402a40970a2d043014d9a6170 pid=4</pre>
 <h5>Human Readable Output</h5>
-<p><a href="https://user-images.githubusercontent.com/20818773/47497291-2beac180-d862-11e8-99c2-0c64a014bf66.png" target="_blank" rel="noopener noreferrer"><img src="https://user-images.githubusercontent.com/20818773/47497291-2beac180-d862-11e8-99c2-0c64a014bf66.png" alt="image" width="752" height="220"></a></p>
+<p><a href="../../doc_files/47497291-2beac180-d862-11e8-99c2-0c64a014bf66.png" target="_blank" rel="noopener noreferrer"><img src="../../doc_files/47497291-2beac180-d862-11e8-99c2-0c64a014bf66.png" alt="image" width="752" height="220"></a></p>
 <h3 id="h_601161801186731540728863204">39. Get data for an analysis process</h3>
 <hr>
 <p>Returns data regarding the analysis processes.</p>
@@ -3529,10 +3531,66 @@
 </tr>
 </tbody>
 </table>
-<h5> </h5>
+<h5> </h5>
 <h5>Context Output</h5>
 <p>There is no context output for this command.</p>
 <h5>Command Example</h5>
 <pre>!threat-grid-get-analysis-processes id=9798717402a40970a2d043014d9a6170</pre>
 <h5>Human Readable Output</h5>
-<p><a href="https://user-images.githubusercontent.com/20818773/47497306-3e64fb00-d862-11e8-8f1b-c2aa623b33ff.png" target="_blank" rel="noopener noreferrer"><img src="https://user-images.githubusercontent.com/20818773/47497306-3e64fb00-d862-11e8-8f1b-c2aa623b33ff.png" alt="image" width="751" height="187"></a></p>
+<p><a href="../../doc_files/47497306-3e64fb00-d862-11e8-8f1b-c2aa623b33ff.png" target="_blank" rel="noopener noreferrer"><img src="../../doc_files/47497306-3e64fb00-d862-11e8-8f1b-c2aa623b33ff.png" alt="image" width="751" height="187"></a></p>
+<h3 id="h_601161801186731540728863304">40. Submit URLs for analysis</h3>
+<hr>
+<p>Submit the URL for Threat analysis processes.</p>
+<h5>Base Command</h5>
+<pre><code>threat-grid-submit-urls</code></pre>
+<h5>Input</h5>
+<table style="width: 748px;" border="2" cellpadding="6">
+<thead>
+<tr>
+<th style="width: 297px;"><strong>Argument Name</strong></th>
+<th style="width: 235px;"><strong>Description</strong></th>
+<th style="width: 176px;"><strong>Required</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="width: 297px;">url</td>
+<td style="width: 235px;">The URL to submit to ThreatGrid</td>
+<td style="width: 176px;">Required</td>
+</tr>
+</tbody>
+</table>
+<h5> </h5>
+<h5>Context Output</h5>
+<p>There is no context output for this command.</p>
+<h5>Command Example</h5>
+<pre>threat-grid-submit-urls url="www.example.com"</pre>
+<h3 id="h_601161801186731540728863404">41. Advanced search for URLs/Samples already submitted for analysis</h3>
+<hr>
+<p>Perform advanced search on ThreatGrid</p>
+<h5>Base Command</h5>
+<pre><code>threat-grid-advanced-search</code></pre>
+<h5>Input</h5>
+<table style="width: 748px;" border="2" cellpadding="6">
+<thead>
+<tr>
+<th style="width: 297px;"><strong>Argument Name</strong></th>
+<th style="width: 235px;"><strong>Description</strong></th>
+<th style="width: 176px;"><strong>Required</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="width: 297px;">query</td>
+<td style="width: 235px;">ThreatGrid search query to run</td>
+<td style="width: 176px;">Required</td>
+</tr>
+</tbody>
+</table>
+<h5> </h5>
+<h5>Context Output</h5>
+<p>There is no context output for this command.</p>
+<h5>Command Example</h5>
+<pre>!threat-grid-advanced-search query="{
+\"query\": \"query get_sample($q_json:
+String) {sample(, q_json: $q_json,limit: 3) {submitted_at id submitted_file_type status threat_score state login url}}\",\"variables\": {\"q_json\": \"{\\\"op\\\": \\\"and\\\",\\\"clauses\\\": [{\\\"op\\\": \\\"attr\\\",\\\"attr\\\": \\\"submitted_file_name\\\",\\\"comp_op\\\": \\\"eq\\\",\\\"value\\\": \\\"www.example.com_.url\\\"}]}\"}}"</pre>

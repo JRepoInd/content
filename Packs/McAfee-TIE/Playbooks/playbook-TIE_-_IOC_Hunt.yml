@@ -1,7 +1,6 @@
 id: TIE - IOC Hunt
 version: -1
 name: TIE - IOC Hunt
-fromversion: 5.0.0
 description: |-
   Hunt for sightings of MD5, SHA1 and/or SHA256 hashes on endpoints, using McAfee TIE (requires ePO as well).
 
@@ -23,7 +22,7 @@ tasks:
       name: ""
       iscommand: false
       brand: ""
-      description: ""
+      description: ''
     nexttasks:
       '#none#':
       - "7"
@@ -40,6 +39,8 @@ tasks:
     ignoreworker: false
     skipunavailable: false
     quietmode: 0
+    isoversize: false
+    isautoswitchedtoquietmode: false
   "1":
     id: "1"
     taskid: 1bf80041-9e03-4daf-861c-a709df537687
@@ -52,15 +53,13 @@ tasks:
       type: condition
       iscommand: false
       brand: ""
-      description: ""
+      description: Is the McAfee TIE integration installed and configured?
     nexttasks:
       '#default#':
       - "4"
       "yes":
       - "3"
     scriptarguments:
-      left: {}
-      right: {}
       value:
         simple: ${modules(val.brand=="McAfee Threat Intelligence Exchange")}
     separatecontext: false
@@ -76,42 +75,8 @@ tasks:
     ignoreworker: false
     skipunavailable: false
     quietmode: 0
-  "2":
-    id: "2"
-    taskid: 992f05a8-3c0e-43bc-8f68-b40d2a9542e9
-    type: condition
-    task:
-      id: 992f05a8-3c0e-43bc-8f68-b40d2a9542e9
-      version: -1
-      name: Is ePO enabled?
-      scriptName: Exists
-      type: condition
-      iscommand: false
-      brand: ""
-      description: ""
-    nexttasks:
-      '#default#':
-      - "4"
-      "yes":
-      - "6"
-    scriptarguments:
-      left: {}
-      right: {}
-      value:
-        simple: ${modules(val.brand=="epo")}
-    separatecontext: false
-    view: |-
-      {
-        "position": {
-          "x": 430,
-          "y": 1080
-        }
-      }
-    note: false
-    timertriggers: []
-    ignoreworker: false
-    skipunavailable: false
-    quietmode: 0
+    isoversize: false
+    isautoswitchedtoquietmode: false
   "3":
     id: "3"
     taskid: c906e63c-45c5-4540-8f42-b74db1943725
@@ -119,18 +84,19 @@ tasks:
     task:
       id: c906e63c-45c5-4540-8f42-b74db1943725
       version: -1
-      name: List all agents that the Hash has been executed on
-      script: McAfee Threat Intelligence Exchange|||tie-file-references
+      name: List all agents that the hash has been executed on
+      description: Retrieves the set of systems which have referenced (typically executed) the specified hashes.
+      script: '|||tie-file-references'
       type: regular
       iscommand: true
-      brand: McAfee Threat Intelligence Exchange
-      description: ""
+      brand: ""
     nexttasks:
       '#none#':
       - "5"
     scriptarguments:
       file:
-        simple: ${inputs.Hash}
+        complex:
+          root: inputs.Hash
     separatecontext: false
     view: |-
       {
@@ -144,6 +110,8 @@ tasks:
     ignoreworker: false
     skipunavailable: false
     quietmode: 0
+    isoversize: false
+    isautoswitchedtoquietmode: false
   "4":
     id: "4"
     taskid: c283821d-46ac-4b77-8728-9bc136f0c729
@@ -155,12 +123,12 @@ tasks:
       type: title
       iscommand: false
       brand: ""
-      description: ""
+      description: ''
     separatecontext: false
     view: |-
       {
         "position": {
-          "x": 135,
+          "x": 162.5,
           "y": 1492
         }
       }
@@ -169,6 +137,8 @@ tasks:
     ignoreworker: false
     skipunavailable: false
     quietmode: 0
+    isoversize: false
+    isautoswitchedtoquietmode: false
   "5":
     id: "5"
     taskid: adfc3709-ca91-4ac0-8c2b-179c44d30403
@@ -181,7 +151,7 @@ tasks:
       type: condition
       iscommand: false
       brand: ""
-      description: ""
+      description: condition
     nexttasks:
       '#default#':
       - "4"
@@ -203,32 +173,37 @@ tasks:
     ignoreworker: false
     skipunavailable: false
     quietmode: 0
+    isoversize: false
+    isautoswitchedtoquietmode: false
   "6":
     id: "6"
-    taskid: 6b8b1d0c-fae5-4779-83a2-9b0e5edbd983
+    taskid: 5d9d7475-757f-4b4a-81a7-8ad317b5a714
     type: regular
     task:
-      id: 6b8b1d0c-fae5-4779-83a2-9b0e5edbd983
+      id: 5d9d7475-757f-4b4a-81a7-8ad317b5a714
       version: -1
-      name: Get Agent info from ePO
-      scriptName: EPOFindSystem
+      name: Get Agent info from ePO v2 (epo-find-system)
+      description: Finds systems in the McAfee ePO system tree.
+      script: '|||epo-find-system'
       type: regular
-      iscommand: false
+      iscommand: true
       brand: ""
-      description: ""
     nexttasks:
       '#none#':
       - "4"
     scriptarguments:
       searchText:
-        simple: ${File.References.AgentGuid}
-      taskID: {}
+        complex:
+          root: McAfee.TIE.FilesReferences.References
+          accessor: AgentGuid
+      verbose:
+        simple: "false"
     separatecontext: false
     view: |-
       {
         "position": {
           "x": 430,
-          "y": 1326
+          "y": 1300
         }
       }
     note: false
@@ -236,6 +211,8 @@ tasks:
     ignoreworker: false
     skipunavailable: false
     quietmode: 0
+    isoversize: false
+    isautoswitchedtoquietmode: false
   "7":
     id: "7"
     taskid: a08baee9-a402-4bc8-8cae-77c4c144d889
@@ -247,7 +224,7 @@ tasks:
       type: title
       iscommand: false
       brand: ""
-      description: ""
+      description: ''
     nexttasks:
       '#none#':
       - "1"
@@ -264,6 +241,8 @@ tasks:
     ignoreworker: false
     skipunavailable: false
     quietmode: 0
+    isoversize: false
+    isautoswitchedtoquietmode: false
   "8":
     id: "8"
     taskid: 1df1aefe-fce4-4fb8-80e0-3fbef311f772
@@ -275,16 +254,16 @@ tasks:
       type: title
       iscommand: false
       brand: ""
-      description: ""
+      description: ''
     nexttasks:
       '#none#':
-      - "2"
+      - "9"
     separatecontext: false
     view: |-
       {
         "position": {
           "x": 430,
-          "y": 956
+          "y": 926
         }
       }
     note: false
@@ -292,19 +271,81 @@ tasks:
     ignoreworker: false
     skipunavailable: false
     quietmode: 0
-system: true
+    isoversize: false
+    isautoswitchedtoquietmode: false
+  "9":
+    id: "9"
+    taskid: a01b200f-cc8b-4f6c-8fbd-b8c568201ad4
+    type: condition
+    task:
+      id: a01b200f-cc8b-4f6c-8fbd-b8c568201ad4
+      version: -1
+      name: Is McAfee ePO v2 enabled?
+      type: condition
+      iscommand: false
+      brand: ""
+      description: Is the McAfee ePO v2 integration installed and configured?
+    nexttasks:
+      '#default#':
+      - "4"
+      "yes":
+      - "6"
+    separatecontext: false
+    conditions:
+    - label: "yes"
+      condition:
+      - - operator: isExists
+          left:
+            value:
+              complex:
+                root: modules
+                filters:
+                - - operator: isEqualString
+                    left:
+                      value:
+                        simple: modules.brand
+                      iscontext: true
+                    right:
+                      value:
+                        simple: McAfee ePO v2
+                - - operator: isEqualString
+                    left:
+                      value:
+                        simple: modules.state
+                      iscontext: true
+                    right:
+                      value:
+                        simple: active
+                accessor: brand
+            iscontext: true
+    view: |-
+      {
+        "position": {
+          "x": 430,
+          "y": 1090
+        }
+      }
+    note: false
+    timertriggers: []
+    ignoreworker: false
+    skipunavailable: false
+    quietmode: 0
+    isoversize: false
+    isautoswitchedtoquietmode: false
 view: |-
   {
     "linkLabelsPosition": {
       "1_4_#default#": 0.1,
-      "2_4_#default#": 0.17,
-      "5_4_#default#": 0.11
+      "5_4_#default#": 0.28,
+      "5_8_yes": 0.58,
+      "9_4_#default#": 0.44,
+      "9_6_yes": 0.59
     },
     "paper": {
       "dimensions": {
         "height": 1507,
-        "width": 675,
-        "x": 135,
+        "width": 647.5,
+        "x": 162.5,
         "y": 50
       }
     }
@@ -312,12 +353,18 @@ view: |-
 inputs:
 - key: Hash
   value:
-    simple: ${.=val.File.map(function(f) {return [f.MD5, f.SHA1, f.SHA256];}).reduce(function(a, b){return a.concat(b);}, []).filter(function (val1) {return val1;})}
+    simple: ${.=val.File.map(function(f) {return [f.MD5, f.SHA1, f.SHA256];}).reduce(function(a,
+      b){return a.concat(b);}, []).filter(function (val1) {return val1;})}
   required: false
   description: |-
     The Hash to hunt (Could be MD5,SHA1,SHA256).
     Default is set to all hashes
   playbookInputQuery:
-outputs: []
+outputs:
+- contextPath: McAfee.ePO.Endpoint
+  description: Endpoint information for agents has been executed on.
+  type: unknown
 tests:
-- No test
+- search_endpoints_by_hash_-_tie_-_test
+- McAfee-TIE Test
+fromversion: 5.0.0

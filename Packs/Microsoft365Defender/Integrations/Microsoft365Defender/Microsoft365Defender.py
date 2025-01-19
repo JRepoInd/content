@@ -1,10 +1,7 @@
-from typing import Dict, Optional, List
-import dateparser
-
+import demistomock as demisto  # noqa: F401
 import urllib3
-
-from CommonServerPython import *  # noqa # pylint: disable=unused-wildcard-import
-from CommonServerUserPython import *  # noqa
+from CommonServerPython import *  # noqa: F401
+from MicrosoftApiModule import *  # noqa: E402
 
 # Disable insecure warnings
 urllib3.disable_warnings()
@@ -22,33 +19,48 @@ BASE_URL = "https://api.security.microsoft.com"
 
 class Client:
     @logger
-    def __init__(self, app_id: str, verify: bool, proxy: bool, base_url: str = BASE_URL):
-        if '@' in app_id:
+    def __init__(self, app_id: str, verify: bool, proxy: bool, base_url: str = BASE_URL, tenant_id: str = None,
+                 enc_key: str = None, client_credentials: bool = False, certificate_thumbprint: Optional[str] = None,
+                 private_key: Optional[str] = None,
+                 managed_identities_client_id: Optional[str] = None):
+        if app_id and '@' in app_id:
             app_id, refresh_token = app_id.split('@')
             integration_context = get_integration_context()
             integration_context.update(current_refresh_token=refresh_token)
             set_integration_context(integration_context)
 
-        client_args = {
-            'self_deployed': True,  # We always set the self_deployed key as True because when not using a self
+        self.client_credentials = client_credentials
+        client_args = assign_params(
+            base_url=base_url,
+            verify=verify,
+            proxy=proxy,
+            ok_codes=(200, 201, 202, 204),
+            scope='offline_access https://security.microsoft.com/mtp/.default',
+            self_deployed=True,  # We always set the self_deployed key as True because when not using a self
             # deployed machine, the DEVICE_CODE flow should behave somewhat like a self deployed
             # flow and most of the same arguments should be set, as we're !not! using OProxy.
-            'auth_id': app_id,
-            'token_retrieval_url': 'https://login.windows.net/organizations/oauth2/v2.0/token',
-            'grant_type': DEVICE_CODE,
-            'base_url': base_url,
-            'verify': verify,
-            'proxy': proxy,
-            'scope': 'offline_access https://security.microsoft.com/mtp/.default',
-            'ok_codes': (200, 201, 202, 204),
-            'resource': 'https://api.security.microsoft.com'
-        }
+
+            auth_id=app_id,
+            grant_type=CLIENT_CREDENTIALS if client_credentials else DEVICE_CODE,
+
+            # used for device code flow
+            resource='https://api.security.microsoft.com' if not client_credentials else None,
+            token_retrieval_url='https://login.windows.net/organizations/oauth2/v2.0/token' if not client_credentials else None,
+            # used for client credentials flow
+            tenant_id=tenant_id,
+            enc_key=enc_key,
+            certificate_thumbprint=certificate_thumbprint,
+            private_key=private_key,
+            managed_identities_client_id=managed_identities_client_id,
+            managed_identities_resource_uri=Resources.security,
+            command_prefix="microsoft-365-defender",
+        )
         self.ms_client = MicrosoftClient(**client_args)  # type: ignore
 
     @logger
     def incidents_list(self, timeout: int, limit: int = MAX_ENTRIES, status: Optional[str] = None,
                        assigned_to: Optional[str] = None, from_date: Optional[datetime] = None,
-                       skip: Optional[int] = None) -> Dict:
+                       skip: Optional[int] = None, odata: Optional[dict] = None) -> dict:
         """
         GET request from the client using OData operators:
             - $top: how many incidents to receive, maximum value is 100
@@ -62,6 +74,7 @@ class Client:
                 establish a connection to a remote machine before a timeout occurs.
             from_date (datetime): get incident with creation date more recent than from_date
             skip (int): how many entries to skip
+            odata (dict): alternative method for listing incidents, accepts dictionary of URI parameters
 
         Returns (Dict): request results as dict:
                     { '@odata.context',
@@ -70,25 +83,30 @@ class Client:
                     }
 
         """
-        params = {'$top': limit}
-        filter_query = ''
-        if status:
-            filter_query += 'status eq ' + "'" + status + "'"
+        params = {}
 
-        if assigned_to:
-            filter_query += ' and ' if filter_query else ''
-            filter_query += f"assignedTo eq '{assigned_to}'"
+        if odata:
+            params = odata
+        else:
+            filter_query = ''
+            params = {'$top': limit}
+            if status:
+                filter_query += 'status eq ' + "'" + status + "'"
 
-        # fetch incidents
-        if from_date:
-            filter_query += ' and ' if filter_query else ''
-            filter_query += f"createdTime gt {from_date}"
+            if assigned_to:
+                filter_query += ' and ' if filter_query else ''
+                filter_query += f"assignedTo eq '{assigned_to}'"
 
-        if filter_query:
-            params['$filter'] = filter_query  # type: ignore
+            # fetch incidents
+            if from_date:
+                filter_query += ' and ' if filter_query else ''
+                filter_query += f"createdTime gt {from_date}"
 
-        if skip:
-            params['$skip'] = skip
+            if filter_query:
+                params['$filter'] = filter_query  # type: ignore
+
+            if skip:
+                params['$skip'] = skip
 
         return self.ms_client.http_request(method='GET', url_suffix='api/incidents', timeout=timeout,
                                            params=params)
@@ -96,7 +114,7 @@ class Client:
     @logger
     def update_incident(self, incident_id: int, status: Optional[str], assigned_to: Optional[str],
                         classification: Optional[str],
-                        determination: Optional[str], tags: Optional[List[str]], timeout: int) -> Dict:
+                        determination: Optional[str], tags: Optional[List[str]], timeout: int, comment: str) -> dict:
         """
         PATCH request to update single incident.
         Args:
@@ -110,6 +128,7 @@ class Client:
                  for example: tag1,tag2,tag3.
             timeout (int): The amount of time (in seconds) that a request will wait for a client to
                 establish a connection to a remote machine before a timeout occurs.
+            comment (str): Comment to be added to the incident
        Returns( Dict): request results as dict:
                     { '@odata.context',
                       'value': updated incident,
@@ -117,10 +136,31 @@ class Client:
 
         """
         body = assign_params(status=status, assignedTo=assigned_to, classification=classification,
-                             determination=determination, tags=tags)
+                             determination=determination, tags=tags, comment=comment)
+        if assigned_to == "":
+            body['assignedTo'] = ""
         updated_incident = self.ms_client.http_request(method='PATCH', url_suffix=f'api/incidents/{incident_id}',
                                                        json_data=body, timeout=timeout)
         return updated_incident
+
+    @logger
+    def get_incident(self, incident_id: int, timeout: int) -> dict:
+        """
+        GET request to get single incident.
+        Args:
+            incident_id (int): incident's id
+            timeout (int): waiting time for command execution
+
+
+       Returns( Dict): request results as dict:
+                    { '@odata.context',
+                      'value': updated incident,
+                    }
+
+        """
+        incident = self.ms_client.http_request(
+            method='GET', url_suffix=f'api/incidents/{incident_id}', timeout=timeout)
+        return incident
 
     @logger
     def advanced_hunting(self, query: str, timeout: int):
@@ -155,15 +195,8 @@ def complete_auth(client: Client) -> CommandResults:
 
 
 @logger
-def reset_auth() -> CommandResults:
-    set_integration_context({})
-    return CommandResults(readable_output='Authorization was reset successfully. You can now run '
-                                          '**!microsoft-365-defender-auth-start** and **!microsoft-365-defender-auth-complete**.')
-
-
-@logger
 def test_connection(client: Client) -> CommandResults:
-    test_context_for_token()
+    test_context_for_token(client)
     client.ms_client.get_access_token()  # If fails, MicrosoftApiModule returns an error
     return CommandResults(readable_output='✅ Success!')
 
@@ -171,13 +204,15 @@ def test_connection(client: Client) -> CommandResults:
 ''' HELPER FUNCTIONS '''
 
 
-def test_context_for_token() -> None:
+def test_context_for_token(client: Client) -> None:
     """test_context_for_token
     Checks if the user acquired token via the authentication process.
     Args:
     Returns:
 
     """
+    if client.client_credentials or client.ms_client.managed_identities_client_id:
+        return
     if not (get_integration_context().get('access_token') or get_integration_context().get('current_refresh_token')):
         raise DemistoException(
             "This integration does not have a test module. Please run !microsoft-365-defender-auth-start and "
@@ -199,13 +234,16 @@ def test_module(client: Client) -> str:
     """
     # This  should validate all the inputs given in the integration configuration panel,
     # either manually or by using an API that uses them.
+    if client.client_credentials:
+        raise DemistoException("When using a self-deployed configuration, run the !microsoft-365-defender-auth-test "
+                               "command in order to test the connection")
 
     test_connection(client)
 
     return "ok"
 
 
-def _get_meta_data_for_incident(raw_incident: Dict) -> Dict:
+def _get_meta_data_for_incident(raw_incident: dict) -> dict:
     """
     Calculated metadata for the gicen incident
     Args:
@@ -231,8 +269,10 @@ def _get_meta_data_for_incident(raw_incident: Dict) -> Dict:
         'Active alerts': f'{alerts_status.count("Active") + alerts_status.count("New")} / {len(alerts_status)}',
         'Service sources': list({alert.get('serviceSource', '') for alert in alerts_list}),
         'Detection sources': list({alert.get('detectionSource', '') for alert in alerts_list}),
-        'First activity': str(min(first_activity_list, key=lambda x: dateparser.parse(x))) if alerts_list else '',
-        'Last activity': str(max(last_activity_list, key=lambda x: dateparser.parse(x))) if alerts_list else '',
+        'First activity': str(min(first_activity_list,
+                                  key=lambda x: dateparser.parse(x))) if alerts_list else '',  # type: ignore
+        'Last activity': str(max(last_activity_list,
+                                 key=lambda x: dateparser.parse(x))) if alerts_list else '',  # type: ignore
         'Devices': [{'device name': device.get('deviceDnsName', ''),
                      'risk level': device.get('riskScore', ''),
                      'tags': ','.join(device.get('tags', []))
@@ -241,7 +281,7 @@ def _get_meta_data_for_incident(raw_incident: Dict) -> Dict:
     }
 
 
-def convert_incident_to_readable(raw_incident: Dict) -> Dict:
+def convert_incident_to_readable(raw_incident: dict) -> dict:
     """
     Converts incident received from microsoft 365 defender to readable format
     Args:
@@ -254,7 +294,8 @@ def convert_incident_to_readable(raw_incident: Dict) -> Dict:
         raw_incident = {}
 
     incident_meta_data = _get_meta_data_for_incident(raw_incident)
-    device_groups = {device.get('device name') for device in incident_meta_data.get('Devices', [])}
+    device_groups = {device.get('device name') for device in incident_meta_data.get('Devices', [])
+                     if device.get('device name')}
     return {
         'Incident name': raw_incident.get('incidentName'),
         'Tags': ', '.join(raw_incident.get('tags', [])),
@@ -280,7 +321,7 @@ def convert_incident_to_readable(raw_incident: Dict) -> Dict:
 
 
 @logger
-def microsoft_365_defender_incidents_list_command(client: Client, args: Dict) -> CommandResults:
+def microsoft_365_defender_incidents_list_command(client: Client, args: dict) -> CommandResults:
     """
     Returns list of the latest incidents in microsoft 365 defender in readable table.
     The list can be filtered using the following arguments:
@@ -293,6 +334,7 @@ def microsoft_365_defender_incidents_list_command(client: Client, args: Dict) ->
               - status (str) - get incidents with the given status (Active, Resolved or Redirected)
               - assigned_to (str) - get incidents assigned to the given user
               - offset (int) - skip the first N entries of the list
+              - odata (str) - json dictionary containing odata uri parameters
     Returns: CommandResults
 
     """
@@ -301,8 +343,16 @@ def microsoft_365_defender_incidents_list_command(client: Client, args: Dict) ->
     assigned_to = args.get('assigned_to')
     offset = arg_to_number(args.get('offset'))
     timeout = arg_to_number(args.get('timeout', TIMEOUT))
+    odata = args.get('odata')
 
-    response = client.incidents_list(limit=limit, status=status, assigned_to=assigned_to, skip=offset, timeout=timeout)
+    if odata:
+        try:
+            odata = json.loads(odata)
+        except json.JSONDecodeError:
+            return_error(f"Can't parse odata argument as JSON array.\nvalue: {odata}")
+
+    response = client.incidents_list(limit=limit, status=status, assigned_to=assigned_to,
+                                     skip=offset, timeout=timeout, odata=odata)
 
     raw_incidents = response.get('value')
     readable_incidents = [convert_incident_to_readable(incident) for incident in raw_incidents]
@@ -318,7 +368,7 @@ def microsoft_365_defender_incidents_list_command(client: Client, args: Dict) ->
 
 
 @logger
-def microsoft_365_defender_incident_update_command(client: Client, args: Dict) -> CommandResults:
+def microsoft_365_defender_incident_update_command(client: Client, args: dict) -> CommandResults:
     """
     Update an incident.
     Args:
@@ -343,10 +393,11 @@ def microsoft_365_defender_incident_update_command(client: Client, args: Dict) -
     determination = args.get('determination')
     incident_id = arg_to_number(args.get('id'))
     timeout = arg_to_number(args.get('timeout', TIMEOUT))
+    comment = args.get('comment')
 
     updated_incident = client.update_incident(incident_id=incident_id, status=status, assigned_to=assigned_to,
                                               classification=classification, determination=determination, tags=tags,
-                                              timeout=timeout)
+                                              timeout=timeout, comment=comment)
     if updated_incident.get('@odata.context'):
         del updated_incident['@odata.context']
 
@@ -359,7 +410,34 @@ def microsoft_365_defender_incident_update_command(client: Client, args: Dict) -
 
 
 @logger
-def fetch_incidents(client: Client, first_fetch_time: str, fetch_limit: int, timeout: int = None) -> List[Dict]:
+def microsoft_365_defender_incident_get_command(client: Client, args: dict) -> CommandResults:
+    """
+    Get an incident.
+    Args:
+        client(Client): Microsoft 365 Defender's client to preform the API calls.
+        args(Dict): Demisto arguments:
+              - id (int)        - incident's id (required)
+              - timeout (int)   - waiting time for command execution
+
+    Returns: CommandResults
+    """
+    incident_id = arg_to_number(args.get('id'))
+    timeout = arg_to_number(args.get('timeout', TIMEOUT))
+
+    incident = client.get_incident(incident_id=incident_id, timeout=timeout)
+    if incident.get('@odata.context'):
+        del incident['@odata.context']
+
+    readable_incident = convert_incident_to_readable(incident)
+    human_readable_table = tableToMarkdown(name=f"Incident No. {incident_id}:", t=readable_incident,
+                                           headers=list(readable_incident.keys()))
+
+    return CommandResults(outputs_prefix='Microsoft365Defender.Incident', outputs_key_field='incidentId',
+                          outputs=incident, readable_output=human_readable_table)
+
+
+@logger
+def fetch_incidents(client: Client, first_fetch_time: str, fetch_limit: int, timeout: int = None) -> List[dict]:
     """
     Uses to fetch incidents into Demisto
     Documentation: https://xsoar.pan.dev/docs/integrations/fetching-incidents#the-fetch-incidents-command
@@ -382,20 +460,22 @@ def fetch_incidents(client: Client, first_fetch_time: str, fetch_limit: int, tim
         incidents, new last_run
     """
     start_time = time.time()
-    test_context_for_token()
+    test_context_for_token(client)
 
     last_run_dict = demisto.getLastRun()
 
     last_run = last_run_dict.get('last_run')
     if not last_run:  # this is the first run
-        last_run = dateparser.parse(first_fetch_time).strftime(DATE_FORMAT)
+        first_fetch_date_time = dateparser.parse(first_fetch_time)
+        assert first_fetch_date_time is not None, f'could not parse {first_fetch_time}'
+        last_run = first_fetch_date_time.strftime(DATE_FORMAT)
 
     # creates incidents queue
     incidents_queue = last_run_dict.get('incidents_queue', [])
 
     if len(incidents_queue) < fetch_limit:
 
-        incidents = list()
+        incidents = []
 
         # The API is limited to MAX_ENTRIES incidents for each requests, if we are trying to get more than MAX_ENTRIES
         # incident we skip (offset) the number of incidents we already fetched.
@@ -429,7 +509,8 @@ def fetch_incidents(client: Client, first_fetch_time: str, fetch_limit: int, tim
                 break
             offset += int(MAX_ENTRIES)
 
-        incidents.sort(key=lambda x: dateparser.parse(x['occurred']))  # sort the incidents by the creation time
+        # sort the incidents by the creation time
+        incidents.sort(key=lambda x: dateparser.parse(x['occurred']))  # type: ignore
         incidents_queue += incidents
 
     oldest_incidents = incidents_queue[:fetch_limit]
@@ -451,7 +532,7 @@ def _query_set_limit(query: str, limit: int) -> str:
         return query
 
     # the query has the structure of "section | section | section ..."
-    query_list = query.split('|')
+    query_list = re.split(r'(?<!\|)\|(?!\|)', query)
 
     # split the query to sections and find limit sections
     changed = False
@@ -471,7 +552,7 @@ def _query_set_limit(query: str, limit: int) -> str:
 
 
 @logger
-def microsoft_365_defender_advanced_hunting_command(client: Client, args: Dict) -> CommandResults:
+def microsoft_365_defender_advanced_hunting_command(client: Client, args: dict) -> CommandResults:
     """
     Sends a query for the advanced hunting tool.
     Args:
@@ -508,32 +589,52 @@ def main() -> None:
     :return:
     :rtype:
     """
-
+    params = demisto.params()
     # if your Client class inherits from BaseClient, SSL verification is
     # handled out of the box by it, just pass ``verify_certificate`` to
     # the Client constructor
-    verify_certificate = not demisto.params().get('insecure', False)
+    verify_certificate = not params.get('insecure', False)
 
     # if your Client class inherits from BaseClient, system proxy is handled
     # out of the box by it, just pass ``proxy`` to the Client constructor
-    proxy = demisto.params().get('proxy', False)
-    app_id = demisto.params().get('app_id')
-    base_url = demisto.params().get('base_url')
+    proxy = params.get('proxy', False)
+    app_id = params.get('creds_client_id', {}).get('password', '') or params.get('app_id') or params.get('_app_id')
+    base_url = params.get('base_url')
 
-    first_fetch_time = demisto.params().get('first_fetch', '3 days').strip()
-    fetch_limit = demisto.params().get('max_fetch', 10)
-    fetch_timeout = arg_to_number(demisto.params().get('fetch_timeout', TIMEOUT))
+    tenant_id = params.get('creds_tenant_id', {}).get('password', '') or params.get('tenant_id') or params.get('_tenant_id')
+    client_credentials = params.get('client_credentials', False)
+    enc_key = params.get('enc_key') or (params.get('credentials') or {}).get('password')
+    certificate_thumbprint = params.get('creds_certificate', {}).get('identifier', '') or \
+        params.get('certificate_thumbprint', '')
+
+    private_key = (replace_spaces_in_credential(params.get('creds_certificate', {}).get('password', ''))
+                   or params.get('private_key', ''))
+    managed_identities_client_id = get_azure_managed_identities_client_id(params)
+
+    first_fetch_time = params.get('first_fetch', '3 days').strip()
+    fetch_limit = arg_to_number(params.get('max_fetch', 10))
+    fetch_timeout = arg_to_number(params.get('fetch_timeout', TIMEOUT))
     demisto.debug(f'Command being called is {demisto.command()}')
 
     command = demisto.command()
     args = demisto.args()
 
     try:
+        if not managed_identities_client_id and not app_id:
+            raise Exception('Application ID must be provided.')
+
         client = Client(
             app_id=app_id,
             verify=verify_certificate,
             base_url=base_url,
-            proxy=proxy)
+            proxy=proxy,
+            tenant_id=tenant_id,
+            enc_key=enc_key,
+            client_credentials=client_credentials,
+            certificate_thumbprint=certificate_thumbprint,
+            private_key=private_key,
+            managed_identities_client_id=managed_identities_client_id
+        )
         if demisto.command() == 'test-module':
             # This is the call made when pressing the integration Test button.
             return_results(test_module(client))
@@ -551,16 +652,20 @@ def main() -> None:
             return_results(test_connection(client))
 
         elif command == 'microsoft-365-defender-incidents-list':
-            test_context_for_token()
+            test_context_for_token(client)
             return_results(microsoft_365_defender_incidents_list_command(client, args))
 
         elif command == 'microsoft-365-defender-incident-update':
-            test_context_for_token()
+            test_context_for_token(client)
             return_results(microsoft_365_defender_incident_update_command(client, args))
 
         elif command == 'microsoft-365-defender-advanced-hunting':
-            test_context_for_token()
+            test_context_for_token(client)
             return_results(microsoft_365_defender_advanced_hunting_command(client, args))
+
+        elif command == 'microsoft-365-defender-incident-get':
+            test_context_for_token(client)
+            return_results(microsoft_365_defender_incident_get_command(client, args))
 
         elif command == 'fetch-incidents':
             fetch_limit = arg_to_number(fetch_limit)
@@ -571,11 +676,8 @@ def main() -> None:
             raise NotImplementedError
     # Log exceptions and return errors
     except Exception as e:
-        demisto.error(traceback.format_exc())  # print the traceback
         return_error(f'Failed to execute {demisto.command()} command.\nError:\n{str(e)}')
 
-
-from MicrosoftApiModule import *  # noqa: E402
 
 ''' ENTRY POINT '''
 

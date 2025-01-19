@@ -9,16 +9,15 @@ you are implementing with your integration
 """
 
 import json
-import io
 
 import pytest
 
 import demistomock as demisto
-from Microsoft365Defender import Client, fetch_incidents, _query_set_limit
+from Microsoft365Defender import Client, fetch_incidents, _query_set_limit, main
 
 
 def util_load_json(path):
-    with io.open(path, mode='r', encoding='utf-8') as f:
+    with open(path, encoding='utf-8') as f:
         return json.loads(f.read())
 
 
@@ -63,9 +62,17 @@ def test_microsoft_365_defender_incident_update_command(mocker):
     from Microsoft365Defender import microsoft_365_defender_incident_update_command
     client = mock_client(mocker, 'update_incident', util_load_json('./test_data/incident_update_response.json'))
     args = {'id': '263', 'tags': 'test1,test2', 'status': 'Active', 'classification': 'Unknown',
-            'determination': 'Other'}
+            'determination': 'Other', 'assigned_to': ""}
     results = microsoft_365_defender_incident_update_command(client, args)
     check_api_response(results, util_load_json('./test_data/incident_update_results.json'))
+
+
+def test_microsoft_365_defender_incident_get_command(mocker):
+    from Microsoft365Defender import microsoft_365_defender_incident_get_command
+    client = mock_client(mocker, 'get_incident', util_load_json('./test_data/incident_get_response.json'))
+    args = {'id': '263'}
+    results = microsoft_365_defender_incident_get_command(client, args)
+    check_api_response(results, util_load_json('./test_data/incident_get_results.json'))
 
 
 def test_microsoft_365_defender_advanced_hunting_command(mocker):
@@ -119,6 +126,62 @@ def test_fetch_incidents(mocker):
 @pytest.mark.parametrize('query, limit, result', [("a | b | limit 5", 10, "a | b | limit 10 "),
                                                   ("a | b ", 10, "a | b | limit 10 "),
                                                   ("a | b | limit 1 | take 1", 10, "a | b | limit 10 | limit 10 "),
+                                                  ("a | where Subject == \"a || b\" | limit  ", 10,
+                                                   "a | where Subject == \"a || b\" | limit 10 ")
                                                   ])
 def test_query_set_limit(query: str, limit: int, result: str):
     assert _query_set_limit(query, limit) == result
+
+
+def test_params(mocker):
+    """
+    Given:
+      - Configuration parameters
+    When:
+      - The required parameter app_id is missed.
+    Then:
+      - Ensure the exception message as expected.
+    """
+
+    mocker.patch.object(demisto, 'params', return_value={'_tenant_id': '_tenant_id', 'credentials': {'password': '1234'}})
+    mocker.patch.object(demisto, 'error')
+    return_error_mock = mocker.patch('Microsoft365Defender.return_error')
+
+    main()
+
+    assert 'Application ID must be provided.' in return_error_mock.call_args[0][0]
+
+
+@pytest.mark.parametrize(argnames='client_id', argvalues=['test_client_id', None])
+def test_test_module_command_with_managed_identities(mocker, requests_mock, client_id):
+    """
+        Given:
+            - Managed Identities client id for authentication.
+        When:
+            - Calling test_module.
+        Then:
+            - Ensure the output are as expected.
+    """
+
+    from Microsoft365Defender import main, MANAGED_IDENTITIES_TOKEN_URL, Resources
+    import Microsoft365Defender
+
+    mock_token = {'access_token': 'test_token', 'expires_in': '86400'}
+    get_mock = requests_mock.get(MANAGED_IDENTITIES_TOKEN_URL, json=mock_token)
+
+    params = {
+        'managed_identities_client_id': {'password': client_id},
+        'use_managed_identities': 'True',
+        'base_url': 'test_base_url'
+    }
+    mocker.patch.object(demisto, 'params', return_value=params)
+    mocker.patch.object(demisto, 'command', return_value='test-module')
+    mocker.patch.object(Microsoft365Defender, 'return_results', return_value=params)
+    mocker.patch('MicrosoftApiModule.get_integration_context', return_value={})
+
+    main()
+
+    assert 'ok' in Microsoft365Defender.return_results.call_args[0][0]
+    qs = get_mock.last_request.qs
+    assert qs['resource'] == [Resources.security]
+    assert client_id and qs['client_id'] == [client_id] or 'client_id' not in qs

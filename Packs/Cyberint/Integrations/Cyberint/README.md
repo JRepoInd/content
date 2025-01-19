@@ -1,31 +1,33 @@
 Cyberint provides intelligence-driven digital risk protection. This integration will help your enterprise effectively consume actionable cyber alerts to increase your security posture.
 This integration was integrated and tested with version v1 of cyberint
-## Configure cyberint on Cortex XSOAR
 
-1. Navigate to **Settings** > **Integrations** > **Servers & Services**.
-2. Search for cyberint.
-3. Click **Add instance** to create and configure a new integration instance.
+## Configure cyberint in Cortex
 
-    | **Parameter** | **Description** | **Required** |
-    | --- | --- | --- |
-    | Incident type |  | False |
-    | Cyberint Access Token | Cyberint API access token. | True |
-    | Cyberint API Environment | Cyberint environment on which the services run \(i.e http://\{environment\}.cyberint.io/...\) | True |
-    | Fetch incidents |  | False |
-    | Fetch Severity | Severities to fetch. If none is chosen, all severity levels will be returned. | False |
-    | Fetch Status | Statuses to fetch. If none is chosen, all statuses will be returned. | False |
-    | Fetch Environment | Environments to fetch \(comma separated\). If empty, all available environments will be returned. | False |
-    | Fetch Types | Types to fetch. If none is chosen, all types will be returned. | False |
-    | Fetch Limit | Max number of alerts per fetch. Defaults to  the minimum 10, max is 100. | False |
-    | First fetch timestamp (&lt;number&gt; &lt;time unit&gt;, e.g., 12 hours, 7 days) |  | False |
-    | Trust any certificate (not secure) |  | False |
-    | Use system proxy settings |  | False |
 
-4. Click **Test** to validate the URLs, token, and connection.
+| **Parameter** | **Description** | **Required** |
+| --- | --- | --- |
+| Incident type |  | False |
+| Cyberint Access Token | Cyberint API access token. | True |
+| Cyberint API Environment | Cyberint environment on which the services run \(i.e http://\{environment\}.cyberint.io/...\) | True |
+| Fetch incidents |  | False |
+| Create an incident per CSV record | An incident will be created with the originated Alert details per CSV file record | False |
+| Fetch Severity | Severities to fetch. If none is chosen, all severity levels will be returned. | False |
+| Fetch Status | Statuses to fetch. If none is chosen, all statuses will be returned. | False |
+| Fetch Environment | Environments to fetch \(comma separated\). If empty, all available environments will be returned. | False |
+| Fetch Types | Types to fetch. If none is chosen, all types will be returned. | False |
+| Fetch Limit | Max number of alerts per fetch. Defaults to  the minimum 10, max is 100. | False |
+| First fetch timestamp (&lt;number&gt; &lt;time unit&gt;, e.g., 12 hours, 7 days) |  | False |
+| Trust any certificate (not secure) |  | False |
+| Use system proxy settings |  | False |
+
+
 ## Commands
-You can execute these commands from the Cortex XSOAR CLI, as part of an automation, or in a playbook.
+
+You can execute these commands from the CLI, as part of an automation, or in a playbook.
 After you successfully execute a command, a DBot message appears in the War Room with the command details.
+
 ### cyberint-alerts-fetch
+
 ***
 List alerts according to parameters
 
@@ -33,91 +35,97 @@ List alerts according to parameters
 #### Base Command
 
 `cyberint-alerts-fetch`
+
 #### Input
 
 | **Argument Name** | **Description** | **Required** |
 | --- | --- | --- |
-| page | Page number to return. Default is 1. Default is 1. | Optional | 
-| page_size | Number of results in a page. Default is 10. Must be between 10 and 100. Default is 10. | Optional | 
-| created_date_from | ISO-Formatted creation date. Get alerts created since this date (YYYY-MM-DDTHH:MM:SSZ). | Optional | 
-| created_date_to | ISO-Formatted creation date. Get alerts created before this date (YYYY-MM-DDTHH:MM:SSZ). | Optional | 
-| created_date_range | You can specify a date range to search for from the current time. (&lt;number&gt; &lt;time unit&gt;, e.g., 12 hours, 7 days) instead of a start/end time. created_date_range will overwrite created_date. | Optional | 
-| modification_date_from | ISO-Formatted modification date. Get alerts modified since this date (YYYY-MM-DDTHH:MM:SSZ). | Optional | 
-| modification_date_to | ISO-Formatted modification date. Get alerts modified before this date (YYYY-MM-DDTHH:MM:SSZ). | Optional | 
-| modified_date_range | You can specify a date range to search for from the current time. (&lt;number&gt; &lt;time unit&gt;, e.g., 12 hours, 7 days) instead of a start/end time. modified_date_range will overwrite modified_date. | Optional | 
-| environments | Environment in which the alerts were created. Can be more than one. | Optional | 
-| statuses | Status of the alert. Can be more than one. Possible values are: open, acknowledged, closed. | Optional | 
-| severities | Severity of the alert. Can be more than one. Possible values are: low, medium, high, very_high. | Optional | 
-| types | Type of the alert, can be more than one. Possible values are: refund_fraud, carding, coupon_fraud, money_laundering, victim_report, malicious_insider, extortion, phishing_email, phishing_kit, phishing_website, lookalike_domain, phishing_target_list, malicious_file, reconnaissance, automated_attack_tools, business_logic_bypass, target_list, official_social_media_profile, impersonation, intellectual_property_infringement, unauthorized_trading, negative_sentiment, fake_job_posting, defacement, compromised_pii, internal_information_disclosure, compromised_payment_cards, compromised_employee_credentials, compromised_customer_credentials, compromised_access_token, ransomware, exposed_web_interfaces, hijackable_subdomains, website_vulnerabilities, exposed_cloud_storage, exploitable_ports, mail_servers_in_blacklist, server_connected_to_botnet, email_security_issues, certificate_authority_issues, other. | Optional | 
+| page | Page number to return. Default is 1. Default is 1. | Optional |
+| page_size | Number of results in a page. Default is 10. Must be between 10 and 100. Default is 10. | Optional |
+| created_date_from | ISO-Formatted creation date. Get alerts created since this date (YYYY-MM-DDTHH:MM:SSZ). | Optional |
+| created_date_to | ISO-Formatted creation date. Get alerts created before this date (YYYY-MM-DDTHH:MM:SSZ). | Optional |
+| created_date_range | You can specify a date range to search for from the current time. (&lt;number&gt; &lt;time unit&gt;, e.g., 12 hours, 7 days) instead of a start/end time. created_date_range will overwrite created_date. | Optional |
+| updated_date_from | ISO-Formatted creation date. Get alerts updated since this date (YYYY-MM-DDTHH:MM:SSZ). | Optional |
+| updated_date_to | ISO-Formatted creation date. Get alerts updated before this date (YYYY-MM-DDTHH:MM:SSZ). | Optional |
+| updated_date_range | You can specify a date range to search for from the current time. (&lt;number&gt; &lt;time unit&gt;, e.g., 12 hours, 7 days) instead of a start/end time. updated_date_range will overwrite updated_date. | Optional |
+| modification_date_from | ISO-Formatted modification date. Get alerts modified since this date (YYYY-MM-DDTHH:MM:SSZ). | Optional |
+| modification_date_to | ISO-Formatted modification date. Get alerts modified before this date (YYYY-MM-DDTHH:MM:SSZ). | Optional |
+| modified_date_range | You can specify a date range to search for from the current time. (&lt;number&gt; &lt;time unit&gt;, e.g., 12 hours, 7 days) instead of a start/end time. modified_date_range will overwrite modified_date. | Optional |
+| environments | Environment in which the alerts were created. Can be more than one. | Optional |
+| statuses | Status of the alert. Can be more than one. Possible values are: open, acknowledged, closed. | Optional |
+| severities | Severity of the alert. Can be more than one. Possible values are: low, medium, high, very_high. | Optional |
+| types | Type of the alert, can be more than one. Possible values are: refund_fraud, carding, coupon_fraud, money_laundering, victim_report, malicious_insider, extortion, phishing_email, phishing_kit, phishing_website, lookalike_domain, phishing_target_list, malicious_file, reconnaissance, automated_attack_tools, business_logic_bypass, target_list, official_social_media_profile, impersonation, intellectual_property_infringement, unauthorized_trading, negative_sentiment, fake_job_posting, defacement, compromised_pii, internal_information_disclosure, compromised_payment_cards, compromised_employee_credentials, compromised_customer_credentials, compromised_access_token, ransomware, exposed_web_interfaces, hijackable_subdomains, website_vulnerabilities, exposed_cloud_storage, exploitable_ports, mail_servers_in_blacklist, server_connected_to_botnet, email_security_issues, certificate_authority_issues, other. | Optional |
 
 
 #### Context Output
 
 | **Path** | **Type** | **Description** |
 | --- | --- | --- |
-| Cyberint.Alert.ref_id | String | Reference ID of the alert. | 
-| Cyberint.Alert.confidence | Number | Confidence score of the alert. | 
-| Cyberint.Alert.status | String | Status of the alert. | 
-| Cyberint.Alert.severity | String | Severity of the alert | 
-| Cyberint.Alert.created_by.email | String | User which has created the alert. | 
-| Cyberint.Alert.created_date | Date | Date in which the alert was created. | 
-| Cyberint.Alert.category | String | Category of the alert. | 
-| Cyberint.Alert.type | String | Type of the alert. | 
-| Cyberint.Alert.source_category | String | Source category of the alert. | 
-| Cyberint.Alert.source | String | Source of the alert. | 
-| Cyberint.Alert.targeted_vectors | String | Vectors targeted by the threat. | 
-| Cyberint.Alert.targeted_brands | String | Brands targeted by the threat. | 
-| Cyberint.Alert.related_entities | String | Entities related to the alert. | 
-| Cyberint.Alert.impacts | String | Impacts made by the threat. | 
-| Cyberint.Alert.acknowledged_date | Date | Date in which the alert was acknowledged. | 
-| Cyberint.Alert.acknowledged_by.email | String | User which has acknowledged the alert. | 
-| Cyberint.Alert.publish_date | Date | Date in which the alert was published. | 
-| Cyberint.Alert.title | String | Title of the alert. | 
-| Cyberint.Alert.alert_data.url | String | URL impacted by the event. | 
-| Cyberint.Alert.alert_data.detection_reasons | String | Reasons why a phishing event has been detected. | 
-| Cyberint.Alert.alert_data.tool_name | String | Name of a tool used for an exploit if available. | 
-| Cyberint.Alert.alert_data.application | String | Application affected by an event. | 
-| Cyberint.Alert.alert_data.source | String | Source of an event if available. | 
-| Cyberint.Alert.alert_data.domain | String | Domain related to an event if available. | 
-| Cyberint.Alert.alert_data.subdomian | String | Subdomain related to an event if available. | 
-| Cyberint.Alert.alert_data.misconfiguration_type | String | Type of misconfiguration for a misconfigured domain. | 
-| Cyberint.Alert.alert_data.ip | String | IP related to an event. | 
-| Cyberint.Alert.alert_data.port | String | Port related to an event. | 
-| Cyberint.Alert.alert_data.service | String | Service related to an event. | 
-| Cyberint.Alert.alert_data.access_token | String | Access token exposed in an event. | 
-| Cyberint.Alert.alert_data.access_token_type | String | Access token exposed in an event. | 
-| Cyberint.Alert.alert_data.username | String | Username of an account related to an event. | 
-| Cyberint.Alert.alert_data.csv.username | String | Username of an account found in a report CSV. | 
-| Cyberint.Alert.alert_data.csv.password | String | Password of an account found in a report CSV. | 
-| Cyberint.Alert.alert_data.email | String | Email of an account related to an event. | 
-| Cyberint.Alert.alert_data.author_email_address | String | Email of an author related to an event. | 
-| Cyberint.Alert.alert_data.repository_name | String | Repository name related to an event. | 
-| Cyberint.Alert.alert_data.mail_server | String | Mail server related to an event. | 
-| Cyberint.Alert.alert_data.blacklist_repository | String | Blacklist repository name related to an event. | 
-| Cyberint.Alert.alert_data.screenshot | String | Screenshot related to an event. | 
-| Cyberint.Alert.alert_data.spf_records | String | SPF records if applicable to the event. | 
-| Cyberint.Alert.alert_data.dmarc_record | String | DMARC records if applicable to the event. | 
-| Cyberint.Alert.alert_data.storage_link | String | Storage link if applicable to the event. | 
-| Cyberint.Alert.alert_data.interface_type | String | Interface type if applicable to the event. | 
-| Cyberint.Alert.alert_data.vulnerable_cname_record | String | Vulnerable CName record if applicable to the event. | 
-| Cyberint.Alert.ioc.type | String | Type of IOC related to the alert. | 
-| Cyberint.Alert.ioc.value | String | Value of the IOC related to the alert. | 
-| Cyberint.Alert.ticket_id | String | Ticket ID of the alert. | 
-| Cyberint.Alert.threat_actor | String | Actor to the threat related to the alert. | 
-| Cyberint.Alert.modification_date | Date | Date the alert was last modified. | 
-| Cyberint.Alert.closure_date | String | Date the alert was closed. | 
-| Cyberint.Alert.closed_by.email | String | User which has closed the alert. | 
-| Cyberint.Alert.closure_reason | String | Reason for closing the alert. | 
-| Cyberint.Alert.description | String | Description of the alert. | 
-| Cyberint.Alert.recommendation | String | Recommendation for the alert | 
-| Cyberint.Alert.tags | String | Tags related to the alert | 
-| Cyberint.Alert.attachments | String | Attachments related to the alert | 
+| Cyberint.Alert.ref_id | String | Reference ID of the alert. |
+| Cyberint.Alert.confidence | Number | Confidence score of the alert. |
+| Cyberint.Alert.status | String | Status of the alert. |
+| Cyberint.Alert.severity | String | Severity of the alert |
+| Cyberint.Alert.created_by.email | String | User which has created the alert. |
+| Cyberint.Alert.created_date | Date | Date in which the alert was created. |
+| Cyberint.Alert.category | String | Category of the alert. |
+| Cyberint.Alert.type | String | Type of the alert. |
+| Cyberint.Alert.source_category | String | Source category of the alert. |
+| Cyberint.Alert.source | String | Source of the alert. |
+| Cyberint.Alert.targeted_vectors | String | Vectors targeted by the threat. |
+| Cyberint.Alert.targeted_brands | String | Brands targeted by the threat. |
+| Cyberint.Alert.related_entities | String | Entities related to the alert. |
+| Cyberint.Alert.impacts | String | Impacts made by the threat. |
+| Cyberint.Alert.acknowledged_date | Date | Date in which the alert was acknowledged. |
+| Cyberint.Alert.acknowledged_by.email | String | User which has acknowledged the alert. |
+| Cyberint.Alert.publish_date | Date | Date in which the alert was published. |
+| Cyberint.Alert.title | String | Title of the alert. |
+| Cyberint.Alert.alert_data.url | String | URL impacted by the event. |
+| Cyberint.Alert.alert_data.detection_reasons | String | Reasons why a phishing event has been detected. |
+| Cyberint.Alert.alert_data.tool_name | String | Name of a tool used for an exploit if available. |
+| Cyberint.Alert.alert_data.application | String | Application affected by an event. |
+| Cyberint.Alert.alert_data.source | String | Source of an event if available. |
+| Cyberint.Alert.alert_data.domain | String | Domain related to an event if available. |
+| Cyberint.Alert.alert_data.subdomian | String | Subdomain related to an event if available. |
+| Cyberint.Alert.alert_data.misconfiguration_type | String | Type of misconfiguration for a misconfigured domain. |
+| Cyberint.Alert.alert_data.ip | String | IP related to an event. |
+| Cyberint.Alert.alert_data.port | String | Port related to an event. |
+| Cyberint.Alert.alert_data.service | String | Service related to an event. |
+| Cyberint.Alert.alert_data.access_token | String | Access token exposed in an event. |
+| Cyberint.Alert.alert_data.access_token_type | String | Access token exposed in an event. |
+| Cyberint.Alert.alert_data.username | String | Username of an account related to an event. |
+| Cyberint.Alert.alert_data.csv.username | String | Username of an account found in a report CSV. |
+| Cyberint.Alert.alert_data.csv.password | String | Password of an account found in a report CSV. |
+| Cyberint.Alert.alert_data.email | String | Email of an account related to an event. |
+| Cyberint.Alert.alert_data.author_email_address | String | Email of an author related to an event. |
+| Cyberint.Alert.alert_data.repository_name | String | Repository name related to an event. |
+| Cyberint.Alert.alert_data.mail_server | String | Mail server related to an event. |
+| Cyberint.Alert.alert_data.blacklist_repository | String | Blacklist repository name related to an event. |
+| Cyberint.Alert.alert_data.screenshot | String | Screenshot related to an event. |
+| Cyberint.Alert.alert_data.spf_records | String | SPF records if applicable to the event. |
+| Cyberint.Alert.alert_data.dmarc_record | String | DMARC records if applicable to the event. |
+| Cyberint.Alert.alert_data.storage_link | String | Storage link if applicable to the event. |
+| Cyberint.Alert.alert_data.interface_type | String | Interface type if applicable to the event. |
+| Cyberint.Alert.alert_data.vulnerable_cname_record | String | Vulnerable CName record if applicable to the event. |
+| Cyberint.Alert.ioc.type | String | Type of IOC related to the alert. |
+| Cyberint.Alert.ioc.value | String | Value of the IOC related to the alert. |
+| Cyberint.Alert.ticket_id | String | Ticket ID of the alert. |
+| Cyberint.Alert.threat_actor | String | Actor to the threat related to the alert. |
+| Cyberint.Alert.modification_date | Date | Date the alert was last modified. |
+| Cyberint.Alert.closure_date | String | Date the alert was closed. |
+| Cyberint.Alert.closed_by.email | String | User which has closed the alert. |
+| Cyberint.Alert.closure_reason | String | Reason for closing the alert. |
+| Cyberint.Alert.description | String | Description of the alert. |
+| Cyberint.Alert.recommendation | String | Recommendation for the alert |
+| Cyberint.Alert.tags | String | Tags related to the alert |
+| Cyberint.Alert.attachments | String | Attachments related to the alert |
 
 
 #### Command Example
+
 ```!cyberint-alerts-fetch page="1" page_size="100" created_date_range="7 days"```
 
 #### Context Example
+
 ```json
 {
     "Cyberint": {
@@ -664,7 +672,9 @@ List alerts according to parameters
 
 >Total alerts: 9
 >Current page: 1
+
 >### CyberInt alerts:
+
 >|ref_id|title|status|severity|created_date|type|environment|
 >|---|---|---|---|---|---|---|
 >| ARG-3 | Company Customer Credentials Exposed | open | high | 2021-04-12T00:01:12 | compromised_customer_credentials | Argos Demo |
@@ -679,6 +689,7 @@ List alerts according to parameters
 
 
 ### cyberint-alerts-status-update
+
 ***
 Update the status of one or more alerts.
 
@@ -686,28 +697,31 @@ Update the status of one or more alerts.
 #### Base Command
 
 `cyberint-alerts-status-update`
+
 #### Input
 
 | **Argument Name** | **Description** | **Required** |
 | --- | --- | --- |
-| alert_ref_ids | Reference IDs for the alert(s). | Required | 
-| status | Desired status to update for the alert(s). Possible values are: open, acknowledged, closed. | Required | 
-| closure_reason | Reason for updating the alerts status to closed. Required when status is closed. Possible values are: resolved, irrelevant, false_positive. | Optional | 
+| alert_ref_ids | Reference IDs for the alert(s). | Required |
+| status | Desired status to update for the alert(s). Possible values are: open, acknowledged, closed. | Required |
+| closure_reason | Reason for updating the alerts status to closed. Required when status is closed. Possible values are: resolved, irrelevant, false_positive. | Optional |
 
 
 #### Context Output
 
 | **Path** | **Type** | **Description** |
 | --- | --- | --- |
-| Cyberint.Alert.ref_id | String | Reference ID of the alert. | 
-| Cyberint.Alert.status | String | Status of the alert. | 
-| Cyberint.Alert.closure_reason | String | Reason for updating the alert to closed if closed. | 
+| Cyberint.Alert.ref_id | String | Reference ID of the alert. |
+| Cyberint.Alert.status | String | Status of the alert. |
+| Cyberint.Alert.closure_reason | String | Reason for updating the alert to closed if closed. |
 
 
 #### Command Example
+
 ```!cyberint-alerts-status-update alert_ref_ids="ADS10-3" status="acknowledged"```
 
 #### Context Example
+
 ```json
 {
     "Cyberint": {
@@ -723,12 +737,14 @@ Update the status of one or more alerts.
 #### Human Readable Output
 
 >### CyberInt alerts updated information:
+
 >|ref_id|status|
 >|---|---|
 >| ADS10-3 | acknowledged |
 
 
 ### cyberint-alerts-get-attachment
+
 ***
 Get alert attachment.
 
@@ -736,35 +752,38 @@ Get alert attachment.
 #### Base Command
 
 `cyberint-alerts-get-attachment`
+
 #### Input
 
 | **Argument Name** | **Description** | **Required** |
 | --- | --- | --- |
-| alert_ref_id | Reference ID of the alert. | Required | 
-| attachment_id | Attachment ID. | Required | 
-| attachment_name | Attachment file name. | Required | 
+| alert_ref_id | Reference ID of the alert. | Required |
+| attachment_id | Attachment ID. | Required |
+| attachment_name | Attachment file name. | Required |
 
 
 #### Context Output
 
 | **Path** | **Type** | **Description** |
 | --- | --- | --- |
-| File.Size | Number | The size of the file. | 
-| File.SHA1 | String | The SHA1 hash of the file. | 
-| File.SHA256 | String | The SHA256 hash of the file. | 
-| File.Name | String | The name of the file. | 
-| File.SSDeep | String | The SSDeep hash of the file. | 
-| File.EntryID | String | The entry ID of the file. | 
-| File.Info | String | File information. | 
-| File.Type | String | The file type. | 
-| File.MD5 | String | The MD5 hash of the file. | 
-| File.Extension | String | The file extension. | 
+| File.Size | Number | The size of the file. |
+| File.SHA1 | String | The SHA1 hash of the file. |
+| File.SHA256 | String | The SHA256 hash of the file. |
+| File.Name | String | The name of the file. |
+| File.SSDeep | String | The SSDeep hash of the file. |
+| File.EntryID | String | The entry ID of the file. |
+| File.Info | String | File information. |
+| File.Type | String | The file type. |
+| File.MD5 | String | The MD5 hash of the file. |
+| File.Extension | String | The file extension. |
 
 
 #### Command Example
+
 ```!cyberint-alerts-get-attachment alert_ref_id="ARG-3" attachment_id="18" attachment_name="Compromised Account As Appears On Argos.png"```
 
 #### Context Example
+
 ```json
 {
     "File": {
@@ -787,6 +806,7 @@ Get alert attachment.
 
 
 ### cyberint-alerts-analysis-report
+
 ***
 Get alert analysis report.
 
@@ -794,34 +814,37 @@ Get alert analysis report.
 #### Base Command
 
 `cyberint-alerts-analysis-report`
+
 #### Input
 
 | **Argument Name** | **Description** | **Required** |
 | --- | --- | --- |
-| alert_ref_id | Reference ID of the alert. | Required | 
-| report_name | Analysis report file name. | Required | 
+| alert_ref_id | Reference ID of the alert. | Required |
+| report_name | Analysis report file name. | Required |
 
 
 #### Context Output
 
 | **Path** | **Type** | **Description** |
 | --- | --- | --- |
-| File.Size | Number | The size of the file. | 
-| File.SHA1 | String | The SHA1 hash of the file. | 
-| File.SHA256 | String | The SHA256 hash of the file. | 
-| File.Name | String | The name of the file. | 
-| File.SSDeep | String | The SSDeep hash of the file. | 
-| File.EntryID | String | The entry ID of the file. | 
-| File.Info | String | File information. | 
-| File.Type | String | The file type. | 
-| File.MD5 | String | The MD5 hash of the file. | 
-| File.Extension | String | The file extension. | 
+| File.Size | Number | The size of the file. |
+| File.SHA1 | String | The SHA1 hash of the file. |
+| File.SHA256 | String | The SHA256 hash of the file. |
+| File.Name | String | The name of the file. |
+| File.SSDeep | String | The SSDeep hash of the file. |
+| File.EntryID | String | The entry ID of the file. |
+| File.Info | String | File information. |
+| File.Type | String | The file type. |
+| File.MD5 | String | The MD5 hash of the file. |
+| File.Extension | String | The file extension. |
 
 
 #### Command Example
+
 ```!cyberint-alerts-analysis-report alert_ref_id="ARG-4" report_name="Expert Analysis - Active Phishing Website Targeting Company.pdf"```
 
 #### Context Example
+
 ```json
 {
     "File": {
@@ -839,6 +862,3 @@ Get alert analysis report.
     }
 }
 ```
-
-
-

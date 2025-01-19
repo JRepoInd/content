@@ -8,3 +8,10 @@ This fact makes it very difficult for IT and Security teams to provide these ser
 One example of these providers is Zoom.
 
 This pack aims is to address this issue by automating the collection of endpoint data in the form of an indicator feed. This will facilitate validation of the indicators before using them in enforcement points, for example firewalls, proxies, and more.
+
+This integration fetches the data from five files linked in the website above:  
+https://assets.zoom.us/docs/ipranges/Zoom.txt
+https://assets.zoom.us/docs/ipranges/ZoomMeetings.txt
+https://assets.zoom.us/docs/ipranges/ZoomCRC.txt
+https://assets.zoom.us/docs/ipranges/ZoomPhone.txt
+https://assets.zoom.us/docs/ipranges/ZoomCDN.txt

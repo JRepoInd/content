@@ -22,8 +22,10 @@ if INSECURE and not USE_SSL:
     raise DemistoException('"Trust any certificate (not secure)" must be ticked with "Use TLS/SSL secured connection"')
 if not INSECURE and not USE_SSL:
     # Connect to MongoDB - Need to add credentials and lock down MongoDB (add auth)
-    CLIENT = MongoClient(URI, username=USERNAME, password=PASSWORD, authSource=DATABASE, authMechanism='SCRAM-SHA-1',
-                         ssl=USE_SSL, socketTimeoutMS=TIMEOUT)
+    CLIENT = MongoClient(  # type: ignore[var-annotated]
+        URI, username=USERNAME, password=PASSWORD,
+        authSource=DATABASE, authMechanism='SCRAM-SHA-1',
+        ssl=USE_SSL, socketTimeoutMS=TIMEOUT)
 else:
     CLIENT = MongoClient(URI, username=USERNAME, password=PASSWORD, authSource=DATABASE, authMechanism='SCRAM-SHA-1',
                          ssl=USE_SSL, tlsAllowInvalidCertificates=INSECURE, socketTimeoutMS=TIMEOUT)
@@ -82,16 +84,18 @@ def read_log_json():
     """ Get all log documents/records from MondoDB """
     limit = int(demisto.args().get('limit'))
     # Point to all the documents
-    cursor = COLLECTION.find({}, {'_id': False}).limit(limit)
+    doc_count = COLLECTION.count_documents(filter={}, limit=limit)
+    cursor = COLLECTION.find({}, {'_id': False})
     # Create an empty log list
     entries = []
     # Iterate through those documents
-    if cursor is not None:
+    if doc_count > 0:
         for i in cursor:
             # Append log entry to list
             entries.append(i)
         return_json = {COLLECTION_NAME: entries}
-        human_readable = tableToMarkdown(f'The log documents/records for collection "{COLLECTION_NAME}"', return_json)
+        human_readable = tableToMarkdown(f'The log documents/records for collection "{COLLECTION_NAME}"',
+                                         return_json.get(COLLECTION_NAME))
         return human_readable, {}, {}
     return 'MongoDB - no documents/records - Log collection is empty', {}, {}
 
@@ -99,10 +103,8 @@ def read_log_json():
 def num_log_json():
     """ Get a count of all log documents/records from MondoDB """
     # Point to the documents
-    cursor = COLLECTION.find({}, {'_id': False})
-    # Get count of those documents
-    log_number = cursor.count()
-    human_readable = f'The count of log documents/records is {str(log_number)}'
+    doc_count = COLLECTION.count_documents(filter={})
+    human_readable = f'The count of log documents/records is {str(doc_count)}'
     return human_readable, {}, {}
 
 

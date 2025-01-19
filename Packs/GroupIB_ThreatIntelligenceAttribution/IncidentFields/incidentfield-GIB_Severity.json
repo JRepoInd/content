@@ -7,7 +7,8 @@
         "GIB Compromised Card",
         "GIB OSI Git Leak",
         "GIB OSI Public Leak",
-        "GIB Targeted Malware"
+        "GIB Targeted Malware",
+        "GIB Data Breach"
     ],
     "caseInsensitive": true,
     "cliName": "gibseverity",
@@ -28,7 +29,7 @@
     "threshold": 72,
     "type": "shortText",
     "unmapped": false,
-    "unsearchable": false,
+    "unsearchable": true,
     "useAsKpi": false,
     "version": -1,
     "fromVersion": "6.0.0"

@@ -3,28 +3,24 @@ Amazon Web Services Identity and Access Management (IAM)
 For detailed instructions about setting up authentication, see: [AWS Integrations - Authentication](https://xsoar.pan.dev/docs/reference/articles/aws-integrations---authentication).
 
 
-## Configure AWS - IAM on Cortex XSOAR
+## Configure AWS - IAM in Cortex
 
-1. Navigate to **Settings** > **Integrations** > **Servers & Services**.
-2. Search for AWS - IAM.
-3. Click **Add instance** to create and configure a new integration instance.
 
-    | **Parameter** | **Description** | **Required** |
-    | --- | --- | --- |
-    | roleArn | Role Arn | False |
-    | roleSessionName | Role Session Name | False |
-    | defaultRegion | AWS Default Region | False |
-    | sessionDuration | Role Session Duration | False |
-    | access_key | Access Key | False |
-    | secret_key | Secret Key | False |
-    | timeout | The time in seconds till a timeout exception is reached. You can specify just the read timeout \(for example 60\) or also the connect timeout followed after a comma \(for example 60,10\). If a connect timeout is not specified, a default of 10 second will be used. | False |
-    | retries | The maximum number of retry attempts when connection or throttling errors are encountered. Set to 0 to disable retries. The default value is 5 and the limit is 10. Note: Increasing the number of retries will increase the execution time. | False |
-    | insecure | Trust any certificate (not secure) | False |
-    | proxy | Use system proxy settings | False |
+| **Parameter** | **Description** | **Required** |
+| --- | --- | --- |
+| roleArn | Role Arn | False |
+| roleSessionName | Role Session Name | False |
+| defaultRegion | AWS Default Region | False |
+| sessionDuration | Role Session Duration | False |
+| access_key | Access Key | False |
+| secret_key | Secret Key | False |
+| timeout | The time in seconds till a timeout exception is reached. You can specify just the read timeout \(for example 60\) or also the connect timeout followed after a comma \(for example 60,10\). If a connect timeout is not specified, a default of 10 second will be used. | False |
+| retries | The maximum number of retry attempts when connection or throttling errors are encountered. Set to 0 to disable retries. The default value is 5 and the limit is 10. Note: Increasing the number of retries will increase the execution time. | False |
+| insecure | Trust any certificate (not secure) | False |
+| proxy | Use system proxy settings | False |
 
-4. Click **Test** to validate the URLs, token, and connection.
 ## Commands
-You can execute these commands from the Cortex XSOAR CLI, as part of an automation, or in a playbook.
+You can execute these commands from the CLI, as part of an automation, or in a playbook.
 After you successfully execute a command, a DBot message appears in the War Room with the command details.
 ### aws-iam-create-user
 ***
@@ -120,6 +116,7 @@ Lists the IAM users, returns all users in the AWS account.
 | AWS.IAM.Users.Arn | string | The Amazon Resource Name \(ARN\) that identifies the user. | 
 | AWS.IAM.Users.CreateDate | date | The date and time when the user was created. | 
 | AWS.IAM.Users.Path | string | The path to the user. | 
+| AWS.IAM.Users.PasswordLastUsed | date | The date and time when the password was last used. | 
 
 
 #### Command Example
@@ -362,7 +359,7 @@ Creates a new AWS secret access key and corresponding AWS access key ID for the 
 
 | **Argument Name** | **Description** | **Required** |
 | --- | --- | --- |
-| userName | The name of the IAM user that the new key will belong to. | Required | 
+| userName | The name of the IAM user that the new key will belong to. If username is not provided, the account name configured in your integration will be used. | Optional | 
 | roleArn | The Amazon Resource Name (ARN) of the role to assume. | Optional | 
 | roleSessionName | An identifier for the assumed role session. | Optional | 
 | roleSessionDuration | The duration, in seconds, of the role session. The value can range from 900 seconds (15 minutes) up to the maximum session duration setting for the role. | Optional | 
@@ -396,7 +393,7 @@ Changes the status of the specified access key from Active to Inactive, or vice 
 
 | **Argument Name** | **Description** | **Required** |
 | --- | --- | --- |
-| userName | The name of the user whose key you want to update. | Required | 
+| userName | The name of the user whose key you want to update. If username is not provided, the account name configured in your integration . | Optional | 
 | accessKeyId | The access key ID of the secret access key you want to update. | Required | 
 | status | The status you want to assign to the secret access key. Active means that the key can be used for API calls to AWS, while Inactive means that the key cannot be used. Possible values are: Active, Inactive. | Required | 
 | roleArn | The Amazon Resource Name (ARN) of the role to assume. | Optional | 
@@ -709,7 +706,7 @@ Deletes the access key pair associated with the specified IAM user.
 
 | **Argument Name** | **Description** | **Required** |
 | --- | --- | --- |
-| userName | he name of the user whose access key pair you want to delete. | Required | 
+| userName | he name of the user whose access key pair you want to delete. If username is not provided, the account name configured in your integration will be used. | Optional | 
 | AccessKeyId | The access key ID for the access key ID and secret access key you want to delete. | Required | 
 | roleArn | The Amazon Resource Name (ARN) of the role to assume. | Optional | 
 | roleSessionName | An identifier for the assumed role session. | Optional | 
@@ -1036,6 +1033,8 @@ Retrieves information about the specified role.
 | AWS.IAM.Roles.AssumeRolePolicyDocument | string | The policy that grants an entity permission to assume the role. | 
 | AWS.IAM.Roles.Description | string | A description of the role that you provide. | 
 | AWS.IAM.Roles.MaxSessionDuration | number | The maximum session duration \(in seconds\) for the specified role. | 
+| AWS.IAM.Roles.Tags.Key | string | The tag key. | 
+| AWS.IAM.Roles.Tags.Value | string | The tag value. | 
 
 
 #### Command Example
@@ -1156,7 +1155,7 @@ Creates a new managed policy for your AWS account.  This operation creates a pol
 | AWS.IAM.Policies.Path | string | The path to the policy. | 
 | AWS.IAM.Policies.DefaultVersionId | string | The identifier for the version of the policy that is set as the default version. | 
 | AWS.IAM.Policies.AttachmentCount | number | The number of entities \(users, groups, and roles\) that the policy is attached to. | 
-| AWS.IAM.Policies.PermissionsBoundaryUsageCount  | number | The number of entities \(users and roles\) for which the policy is used to set the permissions boundary. | 
+| AWS.IAM.Policies.PermissionsBoundaryUsageCount | number | The number of entities \(users and roles\) for which the policy is used to set the permissions boundary. | 
 | AWS.IAM.Policies.IsAttachable | boolean | Specifies whether the policy can be attached to an IAM user, group, or role. | 
 | AWS.IAM.Policies.Description | string | A friendly description of the policy. | 
 | AWS.IAM.Policies.CreateDate | date | The date and time, in ISO 8601 date-time format , when the policy was created. | 
@@ -1497,3 +1496,550 @@ Create/update password policy
 There is no context output for this command.
 
 
+### aws-iam-list-role-policies
+***
+Lists the names of the inline policies that are embedded in the specified IAM role.
+
+
+#### Base Command
+
+`aws-iam-list-role-policies`
+#### Input
+
+| **Argument Name** | **Description** | **Required** |
+| --- | --- | --- |
+| roleName | The name of the role to list policies for. | Required | 
+
+#### Context Output
+
+| **Path** | **Type** | **Description** |
+| --- | --- | --- |
+| AWS.IAM.Roles.RoleName.Policies | Unknown | A list of policy names. | 
+
+#### Command Example
+``` !aws-iam-list-role-policies roleName=test-RoleARN```
+
+
+### aws-iam-get-role-policy
+***
+Retrieves the specified inline policy document that is embedded with the specified IAM role.
+
+
+#### Base Command
+
+`aws-iam-get-role-policy`
+#### Input
+
+| **Argument Name** | **Description** | **Required** |
+| --- | --- | --- |
+| roleName | The name of the role associated with the policy. | Required | 
+| policyName | The name of the policy document to get. | Required | 
+
+
+#### Context Output
+
+| **Path** | **Type** | **Description** |
+| --- | --- | --- |
+| AWS.IAM.Roles.PolicyDocument | string | The policy document. | 
+
+#### Command Example
+``` !aws-iam-get-role-policy roleName=test-RoleARN policyName=testPolicy```
+
+
+### aws-iam-get-policy
+***
+Retrieves information about the specified managed policy, including the policy's default version and the total number of
+ IAM users, groups, and roles to which the policy is attached.
+
+
+#### Base Command
+
+`aws-iam-get-policy`
+#### Input
+
+| **Argument Name** | **Description** | **Required** |
+| --- | --- | --- |
+| policyName | The Amazon Resource Name (ARN) of the managed policy that you want information about. | Required | 
+
+
+#### Context Output
+
+| **Path** | **Type** | **Description** |
+| --- | --- | --- |
+| AWS.IAM.Policy.PolicyName | string | The friendly name (not ARN) identifying the policy. | 
+| AWS.IAM.Policy.PolicyId | string | The stable and unique string identifying the policy. | 
+| AWS.IAM.Policy.Arn | string | The Amazon Resource Name (ARN). ARNs are unique identifiers for Amazon Web Services resources. | 
+| AWS.IAM.Policy.Path | string | The path to the policy. | 
+| AWS.IAM.Policy.Description | string | A friendly description of the policy. | 
+
+#### Command Example
+``` !aws-iam-get-policy policyName=testPolicy```
+
+### aws-iam-list-user-policies
+***
+Lists the names of the inline policies embedded in the specified IAM user.
+
+#### Base Command
+
+`aws-iam-list-user-policies`
+#### Input
+
+| **Argument Name** | **Description** | **Required** |
+| --- | --- | --- |
+| userName | The name (friendly name, not ARN) of the user to list inline policies for. | Required | 
+| limit | Number of results to display. Default value is 50. | Optional | 
+| page | Page number you would like to view. Each page contains page_size values. Must be used along with page_size. | Optional | 
+| page_size | Number of results per page to display. | Optional | 
+| marker | Starting item of the next page to view. Can be retrieved from context (AttachedPoliciesMarker). | Optional | 
+
+
+#### Context Output
+
+| **Path** | **Type** | **Description** |
+| --- | --- | --- |
+| AWS.IAM.UserPolicies.UserName | string | A list of the user's inline policy names. |
+| AWS.IAM.UserPolicies.PolicyName | string | The name of the policy. |
+| AWS.IAM.Users.InlinePoliciesMarker | string | First element of next page of items. | 
+
+#### Command Example
+``` !aws-iam-list-user-policies userName=testUser```
+
+### aws-iam-list-attached-user-polices
+***
+Lists all managed policies that are attached to the specified IAM user.
+
+#### Base Command
+
+`aws-iam-list-attached-user-policies`
+#### Input
+
+| **Argument Name** | **Description** | **Required** |
+| --- | --- | --- |
+| userName | The name (friendly name, not ARN) of the user to list attached policies for. | Required | 
+| limit | Number of results to display. Default value is 50. | Optional | 
+| page | Page number you would like to view. Each page contains page_size values. Must be used along with page_size. | Optional | 
+| page_size | Number of results per page to display. | Optional | 
+| marker | Starting item of the next page to view. Can be retrieved from context (AttachedPoliciesMarker). | Optional | 
+
+
+#### Context Output
+
+| **Path** | **Type** | **Description** |
+| --- | --- | --- |
+| AWS.IAM.AttachedUserPolicies.UserName | string | The name (friendly name, not ARN) of the user to list attached policies for. |
+| AWS.IAM.AttachedUserPolicies.PolicyName | string | Policy Name | 
+| AWS.IAM.AttachedUserPolicies.PolicyArn | string | The Amazon Resource Name (ARN) of the attached policy. | 
+| AWS.IAM.Users.AttachedPoliciesMarker | string | First element of next page of items. | 
+
+#### Command Example
+``` !aws-iam-list-attached-user-policies userName=testUser```
+
+### aws-iam-list-attached-group-policies
+***
+Lists all managed policies that are attached to the specified IAM group.
+
+#### Base Command
+
+`aws-iam-list-attached-group-policies`
+#### Input
+
+| **Argument Name** | **Description** | **Required** |
+| --- | --- | --- |
+| groupName | The name (friendly name, not ARN) of the group to list attached policies for. | Required | 
+| limit | Number of results to display. Default value is 50. | Optional | 
+| page | Page number you would like to view. Each page contains page_size values. Must be used along with page_size. | Optional | 
+| page_size | Number of results per page to display. | Optional | 
+| marker | Starting item of the next page to view. Can be retrieved from context (AttachedPoliciesMarker). | Optional | 
+
+
+#### Context Output
+
+| **Path** | **Type** | **Description** |
+| --- | --- | --- |
+| AWS.IAM.AttachedGroupPolicies.GroupName | string | The name (friendly name, not ARN) of the group to list attached policies for. |
+| AWS.IAM.AttachedGroupPolicies.PolicyName | string | Policy Name | 
+| AWS.IAM.AttachedGroupPolicies.PolicyArn | string | The Amazon Resource Name (ARN) of the attached policy. | 
+| AWS.IAM.Groups.AttachedPoliciesMarker | string | First element of next page of items. | 
+
+#### Command Example
+``` !aws-iam-list-attached-group-policies groupName=testGroup```
+
+### aws-iam-get-user-login-profile
+***
+Lists all managed policies that are attached to the specified IAM user.
+
+#### Base Command
+
+`aws-iam-get-user-login-profile`
+#### Input
+
+| **Argument Name** | **Description** | **Required** |
+| --- | --- | --- |
+| userName | The name (friendly name, not ARN) of the user to retrieve login profile for. | Required | 
+
+
+#### Context Output
+
+| **Path** | **Type** | **Description** |
+| --- | --- | --- |
+| AWS.IAM.Users.LoginProfile.CreateDate | date | The date when the password for the user was created. | 
+| AWS.IAM.Users.LoginProfile.PasswordResetRequired | boolean | Specifies whether the user is required to set a new password on next sign-in. | 
+
+#### Command Example
+``` !aws-iam-get-user-login-profile userName=testUser```
+
+### aws-iam-put-role-policy
+
+***
+Adds or updates an inline policy document that is embedded in the specified IAM role.
+
+#### Base Command
+
+`aws-iam-put-role-policy`
+
+#### Input
+
+| **Argument Name** | **Description** | **Required** |
+| --- | --- | --- |
+| policyDocument | The policy document. You must provide policies in JSON format in IAM. | Required | 
+| policyName | The name of the policy document. | Required | 
+| roleName | The name of the role to associate the policy with. | Required | 
+
+#### Human Readable Output
+
+### Policy {policy_name} was added to role {role_name}
+
+#### Context Output
+
+There is no context output for this command.
+### aws-iam-put-user-policy
+
+***
+Adds or updates an inline policy document that is embedded in the specified IAM user.
+
+#### Base Command
+
+`aws-iam-put-user-policy`
+
+#### Input
+
+| **Argument Name** | **Description** | **Required** |
+| --- | --- | --- |
+| policyDocument | The policy document. You must provide policies in JSON format in IAM. | Required | 
+| policyName | The name of the policy document. | Required | 
+| userName | The name of the user to associate the policy with. | Required | 
+
+#### Context Output
+
+There is no context output for this command.
+
+#### Human Readable Output
+
+### Policy {policy_name} was added to role {user_name}
+
+### aws-iam-put-group-policy
+
+***
+Adds or updates an inline policy document that is embedded in the specified IAM group.
+
+#### Base Command
+
+`aws-iam-put-group-policy`
+
+#### Input
+
+| **Argument Name** | **Description** | **Required** |
+| --- | --- | --- |
+| policyDocument | The policy document. You must provide policies in JSON format in IAM. | Required | 
+| policyName | The name of the policy document. | Required | 
+| groupName | The name of the group to associate the policy with. | Required | 
+
+#### Context Output
+
+There is no context output for this command.
+
+#### Human Readable Output
+
+### Policy {policy_name} was added to role {group_name}
+
+### aws-iam-tag-role
+
+***
+Adds one or more tags to an IAM role. The role can be a regular role or a service-linked role. If a tag with the same key name already exists, then that tag is overwritten with the new value.
+
+#### Base Command
+
+`aws-iam-tag-role`
+
+#### Input
+
+| **Argument Name** | **Description** | **Required** |
+| --- | --- | --- |
+| roleName | The name of the IAM role to which you want to add tags. | Required | 
+| tags | A comma-separated list of Key:Value tag objects. | Required | 
+
+#### Context Output
+
+There is no context output for this command.
+
+#### Human Readable Output
+
+### Added the following tags to role {role_name}
+|Key|Value|
+|---|---|
+| Key | Value |
+
+### aws-iam-tag-user
+
+***
+Adds one or more tags to an IAM user. If a tag with the same key name already exists, then that tag is overwritten with the new value.
+
+#### Base Command
+
+`aws-iam-tag-user`
+
+#### Input
+
+| **Argument Name** | **Description** | **Required** |
+| --- | --- | --- |
+| userName | The name of the IAM user to which you want to add tags. | Required | 
+| tags | A comma-separated list of Key:Value tag objects. | Required | 
+
+#### Context Output
+
+There is no context output for this command.
+
+#### Human Readable Output
+
+### Added the following tags to user {user_name}
+|Key|Value|
+|---|---|
+| Key | Value |
+
+### aws-iam-untag-user
+
+***
+Removes the specified tags from the user.
+
+#### Base Command
+
+`aws-iam-untag-user`
+
+#### Input
+
+| **Argument Name** | **Description** | **Required** |
+| --- | --- | --- |
+| userName | The name of the IAM role to which you want to untag. | Required | 
+| tagKeys | A comma-separated list of tag keys. | Required | 
+
+#### Context Output
+
+There is no context output for this command.
+
+#### Human Readable Output
+
+### Untagged the following tags from user {user_name}
+|Removed keys|
+|---|
+| Key1 |
+
+### aws-iam-untag-role
+
+***
+Removes the specified tags from the role.
+
+#### Base Command
+
+`aws-iam-untag-role`
+
+#### Input
+
+| **Argument Name** | **Description** | **Required** |
+| --- | --- | --- |
+| roleName | The name of the IAM role to which you want to untag. | Required | 
+| tagKeys | A comma-separated list of tag keys. | Required | 
+
+#### Context Output
+
+There is no context output for this command.
+
+#### Human Readable Output
+
+### Untagged the following tags from role {role_name}
+|Removed keys|
+|---|
+| Key1 |
+
+### aws-iam-get-access-key-last-used
+
+***
+Retrieves information about when the specified access key was last used. The information includes the date and time of last use, along with the AWS service and region that were specified in the last request made with that key.
+
+#### Base Command
+
+`aws-iam-get-access-key-last-used`
+
+#### Input
+
+| **Argument Name** | **Description** | **Required** |
+| --- | --- | --- |
+| accessKeyId | The identifier of an access key. | Required | 
+
+#### Context Output
+
+| **Path** | **Type** | **Description** |
+| --- | --- | --- |
+| AWS.IAM.AccessKey.ID | string | The access key ID. | 
+| AWS.IAM.AccessKey.UserName | string | The username owning the given access key. | 
+| AWS.IAM.AccessKey.LastUsedServiceName | string | The name of the service that last used the given access key. | 
+| AWS.IAM.AccessKey.LastUsedRegion | string | The name of the region where the given access key was last used. | 
+| AWS.IAM.AccessKey.LastUsedDate | string | The date when the given access key was last used. | 
+
+#### Human Readable Output
+
+### Found the following information about access key access_Key_Id
+|ID|UserName|LastUsedDate|LastUsedServiceName|LastUsedRegion|
+|---|---|---|---|---|
+| access_Key_Id | user_name | 2023-06-06T14:32:00 | test | Here |
+### aws-iam-list-attached-role-policies
+
+***
+List all managed policies that are attached to the specified IAM role.
+
+#### Base Command
+
+`aws-iam-list-attached-role-policies`
+
+#### Input
+
+| **Argument Name** | **Description** | **Required** |
+| --- | --- | --- |
+| roleName | The name (friendly name, not ARN) of the role to list attached policies for. | Required | 
+| pathPrefix | The path prefix for filtering the results. This parameter is optional. If it is not included, it defaults to a slash (/), listing all policies. | Optional | 
+| maxItems | The maximum number of items to return in the command's output. | Optional | 
+| marker | Use this parameter only when paginating results and only after you receive a response indicating that the results are truncated. Set it to the value of the Marker element in the response that you received to indicate where the next call should start. | Optional | 
+
+#### Context Output
+
+| **Path** | **Type** | **Description** |
+| --- | --- | --- |
+| AWS.IAM.Roles.AttachedPolicies.Policies.PolicyName | string | The policy name. | 
+| AWS.IAM.Roles.AttachedPolicies.Policies.PolicyArn | string | The policy ARN. | 
+| AWS.IAM.Roles.AttachedPolicies.Policies.RoleName | string | The queried role name. | 
+| AWS.IAM.Roles.AttachedPolicies.Query.IsTruncated | Boolean | Whether there are more items to return. If the results were truncated, make a subsequent pagination request using the Marker request parameter to retrieve more items. Note that IAM might return fewer than the MaxItems number of results even when there are more results available. AWS recommends checking IsTruncated after every call to ensure that all results are received. | 
+| AWS.IAM.Roles.AttachedPolicies.Query.Marker | string | When IsTruncated is true, this element is present and contains the value to use for the Marker parameter in a subsequent pagination request. | 
+
+#### Command example
+```!aws-iam-list-attached-role-policies roleName=myRoleName```
+#### Context Example
+```json
+{
+    "AWS": {
+        "IAM": {
+            "Roles": {
+                "AttachedPolicies": {
+                    "Policies": [
+                        {
+                            "PolicyArn": "arn:aws:iam::000000000000:policy/my-policy",
+                            "PolicyName": "my-policy-name",
+                            "RoleName": "myRoleName"
+                        },
+                        {
+                            "PolicyArn": "arn:aws:iam::000000000001:policy/my-other-policy",
+                            "PolicyName": "my-other-policy-name",
+                            "RoleName": "myRoleName"
+                        }
+                    ],
+                    "Query": {
+                        "IsTruncated": false
+                    }
+                }
+            }
+        }
+    }
+}
+```
+
+#### Human Readable Output
+
+>### Results
+### Attached Policies for Role myRoleName
+|PolicyArn|PolicyName|RoleName|
+|---|---|---|
+| arn:aws:iam::000000000000:policy/my-policy | my-policy-name | myRoleName |
+| arn:aws:iam::000000000001:policy/my-other-policy | my-other-policy-name | myRoleName |
+
+
+Listed 2 attached policies for role test-role
+
+### aws-iam-list-mfa-devices
+
+***
+Lists the MFA devices for an IAM user.
+
+#### Base Command
+
+`aws-iam-list-mfa-devices`
+
+#### Input
+
+| **Argument Name** | **Description** | **Required** |
+| --- | --- | --- |
+| userName | The name of the user whose MFA devices you want to list. | Required | 
+| roleArn | The Amazon Resource Name (ARN) of the role to assume. | Optional | 
+| roleSessionName | An identifier for the assumed role session. | Optional | 
+| roleSessionDuration | The duration, in seconds, of the role session. The value can range from 900 seconds (15 minutes) up to the maximum session duration setting for the role. | Optional | 
+| marker | Use this parameter only when paginating results and only after you receive a response indicating that the results are truncated. Set it to the value of the Marker element in the response that you received to indicate where the next call should start. | Optional | 
+
+#### Context Output
+
+| **Path** | **Type** | **Description** |
+| --- | --- | --- |
+| AWS.IAM.MFADevices.Devices.UserName | string | The user with whom the MFA device is associated. | 
+| AWS.IAM.MFADevices.Devices.SerialNumber | string | The serial number that uniquely identifies the MFA device. For virtual MFA devices, the serial number is the device ARN. | 
+| AWS.IAM.MFADevices.Devices.EnableDate | date | The date when the MFA device was enabled for the user. | 
+| MFADevices.Devices.Marker | string | First element of next page of items. | 
+
+### aws-iam-delete-mfa-devices
+
+***
+Deletes a virtual MFA device.
+
+#### Base Command
+
+`aws-iam-delete-mfa-devices`
+
+#### Input
+
+| **Argument Name** | **Description** | **Required** |
+| --- | --- | --- |
+| serialNumber | The serial number that uniquely identifies the MFA device. For virtual MFA devices, the serial number is the same as the ARN. | Required | 
+| roleArn | The Amazon Resource Name (ARN) of the role to assume. | Optional | 
+| roleSessionName | An identifier for the assumed role session. | Optional | 
+| roleSessionDuration | The duration, in seconds, of the role session. The value can range from 900 seconds (15 minutes) up to the maximum session duration setting for the role. | Optional | 
+
+#### Context Output
+
+There is no context output for this command.
+### aws-iam-deactivate-mfa-devices
+
+***
+Deactivates the specified MFA device and removes it from association with the user name for which it was originally enabled.
+
+#### Base Command
+
+`aws-iam-deactivate-mfa-devices`
+
+#### Input
+
+| **Argument Name** | **Description** | **Required** |
+| --- | --- | --- |
+| userName | The name of the user whose MFA devices you want to list. | Required | 
+| serialNumber | The serial number that uniquely identifies the MFA device. For virtual MFA devices, the serial number is the same as the ARN. | Required | 
+| roleArn | The Amazon Resource Name (ARN) of the role to assume. | Optional | 
+| roleSessionName | An identifier for the assumed role session. | Optional | 
+| roleSessionDuration | The duration, in seconds, of the role session. The value can range from 900 seconds (15 minutes) up to the maximum session duration setting for the role. | Optional | 
+
+#### Context Output
+
+There is no context output for this command.

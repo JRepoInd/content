@@ -1,12 +1,13 @@
-import demistomock as demisto
+import uuid
 from CommonServerPython import *
 ''' IMPORTS '''
 import re
 import json
 import base64
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, UTC
 from email.utils import parsedate_to_datetime, format_datetime
 import httplib2
+from httplib2 import socks
 import sys
 from html.parser import HTMLParser
 from html.entities import name2codepoint
@@ -25,28 +26,91 @@ from oauth2client.client import AccessTokenCredentials
 from googleapiclient.discovery_cache.base import Cache
 import itertools as it
 import urllib.parse
-from typing import List, Optional, Tuple
 import secrets
 import hashlib
+from googleapiclient.errors import HttpError
 
 ''' GLOBAL VARS '''
 params = demisto.params()
 EMAIL = params.get('email', '')
+SEND_AS = params.get('send_as')
 PROXIES = handle_proxy()
 DISABLE_SSL = params.get('insecure', False)
 FETCH_TIME = params.get('fetch_time', '1 days')
 MAX_FETCH = int(params.get('fetch_limit') or 50)
-AUTH_CODE = params.get('code')
+AUTH_CODE = params.get('auth_code_creds', {}).get('password') or params.get('code')
+AUTH_CODE_UNQUOTE_PREFIX = 'code='
+LEGACY_NAME = argToBoolean(params.get('legacy_name', False))
 
-CLIENT_ID = params.get('client_id') or "391797357217-pa6jda1554dbmlt3hbji2bivphl0j616.apps.googleusercontent.com"
+OOB_CLIENT_ID = "391797357217-pa6jda1554dbmlt3hbji2bivphl0j616.apps.googleusercontent.com"  # guardrails-disable-line
+CLIENT_ID = params.get('credentials', {}).get('identifier') or params.get('client_id') or OOB_CLIENT_ID
+CLIENT_SECRET = params.get('credentials', {}).get('password') or params.get('client_secret')
+REDIRECT_URI = params.get('redirect_uri')
 TOKEN_URL = "https://www.googleapis.com/oauth2/v4/token"
 TOKEN_FORM_HEADERS = {
     "Content-Type": "application/x-www-form-urlencoded",
     'Accept': 'application/json',
 }
 
-
+EXECUTION_METRICS = ExecutionMetrics()
 ''' HELPER FUNCTIONS '''
+
+
+def execute_gmail_action(service, action: str, action_kwargs: dict) -> dict:
+    """Executes a specified action on the Gmail API, while collecting execution metrics.
+
+    This function dynamically executes an action such as sending an email, retrieving an email,
+    getting attachments, or listing emails based on the specified action and its arguments.
+
+    Args:
+        service: The Gmail API service instance.
+        action (str): The action to perform. Supported actions are "send", "get",
+                      "get_attachments", and "list".
+        action_kwargs (dict): The keyword arguments required for the specified action.
+
+    Returns:
+        dict: The result from the Gmail API call.
+
+    Raises:
+        HttpError: If an error occurs from the Gmail API request.
+        Exception: If a general error occurs during the function execution.
+
+    Note:
+        This function updates execution metrics counters based on the outcome of the API call.
+    """
+    try:
+        match action:
+            case "send":
+                result = service.users().messages().send(**action_kwargs).execute()
+            case "get":
+                result = service.users().messages().get(**action_kwargs).execute()
+            case "get_attachments":
+                result = service.users().messages().attachments().get(**action_kwargs).execute()
+            case "list":
+                result = service.users().messages().list(**action_kwargs).execute()
+            case _:
+                raise ValueError(f"Unsupported action: {action}")
+
+    except HttpError as error:
+        if error.status_code == 429:
+            EXECUTION_METRICS.quota_error += 1
+        elif error.reason == 'Unauthorized':
+            EXECUTION_METRICS.auth_error += 1
+        else:
+            EXECUTION_METRICS.general_error += 1
+        raise
+    except Exception:
+        EXECUTION_METRICS.general_error += 1
+        raise
+    EXECUTION_METRICS.success += 1
+    return result
+
+
+def return_metrics():
+    if EXECUTION_METRICS.metrics is not None and ExecutionMetrics.is_supported():
+        return_results(EXECUTION_METRICS.metrics)
+    else:
+        demisto.debug("Not returning metrics. Either metrics are not supported in this XSOAR version, or none were collected")
 
 
 # See: https://github.com/googleapis/google-api-python-client/issues/325#issuecomment-274349841
@@ -63,7 +127,7 @@ class MemoryCache(Cache):
 class TextExtractHtmlParser(HTMLParser):
     def __init__(self):
         HTMLParser.__init__(self)
-        self._texts = []  # type: list
+        self._texts: list = []
         self._ignore = False
 
     def handle_starttag(self, tag, attrs):
@@ -123,7 +187,7 @@ class Client:
                 https_proxy = 'https://' + https_proxy
             parsed_proxy = urllib.parse.urlparse(https_proxy)
             proxy_info = httplib2.ProxyInfo(  # disable-secrets-detection
-                proxy_type=httplib2.socks.PROXY_TYPE_HTTP,  # disable-secrets-detection
+                proxy_type=socks.PROXY_TYPE_HTTP,  # disable-secrets-detection
                 proxy_host=parsed_proxy.hostname,
                 proxy_port=parsed_proxy.port,
                 proxy_user=parsed_proxy.username,
@@ -150,51 +214,62 @@ class Client:
             demisto.debug("Using refresh token set as auth_code")
             return AUTH_CODE[len(refresh_prefix):]
         demisto.info(f"Going to obtain refresh token from google's oauth service. For client id: {CLIENT_ID}")
-        verifier = integration_context.get('verifier')
-        if not verifier:
-            raise ValueError("Missing verifier. Make sure to follow the auth flow. Start by running !gmail-auth-link.")
-        h = self.get_http_client_with_proxy()
+        code = AUTH_CODE
+        if AUTH_CODE.lower().startswith(AUTH_CODE_UNQUOTE_PREFIX):
+            code = urllib.parse.unquote(AUTH_CODE[len(AUTH_CODE_UNQUOTE_PREFIX):])
         body = {
             'client_id': CLIENT_ID,
-            'code_verifier': verifier,
             'grant_type': 'authorization_code',
-            'code': AUTH_CODE,
-            'redirect_uri': 'urn:ietf:wg:oauth:2.0:oob',  # disable-secrets-detection
+            'code': code,
         }
+        if not CLIENT_SECRET:
+            # old OOB authentication
+            verifier = integration_context.get('verifier')
+            if not verifier:
+                raise ValueError("Missing verifier. Make sure to follow the auth flow."
+                                 " Start by running !gmail-auth-link.")
+            body['code_verifier'] = verifier
+            body['redirect_uri'] = 'urn:ietf:wg:oauth:2.0:oob'
+        else:
+            body['redirect_uri'] = REDIRECT_URI
+            body['client_secret'] = CLIENT_SECRET
+
+        h = self.get_http_client_with_proxy()
         resp, content = h.request(TOKEN_URL, "POST", urllib.parse.urlencode(body), TOKEN_FORM_HEADERS)
         if resp.status not in {200, 201}:
-            raise ValueError('Error obtaining refresh token. Make sure to follow auth flow. {} {} {}'.format(
-                             resp.status, resp.reason, content))
+            raise ValueError(f'Error obtaining refresh token. Make sure to follow auth flow. '
+                             f'{resp.status} {resp.reason} {content}')
         resp_json = json.loads(content)
         if not resp_json.get('refresh_token'):
-            raise ValueError('Error obtaining refresh token. Missing refresh token in response: {}'.format(content))
+            raise ValueError(f'Error obtaining refresh token. Missing refresh token in response: {content}')
         return resp_json.get('refresh_token')
 
     def get_access_token(self):
         integration_context = demisto.getIntegrationContext() or {}
         access_token = integration_context.get('access_token')
         valid_until = integration_context.get('valid_until')
-        if access_token and valid_until and integration_context.get('code') == AUTH_CODE:
-            if self.epoch_seconds() < valid_until:
-                return access_token
+        if access_token and valid_until and integration_context.get('code') == AUTH_CODE and self.epoch_seconds() < valid_until:
+            demisto.debug('Using access token from integration context')
+            return access_token
         refresh_token = self.get_refresh_token(integration_context)
+        demisto.debug(f"Going to obtain access token for client id: {CLIENT_ID}")
         body = {
             'refresh_token': refresh_token,
             'client_id': CLIENT_ID,
             'grant_type': 'refresh_token',
         }
+        if CLIENT_SECRET:
+            body['client_secret'] = CLIENT_SECRET
         h = self.get_http_client_with_proxy()
         resp, content = h.request(TOKEN_URL, "POST", urllib.parse.urlencode(body), TOKEN_FORM_HEADERS)
 
         if resp.status not in {200, 201}:
             msg = 'Error obtaining access token. Try checking the credentials you entered.'
             try:
-                demisto.info('Authentication failure from server: {} {} {}'.format(
-                    resp.status, resp.reason, content))
-
-                msg += ' Server message: {}'.format(content)
+                demisto.info(f'Authentication failure from server: {resp.status} {resp.reason} {content}')
+                msg += f' Server message: {content}'
             except Exception as ex:
-                demisto.error('Failed parsing error response - Exception: {}'.format(ex))
+                demisto.error(f'Failed parsing error response - Exception: {ex}')
             raise Exception(msg)
 
         parsed_response = json.loads(content)
@@ -210,14 +285,15 @@ class Client:
         integration_context['refresh_token'] = refresh_token
         integration_context['code'] = AUTH_CODE
         demisto.setIntegrationContext(integration_context)
+        demisto.debug(f"Done obtaining access token for client id: {CLIENT_ID}. Expires in: {expires_in}")
         return access_token
 
-    def parse_mail_parts(self, parts):
-        body = u''
-        html = u''
-        attachments = []  # type: list
+    def parse_mail_parts(self, parts: list[dict]):
+        body = ''
+        html = ''
+        attachments: list = []
         for part in parts:
-            if 'multipart' in part['mimeType']:
+            if 'multipart' in part['mimeType'] and part.get('parts'):
                 part_body, part_html, part_attachments = self.parse_mail_parts(
                     part['parts'])
                 body += part_body
@@ -233,15 +309,49 @@ class Client:
 
             else:
                 if part['body'].get('attachmentId') is not None:
+                    content_id = ""
+                    is_inline = False
+                    attachmentName = part['filename']
+                    for header in part.get('headers', []):
+                        if header.get('name') == 'Content-ID':
+                            content_id = header.get('value').strip("<>")
+                        if header.get('name') == 'Content-Disposition':
+                            is_inline = 'inline' in header.get('value').strip('<>')
+                    if is_inline and content_id and content_id != "None" and not LEGACY_NAME:
+                        attachmentName = f"{content_id}-attachmentName-{attachmentName}"
                     attachments.append({
                         'ID': part['body']['attachmentId'],
-                        'Name': part['filename']
+                        'Name': attachmentName,
                     })
 
         return body, html, attachments
 
+    def get_attachments(self, user_id, _id):
+        mail_args = {
+            'userId': user_id,
+            'id': _id,
+            'format': 'full',
+        }
+        service = self.get_service(
+            'gmail',
+            'v1')
+        result = execute_gmail_action(service, "get", mail_args)
+        result = self.get_email_context(result, user_id)[0]
+
+        command_args = {
+            'userId': user_id,
+            'messageId': _id,
+        }
+        files = []
+        for attachment in result.get('Attachments', []):
+            command_args['id'] = attachment['ID']
+            result = execute_gmail_action(service, "get_attachments", command_args)
+            file_data = base64.urlsafe_b64decode(result['data'].encode('ascii'))
+            files.append((attachment['Name'], file_data))
+        return files
+
     @staticmethod
-    def get_date_from_email_header(header: str) -> Optional[datetime]:
+    def get_date_from_email_header(header: str) -> datetime | None:
         """Parse an email header such as Date or Received. The format is either just the date
         or name value pairs followed by ; and the date specification. For example:
         by 2002:a17:90a:77cb:0:0:0:0 with SMTP id e11csp4670216pjs;        Mon, 21 Dec 2020 12:11:57 -0800 (PST)
@@ -259,14 +369,14 @@ class Client:
             res = parsedate_to_datetime(date_part)
             if res.tzinfo is None:
                 # some headers may contain a non TZ date so we assume utc
-                res = res.replace(tzinfo=timezone.utc)
+                res = res.replace(tzinfo=UTC)
             return res
         except Exception as ex:
             demisto.debug(f'Failed parsing date from header value: [{header}]. Err: {ex}. Will ignore and continue.')
         return None
 
     @staticmethod
-    def get_occurred_date(email_data: dict) -> Tuple[datetime, bool]:
+    def get_occurred_date(email_data: dict) -> tuple[datetime, bool]:
         """Get the occurred date of an email. The date gmail uses is actually the X-Received or the top Received
         dates in the header. If fails finding these dates will fall back to internal date.
 
@@ -280,7 +390,7 @@ class Client:
         if not headers or not isinstance(headers, list):
             demisto.error(f"couldn't get headers for msg (shouldn't happen): {email_data}")
         else:
-            # use x-received or recvived. We want to use x-received first and fallback to received.
+            # use x-received or received. We want to use x-received first and fallback to received.
             for name in ['x-received', 'received', ]:
                 header = next(filter(lambda ht: ht.get('name', '').lower() == name, headers), None)
                 if header:
@@ -293,33 +403,33 @@ class Client:
         internalDate = email_data.get('internalDate')
         demisto.info(f"couldn't extract occurred date from headers trying internalDate: {internalDate}")
         if internalDate and internalDate != '0':
-            # intenalDate timestamp has 13 digits, but epoch-timestamp counts the seconds since Jan 1st 1970
+            # internalDate timestamp has 13 digits, but epoch-timestamp counts the seconds since Jan 1st 1970
             # (which is currently less than 13 digits) thus a need to cut the timestamp down to size.
             timestamp_len = len(str(int(time.time())))
             if len(str(internalDate)) > timestamp_len:
                 internalDate = (str(internalDate)[:timestamp_len])
-            return datetime.fromtimestamp(int(internalDate), tz=timezone.utc), True
+            return datetime.fromtimestamp(int(internalDate), tz=UTC), True
         # we didn't get a date from anywhere
         demisto.info("Failed finding date from internal or headers. Using 'datetime.now()'")
-        return datetime.now(tz=timezone.utc), False
+        return datetime.now(tz=UTC), False
 
-    def get_email_context(self, email_data, mailbox) -> Tuple[dict, dict, dict, datetime, bool]:
+    def get_email_context(self, email_data, mailbox) -> tuple[dict, dict, dict, datetime, bool]:
         """Get the email context from email data
 
         Args:
-            email_data (dics): the email data received from the gmail api
+            email_data (dict): the email data received from the gmail api
             mailbox (str): mail box name
 
         Returns:
-            (context_gmail, headers, context_email, received_date, is_valid_recieved): note that if received date is not
-                resolved properly is_valid_recieved will be false
+            (context_gmail, headers, context_email, received_date, is_valid_received): note that if received date is not
+                resolved properly is_valid_received will be false
 
         """
         occurred, occurred_is_valid = Client.get_occurred_date(email_data)
         context_headers = email_data.get('payload', {}).get('headers', [])
-        context_headers = [{'Name': v['name'], 'Value':v['value']}
+        context_headers = [{'Name': v['name'], 'Value': v['value']}
                            for v in context_headers]
-        headers = dict([(h['Name'].lower(), h['Value']) for h in context_headers])
+        headers = {h['Name'].lower(): h['Value'] for h in context_headers}
         body = demisto.get(email_data, 'payload.body.data')
         body = body.encode('ascii') if body is not None else ''
         parsed_body = base64.urlsafe_b64decode(body)
@@ -384,7 +494,8 @@ class Client:
                 email_data.get('payload', {}).get('parts', []))
             context_gmail['Attachment Names'] = ', '.join(
                 [attachment['Name'] for attachment in context_gmail['Attachments']])  # type: ignore
-            context_email['Body/Text'], context_email['Body/HTML'], context_email['Attachments'] = self.parse_mail_parts(
+            context_email['Body/Text'], context_email['Body/HTML'], context_email[
+                'Attachments'] = self.parse_mail_parts(
                 email_data.get('payload', {}).get('parts', []))
             context_email['Attachment Names'] = ', '.join(
                 [attachment['Name'] for attachment in context_email['Attachments']])  # type: ignore
@@ -432,9 +543,9 @@ class Client:
         Returns:
             datetime: datetime representation
         """
-        return datetime.strptime(dt, '%Y-%m-%dT%H:%M:%SZ').replace(tzinfo=timezone.utc)
+        return datetime.strptime(dt, '%Y-%m-%dT%H:%M:%SZ').replace(tzinfo=UTC)
 
-    def mail_to_incident(self, msg, service, user_key) -> Tuple[dict, datetime, bool]:
+    def mail_to_incident(self, msg, service, user_key) -> tuple[dict, datetime, bool]:
         """Parse an email message
 
         Args:
@@ -443,13 +554,13 @@ class Client:
             user_key
 
         Raises:
-            Exception: when problem getting attachements
+            Exception: when problem getting attachments
 
         Returns:
             Tuple[dict, datetime, bool]: incident object, occurred datetime, boolean indicating if date is valid or not
         """
         parsed_msg, headers, _, occurred, occurred_is_valid = self.get_email_context(msg, user_key)
-        # conver occurred to gmt and then isoformat + Z
+        # convert occurred to gmt and then isoformat + Z
         occurred_str = Client.get_date_isoformat_server(occurred)
         file_names = []
         command_args = {
@@ -459,7 +570,7 @@ class Client:
 
         for attachment in parsed_msg['Attachments']:
             command_args['id'] = attachment['ID']
-            result = service.users().messages().attachments().get(**command_args).execute()
+            result = execute_gmail_action(service, "get_attachments", command_args)
             file_data = base64.urlsafe_b64decode(result['data'].encode('ascii'))
 
             # save the attachment
@@ -513,7 +624,8 @@ class Client:
             'Contents': response,
             'ReadableContentsFormat': formats['markdown'],
             'HumanReadable': tableToMarkdown(title, gmail_context, headers, removeNull=True),
-            'EntryContext': {'Gmail.SentMail(val.ID && val.Type && val.ID == obj.ID && val.Type == obj.Type)': gmail_context}
+            'EntryContext': {
+                'Gmail.SentMail(val.ID && val.Type && val.ID == obj.ID && val.Type == obj.Type)': gmail_context}
         }
 
     def epoch_seconds(self, d=None):
@@ -542,9 +654,9 @@ class Client:
             'in': _in,
             'has': 'attachment' if has_attachments else ''
         }
-        q = ' '.join('%s:%s ' % (name, value, )
+        q = ' '.join(f'{name}:{value} '
                      for name, value in query_values.items() if value != '')
-        q = ('%s %s' % (q, query, )).strip()
+        q = (f'{q} {query}').strip()
 
         command_args = {
             'userId': user_id,
@@ -556,7 +668,7 @@ class Client:
             'includeSpamTrash': include_spam_trash,
         }
         service = self.get_service('gmail', 'v1')
-        result = service.users().messages().list(**command_args).execute()
+        result = execute_gmail_action(service, "list", command_args)
 
         return [self.get_mail(user_id, mail['id'], 'full') for mail in result.get('messages', [])], q
 
@@ -568,9 +680,7 @@ class Client:
         }
 
         service = self.get_service('gmail', 'v1')
-        result = service.users().messages().get(**command_args).execute()
-
-        return result
+        return execute_gmail_action(service, "get", command_args)
 
     '''MAIL SENDER FUNCTIONS'''
 
@@ -598,7 +708,7 @@ class Client:
                 params = json.loads(paramsStr)
 
             except ValueError as e:
-                return_error('Unable to parse templateParams: {}'.format(str(e)))
+                return_error(f'Unable to parse templateParams: {str(e)}')
             # Build a simple key/value
 
             for p in params:
@@ -654,17 +764,20 @@ class Client:
         cleanBody = ''
         lastIndex = 0
         for i, m in enumerate(
-                re.finditer(r'<img.+?src=\"(data:(image\/.+?);base64,([a-zA-Z0-9+/=\r\n]+?))\"', htmlBody, re.I)):
+                re.finditer(r'<img.+?src=\"(data:(image\/.+?);base64,([a-zA-Z0-9+/=\r\n]+?))\"', htmlBody, re.I | re.S)):
             maintype, subtype = m.group(2).split('/', 1)
-            att = {
+            name = f"image{i}.{subtype}"
+            cid = f'{name}@{str(uuid.uuid4())[:8]}_{str(uuid.uuid4())[:8]}'
+            attachment = {
                 'maintype': maintype,
                 'subtype': subtype,
-                'data': base64.b64decode(m.group(3)),
-                'name': 'image%d.%s' % (i, subtype)
+                'data': b64_decode(m.group(3)),
+                'name': name,
+                'cid': cid,
+                'ID': cid
             }
-            att['cid'] = '%s@%s.%s' % (att['name'], self.randomword(8), self.randomword(8))
-            attachments.append(att)
-            cleanBody += htmlBody[lastIndex:m.start(1)] + 'cid:' + att['cid']
+            attachments.append(attachment)
+            cleanBody += htmlBody[lastIndex:m.start(1)] + 'cid:' + attachment['cid']
             lastIndex = m.end() - 1
 
         cleanBody += htmlBody[lastIndex:]
@@ -699,6 +812,7 @@ class Client:
                 })
 
             return inline_attachment
+        return None
 
     def collect_manual_attachments(self):
         attachments = []
@@ -716,7 +830,7 @@ class Client:
                     data = fp.read()
             else:
                 with open(path, 'rb') as fp:  # type: ignore
-                    data = fp.read()
+                    data = fp.read()  # type: ignore
             attachments.append({
                 'name': attachment['FileName'],
                 'maintype': maintype,
@@ -772,7 +886,7 @@ class Client:
                 msg_txt = MIMEText(att['data'], att['subtype'], 'utf-8')
                 if att['cid'] is not None:
                     msg_txt.add_header('Content-Disposition', 'inline', filename=att['name'])
-                    msg_txt.add_header('Content-ID', '<' + att['name'] + '>')
+                    msg_txt.add_header('Content-ID', '<' + att['cid'] + '>')
 
                 else:
                     msg_txt.add_header('Content-Disposition', 'attachment', filename=att['name'])
@@ -782,8 +896,9 @@ class Client:
                 msg_img = MIMEImage(att['data'], att['subtype'])
                 if att['cid'] is not None:
                     msg_img.add_header('Content-Disposition', 'inline', filename=att['name'])
-                    msg_img.add_header('Content-ID', '<' + att['name'] + '>')
-
+                    msg_img.add_header('Content-ID', '<' + att['cid'] + '>')
+                    if (att.get('ID')):
+                        msg_img.add_header('X-Attachment-Id', att['ID'])
                 else:
                     msg_img.add_header('Content-Disposition', 'attachment', filename=att['name'])
                 message.attach(msg_img)
@@ -792,7 +907,7 @@ class Client:
                 msg_aud = MIMEAudio(att['data'], att['subtype'])
                 if att['cid'] is not None:
                     msg_aud.add_header('Content-Disposition', 'inline', filename=att['name'])
-                    msg_aud.add_header('Content-ID', '<' + att['name'] + '>')
+                    msg_aud.add_header('Content-ID', '<' + att['cid'] + '>')
 
                 else:
                     msg_aud.add_header('Content-Disposition', 'attachment', filename=att['name'])
@@ -802,7 +917,7 @@ class Client:
                 msg_app = MIMEApplication(att['data'], att['subtype'])
                 if att['cid'] is not None:
                     msg_app.add_header('Content-Disposition', 'inline', filename=att['name'])
-                    msg_app.add_header('Content-ID', '<' + att['name'] + '>')
+                    msg_app.add_header('Content-ID', '<' + att['cid'] + '>')
                 else:
                     msg_app.add_header('Content-Disposition', 'attachment', filename=att['name'])
                 message.attach(msg_app)
@@ -812,15 +927,16 @@ class Client:
                 msg_base.set_payload(att['data'])
                 if att['cid'] is not None:
                     msg_base.add_header('Content-Disposition', 'inline', filename=att['name'])
-                    msg_base.add_header('Content-ID', '<' + att['name'] + '>')
+                    msg_base.add_header('Content-ID', '<' + att['cid'] + '>')
 
                 else:
                     msg_base.add_header('Content-Disposition', 'attachment', filename=att['name'])
                 message.attach(msg_base)
 
-    def send_mail(self, emailto, emailfrom, cc, bcc, subject, body, htmlBody, entry_ids, replyTo, file_names,
+    def send_mail(self, emailto, emailfrom, send_as, cc, bcc, subject, body, htmlBody, entry_ids, replyTo, file_names,
                   attach_cid, manualAttachObj,
-                  transientFile, transientFileContent, transientFileCID, additional_headers, templateParams):
+                  transientFile, transientFileContent, transientFileCID, additional_headers,
+                  templateParams, inReplyTo=None, references=None):
 
         templateParams = self.template_params(templateParams)
         if templateParams is not None:
@@ -847,7 +963,7 @@ class Client:
             message.attach(alt)
             attach_body_to = alt
         else:
-            message = MIMEMultipart('alternative') if body and htmlBody else MIMEMultipart()  # type: ignore
+            message = MIMEMultipart()  # type: ignore
 
         if not attach_body_to:
             attach_body_to = message  # type: ignore
@@ -855,25 +971,22 @@ class Client:
         message['to'] = emailto
         message['cc'] = cc
         message['bcc'] = bcc
-        message['from'] = emailfrom
-        message['subject'] = subject
+        message['from'] = send_as or emailfrom
+        message['subject'] = self.header(subject)
         message['reply-to'] = replyTo
 
         # # The following headers are being used for the reply-mail command.
-        # if inReplyTo:
-        #     message['In-Reply-To'] = header(' '.join(inReplyTo))
-        # if references:
-        #     message['References'] = header(' '.join(references))
+        if inReplyTo:
+            message['In-Reply-To'] = self.header(' '.join(inReplyTo.split()))
+        if references:
+            message['References'] = self.header(' '.join(references))
 
         # if there are any attachments to the mail or both body and htmlBody were given
         if entry_ids or file_names or attach_cid or manualAttachObj or (body and htmlBody):
-            msg = MIMEText(body, 'plain', 'utf-8')
-            attach_body_to.attach(msg)  # type: ignore
             htmlAttachments = []  # type: list
             inlineAttachments = []  # type: list
 
             if htmlBody:
-                # htmlBody, htmlAttachments = handle_html(htmlBody)
                 htmlBody, htmlAttachments = self.handle_html(htmlBody)
                 msg = MIMEText(htmlBody, 'html', 'utf-8')
                 attach_body_to.attach(msg)  # type: ignore
@@ -883,6 +996,8 @@ class Client:
             else:
                 # if not html body, cannot attach cids in message
                 transientFileCID = None
+                msg = MIMEText(body, 'plain', 'utf-8')
+                attach_body_to.attach(msg)  # type: ignore
 
             attachments = self.collect_attachments(entry_ids, file_names)
             manual_attachments = self.collect_manual_attachments()
@@ -897,55 +1012,134 @@ class Client:
                 message[header_name] = self.header(header_value)
         encoded_message = base64.urlsafe_b64encode(message.as_bytes())
         command_args = {'raw': encoded_message.decode()}
+        emailfrom = emailfrom or EMAIL
 
+        return self.send_email_request(email_from=emailfrom, body=command_args)
+
+    def send_email_request(self, email_from: str, body: dict) -> dict:
+        """
+        Request to sends a mail through Gmail.
+
+        Args:
+            email_from (str): the email to send an email from.
+            body (dict): email body.
+
+        Returns:
+            dict: the email send response.
+        """
+        command_args = {
+            "userId": email_from,
+            "body": body
+        }
         service = self.get_service('gmail', 'v1')
-        result = (service.users().messages().send(userId=emailfrom, body=command_args).execute())
-        return result
+        return execute_gmail_action(service, "send", command_args)
 
-    def generate_auth_link(self) -> Tuple[str, str]:
+    def generate_auth_link(self):
         """Generate an auth2 link.
 
         Returns:
-            Tuple[str, str] -- Return the link and the challenge used for generating the link.
+            str -- Return the link
         """
-        verifier = secrets.token_hex(64)
-        sha = hashlib.sha256()
-        sha.update(bytes(verifier, 'us-ascii'))
-        challenge = str(base64.urlsafe_b64encode(sha.digest()), 'us-ascii').rstrip('=')
-        link = f"https://accounts.google.com/o/oauth2/v2/auth?scope=https://www.googleapis.com/auth/gmail.compose%20https://www.googleapis.com/auth/gmail.send%20https://www.googleapis.com/auth/gmail.readonly&response_type=code&redirect_uri=urn:ietf:wg:oauth:2.0:oob&client_id={CLIENT_ID}&code_challenge={challenge}&code_challenge_method=S256"  # noqa: E501
-        integration_context = demisto.getIntegrationContext() or {}
-        integration_context['verifier'] = verifier
-        demisto.setIntegrationContext(integration_context)
-        return link, challenge
+        url_params = {
+            "scope": "https://www.googleapis.com/auth/gmail.compose https://www.googleapis.com/auth/gmail.send https://www.googleapis.com/auth/gmail.readonly",  # noqa: E501
+            "client_id": CLIENT_ID,
+            "response_type": "code",
+        }
+        if EMAIL:
+            url_params['login_hint'] = EMAIL
+        if not CLIENT_SECRET:
+            # old OOB authentication
+            verifier = secrets.token_hex(64)
+            sha = hashlib.sha256()
+            sha.update(bytes(verifier, 'us-ascii'))
+            challenge = str(base64.urlsafe_b64encode(sha.digest()), 'us-ascii').rstrip('=')
+            url_params['redirect_uri'] = 'urn:ietf:wg:oauth:2.0:oob'
+            url_params['code_challenge'] = challenge
+            url_params['code_challenge_method'] = 'S256'
+            integration_context = demisto.getIntegrationContext() or {}
+            integration_context['verifier'] = verifier
+            demisto.setIntegrationContext(integration_context)
+        else:
+            if not REDIRECT_URI.lower().startswith('http'):
+                raise DemistoException(f'Invalid redirect URI: "{REDIRECT_URI}". The URI should start with "http".')
+            if CLIENT_ID == OOB_CLIENT_ID:
+                raise DemistoException('Client ID is not set. '
+                                       'Make sure to set the Client ID param of the integration configuration.')
+            url_params['redirect_uri'] = REDIRECT_URI
+            url_params['access_type'] = 'offline'
+            url_params['prompt'] = 'consent'
+
+        params = urllib.parse.urlencode(url_params)
+        link = f"https://accounts.google.com/o/oauth2/v2/auth?{params}"  # noqa: E501
+        return link
 
 
 def test_module(client):
     demisto.results('Test is not supported. Please use the following command: !gmail-auth-test.')
 
 
-def send_mail_command(client):
-    args = demisto.args()
-    emailto = args.get('to')
+def mail_command(client: Client, args: dict, email_from, send_as, subject_prefix='', in_reply_to=None, references=None):
+    email_to = args.get('to')
     body = args.get('body')
-    subject = args.get('subject')
+    subject = f"{subject_prefix}{args.get('subject')}"
     entry_ids = argToList(args.get('attachIDs'))
     cc = args.get('cc')
     bcc = args.get('bcc')
-    htmlBody = args.get('htmlBody')
-    replyTo = args.get('replyTo')
-    file_names = argToList(args.get('attachNames'))
-    attchCID = argToList(args.get('attachCIDs'))
-    manualAttachObj = argToList(args.get('manualAttachObj'))  # when send-mail called from within XSOAR (like reports)
-    transientFile = argToList(args.get('transientFile'))
-    transientFileContent = argToList(args.get('transientFileContent'))
-    transientFileCID = argToList(args.get('transientFileCID'))
+    html_body = args.get('htmlBody')
+    reply_to = args.get('replyTo')
+    attach_names = argToList(args.get('attachNames'))
+    attach_cids = argToList(args.get('attachCIDs'))
+    transient_file = argToList(args.get('transientFile'))
+    transient_file_content = argToList(args.get('transientFileContent'))
+    transient_file_cid = argToList(args.get('transientFileCID'))
+    manual_attach_obj = argToList(args.get('manualAttachObj'))  # when send-mail called from within XSOAR (like reports)
     additional_headers = argToList(args.get('additionalHeader'))
     template_param = args.get('templateParams')
+    render_body = argToBoolean(args.get('renderBody', False))
+    body_type = args.get('bodyType', 'Text').lower()
 
-    result = client.send_mail(emailto, EMAIL, cc, bcc, subject, body, htmlBody, entry_ids,
-                              replyTo, file_names, attchCID, manualAttachObj, transientFile, transientFileContent,
-                              transientFileCID, additional_headers, template_param)
-    return client.sent_mail_to_entry('Email sent:', [result], emailto, EMAIL, cc, bcc, htmlBody, body, subject)
+    rendering_body = html_body if body_type == "html" else body
+
+    result = client.send_mail(email_to, email_from, send_as, cc, bcc, subject, body, html_body, entry_ids, reply_to,
+                              attach_names, attach_cids, manual_attach_obj, transient_file, transient_file_content,
+                              transient_file_cid, additional_headers, template_param, in_reply_to, references)
+    send_mail_result = client.sent_mail_to_entry('Email sent:', [result], email_to, email_from, cc, bcc, html_body,
+                                                 rendering_body, subject)
+
+    if render_body:
+        html_result = {
+            'Type': entryTypes['note'],
+            'ContentsFormat': formats['html'],
+            'Contents': html_body
+        }
+
+        return [send_mail_result, html_result]
+    return send_mail_result
+
+
+def send_mail_command(client: Client):
+
+    args = demisto.args()
+    return mail_command(client, args, EMAIL, SEND_AS or EMAIL)
+
+
+def reply_mail_command(client: Client):
+    args = demisto.args()
+    email_from = args.get('from')
+    send_as = args.get('send_as')
+    in_reply_to = args.get('inReplyTo')
+    references = argToList(args.get('references'))
+
+    return mail_command(client, args, email_from, send_as, 'Re: ', in_reply_to, references)
+
+
+def get_attachments_command(client: Client):
+    args = demisto.args()
+    _id = args.get('message-id')
+
+    attachments = client.get_attachments('me', _id)
+
+    return [fileResult(name, data) for name, data in attachments]
 
 
 '''FETCH INCIDENTS'''
@@ -958,8 +1152,8 @@ def fetch_incidents(client: Client):
     demisto.debug(f'last run: {last_run}')
     last_fetch = last_run.get('gmt_time')
     next_last_fetch = last_run.get('next_gmt_time')
-    page_token = last_run.get('page_token') or None
-    ignore_ids: List[str] = last_run.get('ignore_ids') or []
+    page_token = last_run.get('page_token')
+    ignore_ids: list[str] = last_run.get('ignore_ids') or []
     ignore_list_used = last_run.get('ignore_list_used') or False  # can we reset the ignore list if we haven't used it
     # handle first time fetch - gets current GMT time -1 day
     if not last_fetch:
@@ -979,22 +1173,30 @@ def fetch_incidents(client: Client):
     max_results = MAX_FETCH
     if MAX_FETCH > 200:
         max_results = 200
-    LOG(f'GMAIL: fetch parameters: user: {user_key} query={query}'
-        f' fetch time: {last_fetch} page_token: {page_token} max results: {max_results}')
-    result = service.users().messages().list(
-        userId=user_key, maxResults=max_results, pageToken=page_token, q=query).execute()
+    demisto.debug(f'GMAIL: fetch parameters: user: {user_key} {query=}'
+                  f' fetch time: {last_fetch} page_token: {page_token} max results: {max_results}')
+    list_command_args = {
+        "userId": user_key,
+        "maxResults": max_results,
+        "pageToken": page_token,
+        "q": query
+    }
+    result = execute_gmail_action(service, "list", list_command_args)
 
     incidents = []
     # so far, so good
-    LOG('GMAIL: possible new incidents are %s' % (result, ))
+    demisto.debug(f'GMAIL: possible new incidents are {result}')
     for msg in result.get('messages', []):
         msg_id = msg['id']
         if msg_id in ignore_ids:
             demisto.info(f'Ignoring msg id: {msg_id} as it is in the ignore list')
             ignore_list_used = True
             continue
-        msg_result = service.users().messages().get(
-            id=msg_id, userId=user_key).execute()
+        command_kwargs = {
+            'userId': user_key,
+            'id': msg_id
+        }
+        msg_result = execute_gmail_action(service, "get", command_kwargs)
         incident, occurred, is_valid_date = client.mail_to_incident(msg_result, service, user_key)
         if not is_valid_date:  # if  we can't trust the date store the msg id in the ignore list
             demisto.info(f'appending to ignore list msg id: {msg_id}. name: {incident.get("name")}')
@@ -1008,9 +1210,10 @@ def fetch_incidents(client: Client):
         if (not is_valid_date) or (occurred >= last_fetch):
             incidents.append(incident)
         else:
-            demisto.info(f'skipped incident with lower date: {occurred} than fetch: {last_fetch} name: {incident.get("name")}')
+            demisto.info(
+                f'skipped incident with lower date: {occurred} than fetch: {last_fetch} name: {incident.get("name")}')
 
-    demisto.info('extract {} incidents'.format(len(incidents)))
+    demisto.info(f'extracted {len(incidents)} incidents')
     next_page_token = result.get('nextPageToken', '')
     if next_page_token:
         # we still have more results
@@ -1020,7 +1223,7 @@ def fetch_incidents(client: Client):
         demisto.debug(f'will use new last fetch date (no next page token): {next_last_fetch}')
         # if we are not in a tokenized search and we didn't use the ignore ids we can reset it
         if (not page_token) and (not ignore_list_used) and (len(ignore_ids) > 0):
-            demisto.info(f'reseting igonre list of len: {len(ignore_ids)}')
+            demisto.info(f'resetting ignore list of len: {len(ignore_ids)}')
             ignore_ids = []
         last_fetch = next_last_fetch
     demisto.setLastRun({
@@ -1034,7 +1237,7 @@ def fetch_incidents(client: Client):
 
 
 def auth_link_command(client: Client):
-    link, challange = client.generate_auth_link()
+    link = client.generate_auth_link()
     markdown = f"""
 ## Gmail Auth Link
 Please follow the following **[link]({link})**.
@@ -1062,8 +1265,9 @@ def auth_test_command(client):
 ''' COMMANDS MANAGER / SWITCH PANEL '''
 
 
-def main():
+def main():  # pragma: no cover
     global EMAIL
+    global SEND_AS
 
     command = demisto.command()
     client = Client()
@@ -1072,9 +1276,11 @@ def main():
     commands = {
         'test-module': test_module,
         'send-mail': send_mail_command,
+        'reply-mail': reply_mail_command,
         'fetch-incidents': fetch_incidents,
         'gmail-auth-link': auth_link_command,
         'gmail-auth-test': auth_test_command,
+        'gmail-get-attachments': get_attachments_command,
     }
 
     try:
@@ -1083,12 +1289,12 @@ def main():
             sys.exit(0)
         if command in commands:
             demisto.results(commands[command](client))
-        # Log exceptions
     except Exception as e:
-        import traceback
-        return_error('GMAIL: {}'.format(str(e)), traceback.format_exc())
+        return_error(f'An error occurred: {e}', error=e)
+    finally:
+        return_metrics()
 
 
 # python2 uses __builtin__ python3 uses builtins
-if __name__ == "__builtin__" or __name__ == "builtins":
+if __name__ == "__builtin__" or __name__ == "builtins" or __name__ == '__main__':
     main()

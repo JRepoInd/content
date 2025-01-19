@@ -1,10 +1,10 @@
+import demistomock as demisto  # noqa: F401
+from CommonServerPython import *  # noqa: F401
 import hashlib
 from io import BytesIO
 import traceback
 import requests
 
-import demistomock as demisto  # noqa: F401
-from CommonServerPython import *  # noqa: F401
 
 API_KEY = demisto.params().get('apikey')
 
@@ -30,7 +30,7 @@ def decode_screenshot(r):
 
 def generateHash(url, secretKey):
     string_to_hash = url + secretKey
-    return hashlib.md5(string_to_hash.encode('utf-8')).hexdigest()
+    return hashlib.md5(string_to_hash.encode('utf-8')).hexdigest()  # nosec
 
 
 def get_screenshot(argDict):

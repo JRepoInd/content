@@ -1,13 +1,11 @@
-comment: Data output script for populating dashboard number graph widget with the
-  number of failing incident.
+comment: Data output script for populating dashboard number graph widget with the number of failing incident.
 commonfields:
   id: IncidentsCheck-Widget-NumberFailingIncidents
   version: -1
-dockerimage: demisto/python3:3.8.5.11789
+dockerimage: demisto/python3:3.11.10.115186
 enabled: true
 name: IncidentsCheck-Widget-NumberFailingIncidents
 runas: DBotWeakRole
-runonce: false
 script: ''
 scripttarget: 0
 subtype: python3

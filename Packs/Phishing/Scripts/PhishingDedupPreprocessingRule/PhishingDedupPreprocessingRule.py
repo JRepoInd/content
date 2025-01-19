@@ -1,7 +1,7 @@
+import demistomock as demisto  # noqa: F401
+from CommonServerPython import *  # noqa: F401
 import dateutil  # type: ignore
 
-import demistomock as demisto
-from CommonServerPython import *
 from CommonServerUserPython import *
 import pandas as pd
 from bs4 import BeautifulSoup
@@ -93,7 +93,7 @@ def extract_domain(address):
 
 
 def get_text_from_html(html):
-    soup = BeautifulSoup(html)
+    soup = BeautifulSoup(html, features="html.parser")
     # kill all script and style elements
     for script in soup(["script", "style"]):
         script.extract()  # rip it out

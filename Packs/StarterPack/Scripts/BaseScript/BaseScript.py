@@ -1,3 +1,5 @@
+import demistomock as demisto  # noqa: F401
+from CommonServerPython import *  # noqa: F401
 """Base Script for Cortex XSOAR (aka Demisto)
 
 This is an empty script with some basic structure according
@@ -11,19 +13,16 @@ Linting: https://xsoar.pan.dev/docs/integrations/linting
 
 """
 
-import demistomock as demisto
-from CommonServerPython import *
 from CommonServerUserPython import *
 
-from typing import Dict, Any
-import traceback
+from typing import Any
 
 
 ''' STANDALONE FUNCTION '''
 
 
 # TODO: REMOVE the following dummy function:
-def basescript_dummy(dummy: str) -> Dict[str, str]:
+def basescript_dummy(dummy: str) -> dict[str, str]:
     """Returns a simple python dict with the information provided
     in the input (dummy).
 
@@ -42,7 +41,7 @@ def basescript_dummy(dummy: str) -> Dict[str, str]:
 
 
 # TODO: REMOVE the following dummy command function
-def basescript_dummy_command(args: Dict[str, Any]) -> CommandResults:
+def basescript_dummy_command(args: dict[str, Any]) -> CommandResults:
 
     dummy = args.get('dummy', None)
     if not dummy:
@@ -67,7 +66,7 @@ def main():
         # TODO: replace the invoked command function with yours
         return_results(basescript_dummy_command(demisto.args()))
     except Exception as ex:
-        demisto.error(traceback.format_exc())  # print the traceback
+
         return_error(f'Failed to execute BaseScript. Error: {str(ex)}')
 
 

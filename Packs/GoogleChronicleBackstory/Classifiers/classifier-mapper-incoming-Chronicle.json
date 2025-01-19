@@ -9,106 +9,74 @@
                 "Chronicle Detection Created Time": {
                     "complex": {
                         "accessor": "",
-                        "filters": [
-
-                        ],
+                        "filters": [],
                         "root": "createdTime",
-                        "transformers": [
-
-                        ]
+                        "transformers": []
                     },
                     "simple": ""
                 },
                 "Chronicle Detection ID": {
                     "complex": {
                         "accessor": "",
-                        "filters": [
-
-                        ],
+                        "filters": [],
                         "root": "id",
-                        "transformers": [
-
-                        ]
+                        "transformers": []
                     },
                     "simple": ""
                 },
                 "Chronicle Detection State": {
                     "complex": {
                         "accessor": "alertState",
-                        "filters": [
-
-                        ],
+                        "filters": [],
                         "root": "detection",
-                        "transformers": [
-
-                        ]
+                        "transformers": []
                     },
                     "simple": ""
                 },
                 "Chronicle Detection Time": {
                     "complex": {
                         "accessor": "",
-                        "filters": [
-
-                        ],
+                        "filters": [],
                         "root": "detectionTime",
-                        "transformers": [
-
-                        ]
+                        "transformers": []
                     },
                     "simple": ""
                 },
                 "Chronicle Detection Type": {
                     "complex": {
                         "accessor": "",
-                        "filters": [
-
-                        ],
+                        "filters": [],
                         "root": "type",
-                        "transformers": [
-
-                        ]
+                        "transformers": []
                     },
                     "simple": ""
                 },
                 "Chronicle Detection Window End Time": {
                     "complex": {
                         "accessor": "endTime",
-                        "filters": [
-
-                        ],
+                        "filters": [],
                         "root": "timeWindow",
-                        "transformers": [
-
-                        ]
+                        "transformers": []
                     },
                     "simple": ""
                 },
                 "Chronicle Detection Window Start Time": {
                     "complex": {
                         "accessor": "startTime",
-                        "filters": [
-
-                        ],
+                        "filters": [],
                         "root": "timeWindow",
-                        "transformers": [
-
-                        ]
+                        "transformers": []
                     },
                     "simple": ""
                 },
                 "Chronicle Events": {
                     "complex": {
                         "accessor": "references",
-                        "filters": [
-
-                        ],
+                        "filters": [],
                         "root": "collectionElements",
                         "transformers": [
                             {
-                                "args": {
-
-                                },
+                                "args": {},
                                 "operator": "ConvertKeysToTableFieldFormat"
                             }
                         ]
@@ -118,54 +86,210 @@
                 "Chronicle Rule ID": {
                     "complex": {
                         "accessor": "ruleId",
-                        "filters": [
-
-                        ],
+                        "filters": [],
                         "root": "detection",
-                        "transformers": [
-
-                        ]
+                        "transformers": []
                     },
                     "simple": ""
                 },
                 "Chronicle Rule Name": {
                     "complex": {
                         "accessor": "ruleName",
-                        "filters": [
-
-                        ],
+                        "filters": [],
                         "root": "detection",
-                        "transformers": [
-
-                        ]
+                        "transformers": []
                     },
                     "simple": ""
                 },
                 "Chronicle Rule Type": {
                     "complex": {
                         "accessor": "ruleType",
-                        "filters": [
-
-                        ],
+                        "filters": [],
                         "root": "detection",
-                        "transformers": [
-
-                        ]
+                        "transformers": []
                     },
                     "simple": ""
                 },
                 "Chronicle Rule Version": {
                     "complex": {
                         "accessor": "ruleVersion",
-                        "filters": [
-
-                        ],
+                        "filters": [],
                         "root": "detection",
+                        "transformers": []
+                    },
+                    "simple": ""
+                },
+                "Description": {
+                    "complex": {
+                        "accessor": "description",
+                        "filters": [],
+                        "root": "detection",
+                        "transformers": []
+                    }
+                },
+                "Detection URL": {
+                    "complex": {
+                        "accessor": "urlBackToProduct",
+                        "filters": [],
+                        "root": "detection",
+                        "transformers": []
+                    }
+                }
+            }
+        },
+        "Chronicle Curated Rule Detection": {
+            "dontMapEventToLabels": false,
+            "internalMapping": {
+                "Chronicle Detection Created Time": {
+                    "complex": {
+                        "accessor": "",
+                        "filters": [],
+                        "root": "createdTime",
+                        "transformers": []
+                    },
+                    "simple": ""
+                },
+                "Chronicle Detection ID": {
+                    "complex": {
+                        "accessor": "",
+                        "filters": [],
+                        "root": "id",
+                        "transformers": []
+                    },
+                    "simple": ""
+                },
+                "Chronicle Detection State": {
+                    "complex": {
+                        "accessor": "alertState",
+                        "filters": [],
+                        "root": "detection",
+                        "transformers": []
+                    },
+                    "simple": ""
+                },
+                "Chronicle Detection Time": {
+                    "complex": {
+                        "accessor": "",
+                        "filters": [],
+                        "root": "detectionTime",
+                        "transformers": []
+                    },
+                    "simple": ""
+                },
+                "Chronicle Detection Type": {
+                    "complex": {
+                        "accessor": "",
+                        "filters": [],
+                        "root": "type",
+                        "transformers": []
+                    },
+                    "simple": ""
+                },
+                "Chronicle Detection Window End Time": {
+                    "complex": {
+                        "accessor": "endTime",
+                        "filters": [],
+                        "root": "timeWindow",
+                        "transformers": []
+                    },
+                    "simple": ""
+                },
+                "Chronicle Detection Window Start Time": {
+                    "complex": {
+                        "accessor": "startTime",
+                        "filters": [],
+                        "root": "timeWindow",
+                        "transformers": []
+                    },
+                    "simple": ""
+                },
+                "Chronicle Curated Events": {
+                    "complex": {
+                        "accessor": "references",
+                        "filters": [],
+                        "root": "collectionElements",
                         "transformers": [
-
+                            {
+                                "args": {},
+                                "operator": "ConvertKeysToTableFieldFormat"
+                            }
                         ]
                     },
                     "simple": ""
+                },
+                "Chronicle Rule ID": {
+                    "complex": {
+                        "accessor": "ruleId",
+                        "filters": [],
+                        "root": "detection",
+                        "transformers": []
+                    },
+                    "simple": ""
+                },
+                "Chronicle Rule Name": {
+                    "complex": {
+                        "accessor": "ruleName",
+                        "filters": [],
+                        "root": "detection",
+                        "transformers": []
+                    },
+                    "simple": ""
+                },
+                "Chronicle Rule Type": {
+                    "complex": {
+                        "accessor": "ruleType",
+                        "filters": [],
+                        "root": "detection",
+                        "transformers": []
+                    },
+                    "simple": ""
+                },
+                "Description": {
+                    "complex": {
+                        "accessor": "description",
+                        "filters": [],
+                        "root": "detection",
+                        "transformers": [
+                            {
+                                "operator": "ArrayToCSV"
+                            }
+                        ]
+                    }
+                },
+                "Detection URL": {
+                    "complex": {
+                        "accessor": "urlBackToProduct",
+                        "filters": [],
+                        "root": "detection",
+                        "transformers": [
+                            {
+                                "operator": "ArrayToCSV"
+                            }
+                        ]
+                    }
+                },
+                "Risk Score": {
+                    "complex": {
+                        "accessor": "riskScore",
+                        "filters": [],
+                        "root": "detection",
+                        "transformers": [
+                            {
+                                "operator": "FirstArrayElement"
+                            }
+                        ]
+                    }
+                },
+                "Tags": {
+                    "complex": {
+                        "filters": [],
+                        "root": "tags",
+                        "transformers": [
+                            {
+                                "operator": "ArrayToCSV"
+                            }
+                        ]
+                    }
                 }
             }
         },
@@ -175,41 +299,29 @@
                 "Chronicle Alert Count": {
                     "complex": {
                         "accessor": "",
-                        "filters": [
-
-                        ],
+                        "filters": [],
                         "root": "Alerts",
-                        "transformers": [
-
-                        ]
+                        "transformers": []
                     },
                     "simple": ""
                 },
                 "Chronicle Alert Name": {
                     "complex": {
                         "accessor": "",
-                        "filters": [
-
-                        ],
+                        "filters": [],
                         "root": "AlertName",
-                        "transformers": [
-
-                        ]
+                        "transformers": []
                     },
                     "simple": ""
                 },
                 "Chronicle Events": {
                     "complex": {
                         "accessor": "",
-                        "filters": [
-
-                        ],
+                        "filters": [],
                         "root": "UdmEvents",
                         "transformers": [
                             {
-                                "args": {
-
-                                },
+                                "args": {},
                                 "operator": "ConvertKeysToTableFieldFormat"
                             }
                         ]
@@ -219,52 +331,36 @@
                 "Chronicle First Seen": {
                     "complex": {
                         "accessor": "",
-                        "filters": [
-
-                        ],
+                        "filters": [],
                         "root": "FirstSeen",
-                        "transformers": [
-
-                        ]
+                        "transformers": []
                     },
                     "simple": ""
                 },
                 "Chronicle Last Seen": {
                     "complex": {
                         "accessor": "",
-                        "filters": [
-
-                        ],
+                        "filters": [],
                         "root": "LastSeen",
-                        "transformers": [
-
-                        ]
+                        "transformers": []
                     },
                     "simple": ""
                 },
                 "Chronicle Source Product": {
                     "complex": {
                         "accessor": "",
-                        "filters": [
-
-                        ],
+                        "filters": [],
                         "root": "Sources",
-                        "transformers": [
-
-                        ]
+                        "transformers": []
                     },
                     "simple": ""
                 },
                 "Chronicle User": {
                     "complex": {
                         "accessor": "",
-                        "filters": [
-
-                        ],
+                        "filters": [],
                         "root": "User",
-                        "transformers": [
-
-                        ]
+                        "transformers": []
                     },
                     "simple": ""
                 }

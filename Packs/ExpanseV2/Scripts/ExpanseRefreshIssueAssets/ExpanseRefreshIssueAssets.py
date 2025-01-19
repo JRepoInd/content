@@ -1,7 +1,6 @@
 import demistomock as demisto  # noqa # pylint: disable=unused-wildcard-import
 from CommonServerPython import *  # noqa # pylint: disable=unused-wildcard-import
 
-import traceback
 from typing import Dict, Any
 
 
@@ -23,6 +22,8 @@ def refresh_issue_assets_command(args: Dict[str, Any]) -> CommandResults:
             new_asset = demisto.executeCommand('expanse-get-iprange', {"id": asset_key, "include": "annotations"})
         elif asset_type == 'Certificate':
             new_asset = demisto.executeCommand('expanse-get-certificate', {"md5_hash": asset_key})
+        elif asset_type == 'CloudResource':
+            new_asset = demisto.executeCommand('expanse-get-cloud-resource', {"id": asset_key})
         else:
             # Unknown asset type, ignore.
             continue
@@ -68,7 +69,6 @@ def main():
     try:
         return_results(refresh_issue_assets_command(demisto.args()))
     except Exception as ex:
-        demisto.error(traceback.format_exc())  # print the traceback
         return_error(f'Failed to execute ExpanseRefreshIssueAsset. Error: {str(ex)}')
 
 

@@ -11,7 +11,10 @@
 		"IAM - Update User",
 		"User Profile",
 		"IAM - Sync User",
-		"IAM - Rehire User"
+		"IAM - Rehire User",
+		"Carbon Black EDR",
+		"Azure Active Directory Identity and Access",
+        "CrowdStrike Falcon OFP Detection"
 	],
 	"breachScript": "",
 	"caseInsensitive": true,
@@ -47,7 +50,9 @@
 		"IAM - Update User",
 		"User Profile",
 		"IAM - Sync User",
-		"IAM - Rehire User"
+		"IAM - Rehire User",
+		"Exabeam Notable User",
+        "CrowdStrike Falcon OFP Detection"
 	],
 	"threshold": 72,
 	"type": "shortText",
@@ -55,5 +60,8 @@
 	"unsearchable": false,
 	"useAsKpi": true,
 	"validationRegex": "",
-	"version": -1
+	"version": -1,
+	"marketplaces": [
+       "xsoar"
+    ]
 }

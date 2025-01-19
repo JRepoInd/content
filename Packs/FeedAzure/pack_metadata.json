@@ -2,7 +2,7 @@
     "name": "Azure Feed",
     "description": "Indicators feed from Azure",
     "support": "xsoar",
-    "currentVersion": "1.0.4",
+    "currentVersion": "1.0.32",
     "author": "Cortex XSOAR",
     "url": "https://www.paloaltonetworks.com/cortex",
     "email": "",
@@ -11,11 +11,15 @@
         "Data Enrichment & Threat Intelligence"
     ],
     "tags": [
-        "TIM"
+        "Allow List"
     ],
     "useCases": [],
     "keywords": [
         "Azure",
         "Feed"
+    ],
+    "marketplaces": [
+        "xsoar",
+        "marketplacev2"
     ]
 }

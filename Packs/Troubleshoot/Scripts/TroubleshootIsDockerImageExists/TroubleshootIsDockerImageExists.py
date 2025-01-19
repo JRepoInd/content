@@ -8,7 +8,7 @@ from CommonServerPython import *
 
 def get_installed_docker_images():
     res = demisto.executeCommand(
-        'demisto-api-get',
+        'core-api-get',
         {'uri': 'settings/docker-images'}
     )
     if is_error(res):
@@ -19,7 +19,7 @@ def get_installed_docker_images():
 def main():
     docker_image: str = demisto.args().get('docker_image')
     if docker_image.count(':') != 1:
-        raise DemistoException(f'Got a docker image with more than one \':\'. {docker_image=}')
+        raise DemistoException(f'Got a docker image with more than one \':\'. {docker_image=}')  # type: ignore
     repository, tag = docker_image.split(':')
     installed_dockers_images = get_installed_docker_images()
     # Docker exists

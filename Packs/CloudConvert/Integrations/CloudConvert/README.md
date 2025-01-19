@@ -1,10 +1,8 @@
 Use the CloudConvert integration to convert your files to the required format.
 This integration was integrated and tested with version v2 of CloudConvert.
-## Configure CloudConvert on Cortex XSOAR
 
-1. Navigate to **Settings** > **Integrations** > **Servers & Services**.
-2. Search for CloudConvert.
-3. Click **Add instance** to create and configure a new integration instance.
+## Configure CloudConvert in Cortex
+
 
 | **Parameter** | **Description** | **Required** |
 | --- | --- | --- |
@@ -12,11 +10,14 @@ This integration was integrated and tested with version v2 of CloudConvert.
 | insecure | Trust any certificate \(not secure\) | False |
 | proxy | Use system proxy settings | False |
 
-4. Click **Test** to validate the URLs, token, and connection.
+
 ## Commands
-You can execute these commands from the Cortex XSOAR CLI, as part of an automation, or in a playbook.
+
+You can execute these commands from the CLI, as part of an automation, or in a playbook.
 After you successfully execute a command, a DBot message appears in the War Room with the command details.
+
 ### cloudconvert-upload
+
 ***
 Uploads a file for conversion.
 
@@ -24,6 +25,7 @@ Uploads a file for conversion.
 #### Base Command
 
 `cloudconvert-upload`
+
 #### Input
 
 | **Argument Name** | **Description** | **Required** |
@@ -52,6 +54,7 @@ Uploads a file for conversion.
 
 
 #### Command Example
+
 `cloudconvert-upload entry_id=@123`
 
 #### Human Readable Output
@@ -59,6 +62,7 @@ Uploads a file for conversion.
 
 
 ### cloudconvert-convert
+
 ***
 Converts an uploaded file to the required format.
 
@@ -66,6 +70,7 @@ Converts an uploaded file to the required format.
 #### Base Command
 
 `cloudconvert-convert`
+
 #### Input
 
 | **Argument Name** | **Description** | **Required** |
@@ -95,6 +100,7 @@ Converts an uploaded file to the required format.
 
 
 #### Command Example
+
 `cloudconvert-convert task_id=1 output_format=pdf`
 
 #### Human Readable Output
@@ -102,6 +108,7 @@ Converts an uploaded file to the required format.
 
 
 ### cloudconvert-check-status
+
 ***
 Checks the status of an operation. Use the 'create_war_room_entry' argument to also create a war room entry of the file when checking on a download operation.
 
@@ -109,6 +116,7 @@ Checks the status of an operation. Use the 'create_war_room_entry' argument to a
 #### Base Command
 
 `cloudconvert-check-status`
+
 #### Input
 
 | **Argument Name** | **Description** | **Required** |
@@ -138,6 +146,7 @@ Checks the status of an operation. Use the 'create_war_room_entry' argument to a
 
 
 #### Command Example
+
 `cloudconvert-check-status task_id=1`
 
 #### Human Readable Output
@@ -145,6 +154,7 @@ Checks the status of an operation. Use the 'create_war_room_entry' argument to a
 
 
 ### cloudconvert-download
+
 ***
 Downloads a converted file as a URL or a War Room entry.
 
@@ -152,6 +162,7 @@ Downloads a converted file as a URL or a War Room entry.
 #### Base Command
 
 `cloudconvert-download`
+
 #### Input
 
 | **Argument Name** | **Description** | **Required** |
@@ -181,8 +192,8 @@ Downloads a converted file as a URL or a War Room entry.
 
 
 #### Command Example
+
 `cloudconvert-download task_id=1 download_as=url`
 
 #### Human Readable Output
-
 

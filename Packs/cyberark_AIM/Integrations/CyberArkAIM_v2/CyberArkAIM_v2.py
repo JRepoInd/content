@@ -1,12 +1,13 @@
+import demistomock as demisto  # noqa: F401
+from CommonServerPython import *  # noqa: F401
 from requests_ntlm import HttpNtlmAuth
 import tempfile
 
-import demistomock as demisto
-from CommonServerPython import *
 from CommonServerUserPython import *
 
 # disable insecure warnings
-requests.packages.urllib3.disable_warnings()
+import urllib3
+urllib3.disable_warnings()
 
 
 class Client(BaseClient):
@@ -53,6 +54,7 @@ class Client(BaseClient):
             kf.write(key_text_fixed.encode())
             kf.flush()
             return (cf.name, kf.name), cf, kf
+        return None
 
     def get_credentials(self, creds_object: str):
         url_suffix = '/AIMWebService/api/Accounts'
@@ -100,7 +102,11 @@ def fetch_credentials(client, args: dict):
     demisto.debug('name of cred used: ', creds_name)
 
     if creds_name:
-        creds_list = [client.get_credentials(creds_name)]
+        try:
+            creds_list = [client.get_credentials(creds_name)]
+        except Exception as e:
+            demisto.debug(f"Could not fetch credentials: {creds_name}. Error: {e}")
+            creds_list = []
     else:
         creds_list = client.list_credentials()
     credentials = []
@@ -118,7 +124,17 @@ def test_module(client: Client) -> str:
     :param client: the client object with the given params
     :return: ok if the request succeeded
     """
-    client.list_credentials()
+    if client._credentials_list:
+        client.list_credentials()
+    else:
+        try:
+            # Running a dummy credential just to check connection itself.
+            client.get_credentials("test_cred")
+        except DemistoException as e:
+            if 'Error in API call [500]' in e.message or 'Error in API call [404]' in e.message:
+                return 'ok'
+            else:
+                raise e
     return "ok"
 
 
@@ -135,7 +151,9 @@ def main():
     credentials_object = params.get('credential_names') or ""
 
     cert_text = params.get('cert_text') or ""
-    key_text = params.get('key_text') or ""
+    key_text = (
+        params.get('key_text_creds', {}).get('password')
+        or params.get('key_text', ''))
 
     username = ""
     password = ""

@@ -2,12 +2,13 @@ from CommonServerPython import *
 
 ''' IMPORTS '''
 
-from typing import Dict, Any, List, Union, Tuple, Optional
+from typing import Any
 from requests import ConnectionError
 from requests.exceptions import MissingSchema, InvalidSchema
 import urllib3
 import traceback
 import re
+from urllib import parse
 
 # Disable insecure warnings
 urllib3.disable_warnings()
@@ -21,7 +22,15 @@ INTEGRATION_NAME: str = 'PassiveTotal'
 
 DEFAULT_REQUEST_TIMEOUT = '20'
 
-MESSAGES: Dict[str, str] = {
+PROFILE_TYPE = ["actor", "backdoor", "tool"]
+
+SOURCE = ["osint", "riskiq"]
+
+DEFAULT_PAGE_NUMBER = 0
+
+DEFAULT_SIZE = 50
+
+MESSAGES: dict[str, str] = {
     'AUTHENTICATION_ERROR': 'Unauthenticated. Check the configured Username and API secret.',
     'PAGE_NOT_FOUND_ERROR': 'No record(s) found.',
     'INTERNAL_SERVER_ERROR': 'The server encountered an internal error for PassiveTotal and was unable to complete '
@@ -50,10 +59,22 @@ MESSAGES: Dict[str, str] = {
     'INVALID_QUERY_COOKIE_DOMAIN': 'Argument query should be a valid domain that '
                                    'does not contain any special characters other than hyphen (-) and full stop (.)',
     'INVALID_QUERY_COOKIE_NAME': 'Argument query should be a valid cookie name that does not contain '
-                                 'spaces, separator character or tabs.'
+                                 'spaces, separator character or tabs.',
+    "REQUIRED_ARGUMENT": "Invalid argument value. {} is a required argument.",
+    "EMPTY_IP_ARGUMENT": "IP(s) not specified",
+    "INVALID_IP_ARGUMENT": "Invalid IP - {}",
+    'INVALID_INDICATOR_TYPE': 'Invalid indicator type {}. Valid values are certficate_sha1, certificate_sha1, domain, '
+                              'email, hash_md5, hash_sha256, ip, pdb_path, soa_email, url, whois_email.',
+    'INVALID_SOURCE': 'Invalid indicator source {}. Valid values are osint, riskiq.',
+    'INVALID_PAGE_SIZE': '{} is an invalid value for page size. Page size must be between 1 and int32.',
+    'INVALID_PAGE_NUMBER': '{} is an invalid value for page number. Page number must be between 0 and int32.',
+    "INVALID_PROFILE_TYPE": "Invalid profile type {}. Valid profile types are actor, backdoor, tool.",
+    "REQUIRED_INDICATOR_VALUE": "'indicator_value' must be specified if the arguments 'source' or 'category' are used.",
+    "INVALID_PRIORITY_LEVEL": "Invalid priority level {}. Valid priority level are low, medium, high.",
+    "NOT_VALID_PAGE_SIZE": "{} is an invalid value for page size. Page size must be between 1 and 1000."
 }
 
-URL_SUFFIX: Dict[str, str] = {
+URL_SUFFIX: dict[str, str] = {
     'TEST_MODULE': '/v2/account',
     'SSL_CERT_SEARCH': '/v2/ssl-certificate/search',
     'GET_PDNS_DETAILS': '/v2/dns/passive',
@@ -67,10 +88,27 @@ URL_SUFFIX: Dict[str, str] = {
     "GET_ADDRESSES_BY_COOKIE_NAME": "v2/cookies/name/{0}/addresses",
     "GET_ADDRESSES_BY_COOKIE_DOMAIN": "v2/cookies/domain/{0}/addresses",
     "GET_HOSTS_BY_COOKIE_NAME": "v2/cookies/name/{0}/hosts",
-    "GET_HOSTS_BY_COOKIE_DOMAIN": "v2/cookies/domain/{0}/hosts"
+    "GET_HOSTS_BY_COOKIE_DOMAIN": "v2/cookies/domain/{0}/hosts",
+    "GET_DATA_CARD_SUMMARY": "v2/cards/summary",
+    "GET_REPUTATION": "v2/reputation",
+    "LIST_INTEL_PROFILE_INDICATOR": "v2/intel-profiles/{}/indicators",
+    "LIST_INTEL_PROFILE": "v2/intel-profiles",
+    "LIST_INTEL_PROFILE_BY_INDICATOR": "v2/intel-profiles/indicator",
+    "LIST_ASI_INSIGHTS": "/v2/attack-surface/priority",
+    "LIST_ATTACK_SURFACE": "v2/attack-surface",
+    "LIST_THIRD_PARTY_ASI": "v2/attack-surface/third-party",
+    "LIST_ASI_ASSETS": "v2/attack-surface/insight",
+    "THIRD_PARTY_ASI_INSIGHTS": "v2/attack-surface/third-party/{}/priority/{}",
+    "LIST_ASI_VULNERABLE_COMPONENTS": "v2/attack-surface/vuln-intel/components",
+    "LIST_ASI_VULNERABILITIES": "v2/attack-surface/vuln-intel/cves",
+    "LIST_ASI_OBSERVATIONS": "v2/attack-surface/vuln-intel/cves/{}/observations",
+    "LIST_THIRD_PARTY_ASI_ASSETS": "v2/attack-surface/third-party/{}/insight/{}",
+    "LIST_THIRD_PARTY_ASI_VULNERABLE_COMPONENTS": "v2/attack-surface/vuln-intel/third-party/{}/components",
+    "LIST_THIRD_PARTY_ASI_VULNERABILITIES": "v2/attack-surface/vuln-intel/third-party/{}/cves",
+    "LIST_THIRD_PARTY_ASI_OBSERVATIONS": "v2/attack-surface/vuln-intel/third-party/{}/cves/{}/observations"
 }
 
-ISO_DATE: Dict[str, str] = {
+ISO_DATE: dict[str, str] = {
     DATE_TIME_FORMAT: '"yyyy-mm-dd hh:mm:ss"',
     DATE_FORMAT: '"yyyy-mm-dd"'
 }
@@ -82,6 +120,13 @@ REQUEST_TIMEOUT_MAX_VALUE = 9223372036
 COMPANY_NAME = "PaloAltoNetworks"
 
 PRODUCT_NAME = "XSOAR"
+
+INDICATOR_TYPE = ['certficate_sha1', 'certificate_sha1', 'domain', 'email', 'hash_md5', 'hash_sha256', 'ip',
+                  'pdb_path', 'soa_email', 'url', 'whois_email']
+
+PRIORITY = ["high", "medium", "low"]
+
+UI_LINK = "https://community.riskiq.com/attack-surfaces/"
 
 
 class Client(BaseClient):
@@ -95,7 +140,7 @@ class Client(BaseClient):
         super().__init__(base_url=base_url, verify=verify, proxy=proxy, auth=auth)
         self.request_timeout = request_timeout
 
-    def http_request(self, method: str, url_suffix: str, json_data=None, params=None, headers=None) -> Dict[str, Any]:
+    def http_request(self, method: str, url_suffix: str, json_data=None, params=None, headers=None) -> dict[str, Any]:
         """
             Override http_request method from BaseClient class. This method will print an error based on status code
             and exceptions.
@@ -152,7 +197,7 @@ class Client(BaseClient):
                 407: MESSAGES['PROXY_ERROR']
             }
             if status_code in status_code_message_map:
-                demisto.info('Response code: {}. Reason: {}'.format(status_code, status_code_message_map[status_code]))
+                demisto.info(f'Response code: {status_code}. Reason: {status_code_message_map[status_code]}')
                 raise ValueError(status_code_message_map[status_code])
             elif status_code >= 500:
                 demisto.info('Response code: {}. Reason: {}'.format(status_code, MESSAGES['INTERNAL_SERVER_ERROR']))
@@ -166,7 +211,7 @@ class Client(BaseClient):
 ''' HELPER FUNCTIONS '''
 
 
-def get_request_timeout() -> Optional[Any]:
+def get_request_timeout() -> Any | None:
     """
     Validate and return the request timeout parameter.
     The parameter must be a positive integer.
@@ -177,7 +222,7 @@ def get_request_timeout() -> Optional[Any]:
     """
     try:
         request_timeout = demisto.params().get('request_timeout', DEFAULT_REQUEST_TIMEOUT)
-        request_timeout = DEFAULT_REQUEST_TIMEOUT if not request_timeout else request_timeout
+        request_timeout = request_timeout if request_timeout else DEFAULT_REQUEST_TIMEOUT
         request_timeout = int(request_timeout)
     except ValueError:
         raise ValueError(MESSAGES['REQUEST_TIMEOUT_VALIDATION'])
@@ -190,7 +235,30 @@ def get_request_timeout() -> Optional[Any]:
     return request_timeout
 
 
-def get_host_attribute_context_data(records: List[Dict[str, Any]]) -> Tuple[list, list]:
+def remove_empty_elements_for_context(src):
+    """
+     Recursively remove empty lists, empty dicts, empty string or None elements from a dictionary.
+
+    :type src: ``dict``
+    :param src: Input dictionary.
+
+    :return: Dictionary with all empty lists,empty string and empty dictionaries removed.
+    :rtype: ``dict``
+    """
+
+    def empty(x):
+        return x is None or x == '' or x == {} or x == []
+
+    if not isinstance(src, dict | list):
+        return src
+    elif isinstance(src, list):
+        return [v for v in (remove_empty_elements_for_context(v) for v in src) if not empty(v)]
+    else:
+        return {k: v for k, v in ((k, remove_empty_elements_for_context(v))
+                                  for k, v in src.items()) if not empty(v)}
+
+
+def get_host_attribute_context_data(records: list[dict[str, Any]]) -> tuple[list, list]:
     """
     Prepares context data for get components and get trackers command
 
@@ -198,12 +266,15 @@ def get_host_attribute_context_data(records: List[Dict[str, Any]]) -> Tuple[list
     :return: standard entry command results list and custom entry context
     """
     custom_ec = createContext(data=records, removeNull=True)
-    standard_results: List[CommandResults] = []
+    standard_results: list[CommandResults] = []
     for record in records:
         if record.get('hostname'):
             hostname = record.get('hostname')
-            dbot_score = Common.DBotScore(indicator=hostname, indicator_type=DBotScoreType.DOMAIN,
-                                          integration_name=INTEGRATION_NAME, score=Common.DBotScore.NONE)
+            dbot_score = Common.DBotScore(indicator=hostname,
+                                          indicator_type=DBotScoreType.DOMAIN,
+                                          integration_name=INTEGRATION_NAME,
+                                          score=Common.DBotScore.NONE,
+                                          reliability=demisto.params().get('integrationReliability'))
             if auto_detect_indicator_type(hostname) == FeedIndicatorType.Domain:
                 domain_ioc = Common.Domain(domain=hostname, dbot_score=dbot_score)
                 # add standard output with standard readable output
@@ -213,8 +284,11 @@ def get_host_attribute_context_data(records: List[Dict[str, Any]]) -> Tuple[list
                 ))
         elif record.get('address'):
             address = record.get('address')
-            dbot_score = Common.DBotScore(indicator=address, indicator_type=DBotScoreType.IP,
-                                          integration_name=INTEGRATION_NAME, score=Common.DBotScore.NONE)
+            dbot_score = Common.DBotScore(indicator=address,
+                                          indicator_type=DBotScoreType.IP,
+                                          integration_name=INTEGRATION_NAME,
+                                          score=Common.DBotScore.NONE,
+                                          reliability=demisto.params().get('integrationReliability'))
             if auto_detect_indicator_type(address) == FeedIndicatorType.IP:
                 ip_ioc = Common.IP(ip=address, dbot_score=dbot_score)
                 # add standard output with standard readable output
@@ -226,7 +300,7 @@ def get_host_attribute_context_data(records: List[Dict[str, Any]]) -> Tuple[list
     return standard_results, custom_ec
 
 
-def get_components_hr(components: List[Dict[str, Any]]) -> str:
+def get_components_hr(components: list[dict[str, Any]]) -> str:
     """
     Prepares human readable text for get components command
 
@@ -234,7 +308,7 @@ def get_components_hr(components: List[Dict[str, Any]]) -> str:
     :return: Human readable output for components
     """
 
-    hr_table: List[Dict[str, Any]] = []
+    hr_table: list[dict[str, Any]] = []
 
     for component in components:
         hr_row = {
@@ -249,11 +323,11 @@ def get_components_hr(components: List[Dict[str, Any]]) -> str:
         hr_table.append(hr_row)
 
     hr_headers = ['Hostname', 'Address', 'First (GMT)', 'Last (GMT)', 'Category', 'Value', 'Version']
-    hr = '### Total Retrieved Record(s): {0}\n'.format(len(components))
+    hr = f'### Total Retrieved Record(s): {len(components)}\n'
     return hr + tableToMarkdown('COMPONENTS', hr_table, hr_headers, removeNull=True)
 
 
-def get_trackers_hr(trackers: List[Dict[str, Any]]) -> str:
+def get_trackers_hr(trackers: list[dict[str, Any]]) -> str:
     """
     Prepares human readable text for get trackers command
 
@@ -261,7 +335,7 @@ def get_trackers_hr(trackers: List[Dict[str, Any]]) -> str:
     :return: Human readable output for trackers
     """
 
-    hr_table: List[Dict[str, Any]] = []
+    hr_table: list[dict[str, Any]] = []
 
     for tracker in trackers:
         hr_row = {
@@ -275,11 +349,11 @@ def get_trackers_hr(trackers: List[Dict[str, Any]]) -> str:
         hr_table.append(hr_row)
 
     hr_headers = ['Hostname', 'Address', 'First (GMT)', 'Last (GMT)', 'Type', 'Value']
-    hr = '### Total Retrieved Record(s): {0}\n'.format(len(trackers))
+    hr = f'### Total Retrieved Record(s): {len(trackers)}\n'
     return hr + tableToMarkdown('TRACKERS', hr_table, hr_headers, removeNull=True)
 
 
-def get_host_pairs_hr(host_pairs: List[Dict[str, Any]]) -> str:
+def get_host_pairs_hr(host_pairs: list[dict[str, Any]]) -> str:
     """
     Prepares human readable text for get host pairs command
 
@@ -287,7 +361,7 @@ def get_host_pairs_hr(host_pairs: List[Dict[str, Any]]) -> str:
     :return: Human readable output for host pairs
     """
 
-    hr_table: List[Dict[str, Any]] = []
+    hr_table: list[dict[str, Any]] = []
 
     for pair in host_pairs:
         hr_row = {
@@ -300,11 +374,11 @@ def get_host_pairs_hr(host_pairs: List[Dict[str, Any]]) -> str:
         hr_table.append(hr_row)
 
     hr_headers = ['Parent Hostname', 'Child Hostname', 'First (GMT)', 'Last (GMT)', 'Cause']
-    hr = '### Total Retrieved Record(s): {0}\n'.format(len(host_pairs))
+    hr = f'### Total Retrieved Record(s): {len(host_pairs)}\n'
     return hr + tableToMarkdown('HOST PAIRS', hr_table, hr_headers, removeNull=True)
 
 
-def get_common_arguments(args: Dict[str, Any]) -> Dict[str, Any]:
+def get_common_arguments(args: dict[str, Any]) -> dict[str, Any]:
     """
     Validates the common arguments and prepares parameter dictionary
     This method is used in commands "get-trackers", "get-components", "get-host-pairs"
@@ -312,7 +386,7 @@ def get_common_arguments(args: Dict[str, Any]) -> Dict[str, Any]:
     :param args: The general arguments
     :return: dict of params or message describing error in argument validation
     """
-    params: Dict[str, Any] = {}
+    params: dict[str, Any] = {}
 
     if not args.get('query'):
         raise ValueError(MESSAGES['INVALID_QUERY_VALUE'])
@@ -326,7 +400,7 @@ def get_common_arguments(args: Dict[str, Any]) -> Dict[str, Any]:
     return params
 
 
-def get_valid_whois_search_arguments(args: Dict[str, Any]) -> Tuple[str, str]:
+def get_valid_whois_search_arguments(args: dict[str, Any]) -> tuple[str, str]:
     """
     Get and Validate arguments for pt-whois-search command.
 
@@ -342,7 +416,7 @@ def get_valid_whois_search_arguments(args: Dict[str, Any]) -> Tuple[str, str]:
     return query, field
 
 
-def get_valid_get_whois_arguments(args: Dict[str, Any]) -> Tuple[str, str]:
+def get_valid_get_whois_arguments(args: dict[str, Any]) -> tuple[str, str]:
     """
     Get and Validate arguments for pt-get-whois command.
 
@@ -359,7 +433,7 @@ def get_valid_get_whois_arguments(args: Dict[str, Any]) -> Tuple[str, str]:
     return query, history
 
 
-def nested_to_flat(src: Dict[str, Any], key: str) -> Dict[str, Any]:
+def nested_to_flat(src: dict[str, Any], key: str) -> dict[str, Any]:
     """
     Convert nested dictionary to flat by contact the keys. Also converts keys in pascal string format.
 
@@ -368,17 +442,17 @@ def nested_to_flat(src: Dict[str, Any], key: str) -> Dict[str, Any]:
     :return: flat dictionary with pascal formatted keys (e.g. {"FooBar": "some-value"})
     """
 
-    flat_dict: Dict[str, str] = {}
+    flat_dict: dict[str, str] = {}
     for sub_key, sub_value in src.items():
-        pascal_key = '{}{}'.format(key, sub_key[0].upper() + sub_key[1:])
+        pascal_key = f'{key}{sub_key[0].upper() + sub_key[1:]}'
         flat_dict[pascal_key] = sub_value
 
     return flat_dict
 
 
-def prepare_context_dict(response_dict: Dict[str, Any],
+def prepare_context_dict(response_dict: dict[str, Any],
                          keys_with_hierarchy: tuple = (),
-                         exclude_keys: tuple = ()) -> Dict[str, str]:
+                         exclude_keys: tuple = ()) -> dict[str, str]:
     """
     Prepare the context dictionary as per the standards.
 
@@ -387,7 +461,7 @@ def prepare_context_dict(response_dict: Dict[str, Any],
     :param exclude_keys: keys need to exclude.
     :return: single level dictionary
     """
-    simple_dict: Dict[str, str] = {}
+    simple_dict: dict[str, str] = {}
     for key, value in response_dict.items():
         if key in keys_with_hierarchy:
             simple_dict.update(nested_to_flat(response_dict.get(key, {}), key))
@@ -396,15 +470,16 @@ def prepare_context_dict(response_dict: Dict[str, Any],
     return simple_dict
 
 
-def get_context_for_whois_commands(domains: List[Dict[str, Any]]) -> Tuple[list, list]:
+def get_context_for_whois_commands(domains: list[dict[str, Any]], score=0) -> tuple[list, list]:
     """
     Prepare context for whois and domain reputation commands.
 
     :param domains: list of domains return from response
+    :param score:
     :return: command results for standard context and custom context for whois and domain reputation command
     """
-    command_results: List[CommandResults] = []
-    custom_context: List[Dict[str, Any]] = []
+    command_results: list[CommandResults] = []
+    custom_context: list[dict[str, Any]] = []
     # set domain standard context
     for domain in domains:
         # set domain standard context
@@ -429,7 +504,8 @@ def get_context_for_whois_commands(domains: List[Dict[str, Any]]) -> Tuple[list,
                     indicator=domain.get('domain', ''),
                     indicator_type=DBotScoreType.DOMAIN,
                     integration_name=INTEGRATION_NAME,
-                    score=Common.DBotScore.NONE
+                    score=score,
+                    reliability=demisto.params().get('integrationReliability')
                 )
             )
             # add standard output with standard readable output
@@ -450,14 +526,14 @@ def get_context_for_whois_commands(domains: List[Dict[str, Any]]) -> Tuple[list,
     return command_results, createContext(custom_context, removeNull=True)
 
 
-def get_context_for_get_whois_commands(domains: List[Dict[str, Any]]) -> list:
+def get_context_for_get_whois_commands(domains: list[dict[str, Any]]) -> list:
     """
     Prepare context for pt-get-whois command.
 
     :param domains: list of domains return from response
     :return: command results for custom context for whois command
     """
-    custom_context: List[Dict[str, Any]] = []
+    custom_context: list[dict[str, Any]] = []
     # set domain standard context
     for domain in domains:
         custom_context.append(
@@ -470,20 +546,20 @@ def get_context_for_get_whois_commands(domains: List[Dict[str, Any]]) -> list:
     return createContext(custom_context, removeNull=True)
 
 
-def prepare_hr_cell_for_whois_info(domain_info: Dict[str, Any]) -> str:
+def prepare_hr_cell_for_whois_info(domain_info: dict[str, Any]) -> str:
     """
     Prepare cell information for Registrant, Admin, Billing and Tech columns.
 
     :param domain_info: domain information as a directory
     :return: domain information as a readable format
     """
-    hr_cell_info: List[str] = []
+    hr_cell_info: list[str] = []
     for key, value in domain_info.items():
-        hr_cell_info.append('**{}:** {}'.format(key[0].upper() + key[1:], value))
+        hr_cell_info.append(f'**{key[0].upper() + key[1:]}:** {value}')
     return ',\n'.join(hr_cell_info)
 
 
-def get_human_readable_for_whois_commands(domains: List[Dict[str, Any]], is_reputation_command=False):
+def get_human_readable_for_whois_commands(domains: list[dict[str, Any]], is_reputation_command=False):
     """
     Prepare readable output for whois commands
 
@@ -491,7 +567,7 @@ def get_human_readable_for_whois_commands(domains: List[Dict[str, Any]], is_repu
     :param is_reputation_command: true if the command is execute for reputation command else false, default is false
     :return: markdown of whois commands based on domains passed
     """
-    hr_table_content: List[Dict[str, Any]] = []
+    hr_table_content: list[dict[str, Any]] = []
     table_name = 'Domain(s)'
     for domain in domains:
         hr_row = {
@@ -526,14 +602,14 @@ def get_human_readable_for_whois_commands(domains: List[Dict[str, Any]], is_repu
     return hr
 
 
-def get_human_readable_for_articles_commands(articles: List[Dict[str, Any]]):
+def get_human_readable_for_articles_commands(articles: list[dict[str, Any]]):
     """
     Prepare readable output for pt-get-articles command
 
     :param articles: list of articles return from response
     :return: markdown of article command based on articles passed
     """
-    hr_table_content: List[Dict[str, Any]] = []
+    hr_table_content: list[dict[str, Any]] = []
     table_name = 'Article(s)'
     for article in articles:
         hr_row = {
@@ -558,7 +634,78 @@ def get_human_readable_for_articles_commands(articles: List[Dict[str, Any]]):
     return hr
 
 
-def prepare_human_readable_dict_for_ssl(results: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+def get_human_readable_for_data_card_command(results: dict[str, Any]) -> str:
+    """
+        Parse and convert the Data Card Summary in the response into human-readable markdown string.
+
+        :type results: ``List[Dict[str, Any]]``
+        :param results: Details of urls.
+
+        :return: Human Readable string containing information of data card.
+        :rtype: ``str``
+        """
+    hr_table_content: list[dict[str, Any]] = []
+    summary = results.get('data_summary', {})
+    summary = {pascalToSpace(underscoreToCamelCase(k)): v for k, v in summary.items()}
+
+    hr_row = {
+        'Name': results.get('name', ''),
+        'Type': results.get('type', ''),
+        'Netblock': results.get('netblock', ''),
+        'Autonomous System Number': results.get('asn', ''),
+        'Host Provider': results.get('hosting_provider', ''),
+        'Operating System': results.get('os', ''),
+        'Data Card Summary': get_data_card_summary(summary)
+
+    }
+    hr_table_content.append(hr_row)
+
+    return tableToMarkdown("Data Card Summary", hr_table_content,
+                           headers=["Name", "Type", "Netblock", "Autonomous System Number", "Host Provider",
+                                    "Operating System", "Data Card Summary"], removeNull=True)
+
+
+def get_human_readable_for_reputation_command(results: dict[str, Any], query: str) -> str:
+    """
+        Parse and convert the response into human-readable markdown string.
+
+        :type results: ``List[Dict[str, Any]]``
+        :param results: Details of urls.
+
+        :type query: ``str``
+        :param query: Value of the indicator.
+
+        :return: Human Readable string containing information.
+        :rtype: ``str``
+        """
+    classification = results.get('classification', '')
+
+    reputation_score = results.get('score', '')
+
+    reputation_message = f"The reputation score for '{query}' is {reputation_score} and is classified as '{classification}'.\n"
+
+    hr_table_content: list[dict[str, Any]] = []
+
+    rules = results.get('rules', [])
+    for rule in rules:
+        link = rule.get('link')
+        if link:
+            name = f"[{rule.get('name', '')}]({rule.get('link')})"
+        else:
+            name = rule.get('name', '')
+        hr_row = {
+            'Name': name,
+            'Description': rule.get('description', ''),
+            'Severity': rule.get('severity', '')
+
+        }
+        hr_table_content.append(hr_row)
+    hr_table = tableToMarkdown("Reputation Rules", hr_table_content, headers=['Name', 'Description', 'Severity'])
+
+    return reputation_message + hr_table
+
+
+def prepare_human_readable_dict_for_ssl(results: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """
     Preparing human-readable dictionary for ssl certificate command.
 
@@ -593,7 +740,7 @@ def prepare_human_readable_dict_for_ssl(results: List[Dict[str, Any]]) -> List[D
     } for result in results]
 
 
-def prepare_human_readable_dict_for_pdns(results: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+def prepare_human_readable_dict_for_pdns(results: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """
     Prepare human-readable dictionary for passive DNS command.
 
@@ -613,14 +760,14 @@ def prepare_human_readable_dict_for_pdns(results: List[Dict[str, Any]]) -> List[
     } for result in results]
 
 
-def get_ssl_cert_search_hr(results: List[Dict[str, Any]]) -> str:
+def get_ssl_cert_search_hr(results: list[dict[str, Any]]) -> str:
     """
     Retrieved information of ssl certificates and convert it into human-readable markdown string.
 
     :param results: ssl certificates details
     :return: human-readable string
     """
-    ssl_cert_search_hr: List[Dict[str, Any]] = prepare_human_readable_dict_for_ssl(results)
+    ssl_cert_search_hr: list[dict[str, Any]] = prepare_human_readable_dict_for_ssl(results)
 
     hr = '### Total Retrieved Record(s): ' + str(len(results)) + '\n'
     hr += tableToMarkdown('SSL certificate(s)', ssl_cert_search_hr,
@@ -634,7 +781,7 @@ def get_ssl_cert_search_hr(results: List[Dict[str, Any]]) -> str:
     return hr
 
 
-def get_pdns_details_hr(results: List[Dict[str, Any]], total_record: int) -> str:
+def get_pdns_details_hr(results: list[dict[str, Any]], total_record: int) -> str:
     """
     Retrieved information of passive DNS and convert it into human-readable markdown string.
 
@@ -642,7 +789,7 @@ def get_pdns_details_hr(results: List[Dict[str, Any]], total_record: int) -> str
     :param total_record: number of record retrieved from response
     :return: human-readable string
     """
-    pdns_details_hr: List[Dict[str, Any]] = prepare_human_readable_dict_for_pdns(results)
+    pdns_details_hr: list[dict[str, Any]] = prepare_human_readable_dict_for_pdns(results)
 
     table_headers = ['Resolve', 'Resolve Type', 'Record Type', 'Collected (GMT)', 'First (GMT)', 'Last (GMT)',
                      'Source', 'Record Hash']
@@ -651,7 +798,7 @@ def get_pdns_details_hr(results: List[Dict[str, Any]], total_record: int) -> str
     return hr
 
 
-def create_pdns_standard_context(results: List[Dict[str, Any]]) -> List[CommandResults]:
+def create_pdns_standard_context(results: list[dict[str, Any]]) -> list[CommandResults]:
     """
     Preparing standard context and dbotScore for pdns command.
     here, standard context includes ip and domain model.
@@ -659,12 +806,12 @@ def create_pdns_standard_context(results: List[Dict[str, Any]]) -> List[CommandR
     :param results: pdns details from response
     :return: list of CommandResults of standard context
     """
-    standard_results: List[CommandResults] = []
+    standard_results: list[CommandResults] = []
     for result in results:
         resolve_type = result.get('resolveType', '')
         resolve = result.get('resolve', '')
 
-        if 'domain' == resolve_type:
+        if resolve_type == 'domain':
             dbot_score = Common.DBotScore(resolve, resolve_type, INTEGRATION_NAME, Common.DBotScore.NONE)
             if auto_detect_indicator_type(resolve) == FeedIndicatorType.Domain:
                 domain_ioc = Common.Domain(resolve, dbot_score)
@@ -673,7 +820,7 @@ def create_pdns_standard_context(results: List[Dict[str, Any]]) -> List[CommandR
                     indicator=domain_ioc,
                     readable_output=tableToMarkdown('', domain_ioc.to_context().get(Common.Domain.CONTEXT_PATH))
                 ))
-        elif 'ip' == resolve_type:
+        elif resolve_type == 'ip':
             dbot_score = Common.DBotScore(resolve, resolve_type, INTEGRATION_NAME, Common.DBotScore.NONE)
             if auto_detect_indicator_type(resolve) == FeedIndicatorType.IP:
                 ip_ioc = Common.IP(resolve, dbot_score)
@@ -713,7 +860,7 @@ def get_services_hr(total_records: int, results: list) -> str:
     return f"### Total Retrieved Record(s) {total_records} \n {table_output}"
 
 
-def validate_get_cookies_arguments(args: Dict[str, Any]) -> None:
+def validate_get_cookies_arguments(args: dict[str, Any]) -> None:
     """
     Validate arguments for get cookies command, raise ValueError on invalid arguments.
 
@@ -760,7 +907,7 @@ def validate_get_cookies_arguments(args: Dict[str, Any]) -> None:
             raise ValueError(MESSAGES['INVALID_QUERY_COOKIE_NAME'])
 
 
-def get_cookies_hr(results: List[Dict[str, Any]], hostname_header: str, total_records: int):
+def get_cookies_hr(results: list[dict[str, Any]], hostname_header: str, total_records: int):
     """
     Retrieved information of cookies and convert it into human-readable markdown string.
 
@@ -785,6 +932,448 @@ def get_cookies_hr(results: List[Dict[str, Any]], hostname_header: str, total_re
     return hr
 
 
+def calculate_dbot_score(classification: str) -> int:
+    """
+    Calculate te dbot score according to the classification provided
+    :param classification: The classification received from he api response
+    :return: Dbot Score
+    """
+    if classification == "UNKNOWN":
+        score = Common.DBotScore.NONE  # unknown
+    elif classification == "MALICIOUS":
+        score = Common.DBotScore.BAD  # bad
+    elif classification == "SUSPICIOUS":
+        score = Common.DBotScore.SUSPICIOUS  # suspicious
+    else:
+        score = Common.DBotScore.GOOD  # good
+    return score
+
+
+def get_standard_context(score: int, ip: str) -> Common.IP:
+    """
+    Prepare standard context for ip reputation command
+    :param score: The Dbot score
+    :param ip: IP Address
+    :return: IP indicator object
+    """
+    dbot_score = Common.DBotScore(
+        indicator=ip,
+        integration_name='PassiveTotal',
+        indicator_type=DBotScoreType.IP,
+        score=score,
+        reliability=demisto.params().get('integrationReliability')
+    )
+    return Common.IP(
+        ip=ip,
+        dbot_score=dbot_score
+    )
+
+
+def get_data_card_summary(summary: dict) -> str:
+    """
+    Prepare data card summary
+    :param summary: data card summary response
+    :return: human readable string
+    """
+    data_card_summary = ""
+    for key, value in summary.items():
+        if value.get("count") == 0:
+            data_card_summary += "{}: {}, ".format(key, value.get("count"))
+        else:
+            data_card_summary += "{}: [{}]({}), ".format(key, value.get("count"), value.get("link"))
+
+    return data_card_summary[:-2]
+
+
+def validate_list_intel_profile_args(args: dict[str, str]) -> tuple[dict[str, Any], int]:
+    """
+    Validate arguments for pt-list-intel-profiles, raise ValueError on invalid arguments.
+
+    :param args: The command arguments provided by the user.
+    :return: Parameters to send in request
+
+    """
+    params: dict[str, Any] = {}
+    query = args.get('query', '')
+    if query:
+        params["query"] = query
+
+    profile_type = args.get('type', '').lower()
+    if profile_type:
+        if profile_type not in PROFILE_TYPE:
+            raise ValueError(MESSAGES["INVALID_PROFILE_TYPE"].format(profile_type))
+        params["type"] = profile_type
+
+    indicator_value = args.get("indicator_value", "")
+    if indicator_value:
+        params["query"] = indicator_value
+
+    source = args.get('source', '').lower()
+    if source:
+        if not indicator_value:
+            raise ValueError(MESSAGES["REQUIRED_INDICATOR_VALUE"])
+        if source not in SOURCE:
+            raise ValueError(MESSAGES["INVALID_SOURCE"].format(source))
+        params["sources"] = source
+
+    category = args.get('category', '').lower()
+    if category:
+        if not indicator_value:
+            raise ValueError(MESSAGES["REQUIRED_INDICATOR_VALUE"])
+        params["categories"] = category
+
+    page_size = validate_page_size_args(args)
+
+    return params, page_size
+
+
+def get_human_readable_for_intel_profile_command(results: list[dict[str, Any]]) -> str:
+    """
+    Parse and convert the response into human-readable markdown string.
+
+    :param results: Details of profiles.
+    :return: Human Readable string containing information.
+    """
+    hr_list = []
+    for profile in results:
+        hr_record = {
+            'ID': profile.get('id', ''),
+            'Title': profile.get('title', ''),
+            'Aliases': ", ".join(f"{i}" for i in profile.get("aliases", [])),
+            'Public Indicators': profile.get('osintIndicatorsCount', ''),
+            'RiskIQ Indicators': profile.get('riskIqIndicatorsCount', '')
+        }
+
+        hr_list.append(hr_record)
+
+    return tableToMarkdown('Profile(s)', hr_list, ['ID', 'Title', 'Aliases', 'Public Indicators', 'RiskIQ Indicators'],
+                           removeNull=True)
+
+
+def validate_page_and_size_args(args: dict[str, str]) -> dict:
+    """
+    Validate page and size arguments for all commands, raise ValueError on invalid arguments.
+    :param args: The command arguments provided by the user.
+    :return: Parameters to send in request
+    """
+
+    params: dict[str, Any] = {}
+
+    page_size = arg_to_number(args.get('page_size', DEFAULT_SIZE))
+
+    if page_size is not None:
+        if page_size < 1 or page_size > 2147483647:
+            raise ValueError(MESSAGES["INVALID_PAGE_SIZE"].format(page_size))
+    else:
+        page_size = int(DEFAULT_SIZE)
+    params["size"] = page_size
+
+    page_number = arg_to_number(args.get('page_number', DEFAULT_PAGE_NUMBER))
+    if page_number:
+        if page_number < 0 or page_number > 2147483647:
+            raise ValueError(MESSAGES["INVALID_PAGE_NUMBER"].format(page_number))
+    else:
+        page_number = int(DEFAULT_PAGE_NUMBER)
+    params["page"] = page_number
+
+    return params
+
+
+def validate_list_intel_profile_indicators_args(args: dict[str, Any]) -> tuple[str, dict]:
+    """
+    Validate arguments of list_intel_profile_indicators commands, raise ValueError on invalid arguments.
+    :param args: The command arguments provided by the user.
+    :return: Parameters to send in request
+    """
+    profile_id = args.get('id', '')
+    if not profile_id:
+        raise ValueError(MESSAGES['REQUIRED_ARGUMENT'].format('id'))
+
+    params = validate_page_and_size_args(args)
+
+    indicator_type = args.get('type', '').lower()
+    if indicator_type:
+        if indicator_type not in INDICATOR_TYPE:
+            raise ValueError(MESSAGES["INVALID_INDICATOR_TYPE"].format(indicator_type))
+        params['types'] = indicator_type
+
+    indicator_value = args.get('indicator_value', '')
+    if indicator_value:
+        params['query'] = indicator_value
+
+    source = args.get('source', '').lower()
+    if source:
+        if source not in SOURCE:
+            raise ValueError(MESSAGES['INVALID_SOURCE'].format(source))
+        params['sources'] = source
+
+    category = args.get('category', '').lower()
+    if category:
+        params['categories'] = category
+
+    return profile_id, params
+
+
+def get_human_readable_for_intel_profile_indicator_command(indicators: dict[str, Any]) -> str:
+    """
+    Parse and convert the intel profile indicator list into human-readable markdown string.
+    :param indicators: Details of indicators.
+    :return: Human Readable string containing information of intel profile indicators.
+    """
+    hr_table_content: list[dict[str, Any]] = []
+    total_records = indicators.get('totalCount', 0)
+
+    for indicator in indicators.get('results', []):
+        hr_row = {
+            'ID': indicator.get('id', ''),
+            'Artifact Value': indicator.get('value', ''),
+            'Type': indicator.get('type', ''),
+            'First Seen (GMT)': indicator.get('firstSeen', ''),
+            'Last Seen (GMT)': indicator.get('lastSeen', ''),
+            'Source': 'OSINT' if indicator.get('osint', True) else 'RiskIQ',
+        }
+        hr_table_content.append(hr_row)
+
+    hr = f"### Total Retrieved Indicator(s) {total_records}\n"
+    hr += tableToMarkdown("Indicator(s)", hr_table_content,
+                          headers=["ID", "Artifact Value", "Type", "First Seen (GMT)", "Last Seen (GMT)", "Source"],
+                          removeNull=True)
+    return hr
+
+
+def validate_list_my_asi_insights_args(args: dict[str, Any]) -> tuple[str, int]:
+    """
+    Validate arguments of pt-list-my-attack-surface-insights, pt-list-third-party-asi-insights command, raise ValueError
+    on invalid arguments.
+
+    :param args: The command arguments provided by the user.
+    :return: Parameters to send in request
+    """
+
+    priority = args.get('priority', '').lower()
+
+    if priority:
+        if priority not in PRIORITY:
+            raise ValueError(MESSAGES["INVALID_PRIORITY_LEVEL"].format(priority))
+    else:
+        raise ValueError(MESSAGES["REQUIRED_ARGUMENT"].format("priority"))
+
+    page_size = validate_page_size_args(args)
+
+    return priority, page_size
+
+
+def prepare_context_for_my_asi_insights(response, priority_level) -> dict[str, Any]:
+    """
+    Prepare context data for pt-list-my-attack-surface-insights, pt-list-third-party-asi-insights command
+    :param response: API response.
+    :param priority_level: The priority level provided by the user.
+    :return: context data
+    """
+    context_data = {"priorityLevel": priority_level}
+
+    insights = response.get("insights", [])
+
+    for insight in insights:
+        link = insight.get("link", '')
+        if link:
+            # retrieve segment_by and insight_id from the link received from api response
+            link_split = link.split('?')
+            insight['insightId'] = link_split[0].split('/')[-1]
+            query_parameters = parse.parse_qs(link_split[1])
+            insight['segmentBy'] = query_parameters.get("segmentBy", '')[0]
+
+    context_data["insight"] = insights
+
+    return context_data
+
+
+def get_human_readable_for_my_asi_insights_command(results: dict[str, Any], priority: str, active_insights: int,
+                                                   total_insights: int, total_observations: int) -> str:
+    """
+    Parse and convert the asi insight list into human-readable markdown string.
+    :param results: Details of insights.
+    :param priority: Priority of insights.
+    :param active_insights: Total active insights
+    :param total_insights: Total number of insights
+    :param total_observations: Total observations
+    :return: Human Readable string containing information.
+    """
+    hr_table_content: list[dict[str, Any]] = []
+
+    insights = results.get('insight', {})
+    for insight in insights:
+        hr_row = {
+            'Name': insight.get('name', ''),
+            'Description': insight.get('description', ''),
+            'Observations': insight.get('observationCount', ''),
+            'Insight ID': insight.get('insightId', ''),
+            'Segment By': insight.get('segmentBy', ''),
+        }
+        hr_table_content.append(hr_row)
+
+    # sort on the basis of observation count
+    sorted_hr_table = sorted(hr_table_content, key=lambda item: item['Observations'], reverse=True)
+
+    table_heading = f"{priority.capitalize()} Severity Insights\n{active_insights} Active of {total_insights} " \
+                    f"Insights - {total_observations} Observations\n"
+    hr = tableToMarkdown(table_heading, sorted_hr_table,
+                         headers=["Name", "Description", "Observations", "Insight ID", "Segment By"],
+                         removeNull=True)
+    return hr
+
+
+def get_human_readable_for_attack_surface_command(response: list[dict[str, Any]]) -> str:
+    """
+    Parse and convert the attack surface list into human-readable markdown string.
+    :param response: Details of attack surface.
+    :return: Human Readable string containing information of attack surface.
+    """
+    hr_table_content: list[dict[str, Any]] = []
+
+    for result in response:
+        hr_row = {
+            'ID': result.get('id', ''),
+            'Name': f"[{result.get('name', '')}]({UI_LINK}{result.get('id', '')})",
+            'High Severity': f"{result.get('priorities', {}).get('high', {}).get('observationCount', 0)} observations",
+            'Medium Severity': f"{result.get('priorities', {}).get('medium', {}).get('observationCount', 0)} observations",
+            'Low Severity': f"{result.get('priorities', {}).get('low', {}).get('observationCount', 0)} observations",
+        }
+        hr_table_content.append(hr_row)
+
+    return tableToMarkdown("Attack Surface(s)", hr_table_content,
+                           headers=["ID", "Name", "High Severity", "Medium Severity", "Low Severity"], removeNull=True)
+
+
+def validate_list_my_asi_assets_args(args: dict[str, Any]) -> tuple[str, dict]:
+    """
+    Validate arguments of list_my_asi_assets_command commands, raise ValueError on invalid arguments.
+    :param args: The command arguments provided by the user.
+    :return: Parameters to send in request
+    """
+    insight_id = args.get('id', '')
+    if not insight_id:
+        raise ValueError(MESSAGES['REQUIRED_ARGUMENT'].format('id'))
+
+    segment_by = args.get('segment_by', '')
+    if not segment_by:
+        raise ValueError(MESSAGES["REQUIRED_ARGUMENT"].format("segment_by"))
+
+    params = validate_page_and_size_args(args)
+    params["segmentBy"] = segment_by
+
+    return insight_id, params
+
+
+def get_human_readable_for_my_asi_assets_command(results: dict[str, Any]) -> str:
+    """
+    Parse and convert the asi asset list into human-readable markdown string.
+    :param results: Details of assets.
+    :return: Human Readable string containing information.
+    """
+    hr_table_content: list[dict[str, Any]] = []
+    assets = results.get('assets', [])
+    for asset in assets:
+        hr_row = {
+            'Name': asset.get('name', ''),
+            'Type': asset.get('type', ''),
+            'First Seen (GMT)': asset.get('firstSeen', ''),
+            'Last Seen (GMT)': asset.get('lastSeen', ''),
+        }
+        hr_table_content.append(hr_row)
+
+    hr = tableToMarkdown("Asset(s)", hr_table_content,
+                         headers=["Name", "Type", "First Seen (GMT)", "Last Seen (GMT)"],
+                         removeNull=True)
+    return hr
+
+
+def get_human_readable_for_my_asi_vulnerable_components_command(results: list[dict[str, Any]]) -> str:
+    """
+    Parse and convert the asi vulnerable component list into human-readable markdown string.
+    :param results: Details of vulnerable component.
+    :return: Human Readable string containing information.
+    """
+    hr_table_content: list[dict[str, Any]] = []
+    for component in results:
+        hr_row = {
+            'Name': component.get('name', ''),
+            'Type': component.get('type', ''),
+            'Severity': component.get('severity', ''),
+            'Asset Count': component.get('count', ''),
+        }
+        hr_table_content.append(hr_row)
+
+    hr = tableToMarkdown("Vulnerable Component(s)", hr_table_content,
+                         headers=["Name", "Type", "Severity", "Asset Count"],
+                         removeNull=True)
+    return hr
+
+
+def get_human_readable_for_my_asi_vulnerabilities_command(results: list[dict[str, Any]]) -> str:
+    """
+    Parse and convert the asi vulnerabilities list into human-readable markdown string.
+    :param results: Details of vulnerability.
+    :return: Human Readable string containing information.
+    """
+    hr_table_content: list[dict[str, Any]] = []
+    for component in results:
+        hr_row = {
+            'CVE ID': component.get('cveId', ''),
+            'CWE ID': f'{", ".join("{}".format(i.get("cweId")) for i in component.get("cwes", []))} ',
+            'RiskIQ Priority Score': component.get('priorityScore', ''),
+            'Asset Count': component.get('observationCount', ''),
+        }
+        hr_table_content.append(hr_row)
+
+    hr = tableToMarkdown("Vulnerabilities", hr_table_content,
+                         headers=["CVE ID", "CWE ID", "RiskIQ Priority Score", "Asset Count"],
+                         removeNull=True)
+    return hr
+
+
+def get_human_readable_for_my_asi_observations_command(results: dict[str, Any]) -> str:
+    """
+    Parse and convert the asi observations list into human-readable markdown string.
+    :param results: Details of observations.
+    :return: Human Readable string containing information.
+    """
+    hr_table_content: list[dict[str, Any]] = []
+    assets = results.get('assets', [])
+    for asset in assets:
+        hr_row = {
+            'Name': asset.get('name', ''),
+            'Type': asset.get('type', ''),
+            'First Seen (GMT)': asset.get('firstSeen', ''),
+            'Last Seen (GMT)': asset.get('lastSeen', ''),
+        }
+        hr_table_content.append(hr_row)
+
+    hr = tableToMarkdown("Observation(s)", hr_table_content,
+                         headers=["Name", "Type", "First Seen (GMT)", "Last Seen (GMT)"],
+                         removeNull=True)
+    return hr
+
+
+def validate_page_size_args(args: dict[str, str]) -> int:
+    """
+    Validate page_size argument for all command which does not supports pagination, raise ValueError on invalid
+    arguments.
+    :param args: The command arguments provided by the user.
+    :return: Validated page_size argument
+    """
+
+    page_size = arg_to_number(args.get('page_size', DEFAULT_SIZE))
+
+    if page_size is not None:
+        if page_size < 1 or page_size > 1000:
+            raise ValueError(MESSAGES["NOT_VALID_PAGE_SIZE"].format(page_size))
+    else:
+        page_size = int(DEFAULT_SIZE)
+
+    return page_size
+
+
 ''' REQUESTS FUNCTIONS '''
 
 
@@ -801,7 +1390,7 @@ def test_function(client: Client) -> str:
 
 
 @logger
-def get_components_command(client: Client, args: Dict[str, Any]) -> Union[str, List[CommandResults]]:
+def get_components_command(client: Client, args: dict[str, Any]) -> str | list[CommandResults]:
     """
     Retrieves the host attribute components for a domain or IP address.
 
@@ -843,7 +1432,7 @@ def get_components_command(client: Client, args: Dict[str, Any]) -> Union[str, L
 
 
 @logger
-def pt_whois_search_command(client_obj: Client, args: Dict[str, Any]) -> Union[List[CommandResults], str]:
+def pt_whois_search_command(client_obj: Client, args: dict[str, Any]) -> list[CommandResults] | str:
     """
     Gets WHOIS information records based on field matching queries
 
@@ -883,7 +1472,7 @@ def pt_whois_search_command(client_obj: Client, args: Dict[str, Any]) -> Union[L
 
 
 @logger
-def get_trackers_command(client: Client, args: Dict[str, Any]) -> Union[str, List[CommandResults]]:
+def get_trackers_command(client: Client, args: dict[str, Any]) -> str | list[CommandResults]:
     """
     Retrieves the host attribute trackers for a domain or IP address.
 
@@ -925,7 +1514,7 @@ def get_trackers_command(client: Client, args: Dict[str, Any]) -> Union[str, Lis
 
 
 @logger
-def ssl_cert_search_command(client: Client, args: Dict[str, Any]) -> Union[str, CommandResults]:
+def ssl_cert_search_command(client: Client, args: dict[str, Any]) -> str | CommandResults:
     """
     Retrieve SSL certificates based on various field and its value.
 
@@ -941,15 +1530,15 @@ def ssl_cert_search_command(client: Client, args: Dict[str, Any]) -> Union[str, 
     url_suffix: str = URL_SUFFIX['SSL_CERT_SEARCH']
 
     # Prepare query data
-    request_data: Dict[str, Any] = {
+    request_data: dict[str, Any] = {
         'field': field,
         'query': query
     }
 
     # http call
-    resp: Dict[str, Any] = client.http_request("GET", url_suffix, request_data)
+    resp: dict[str, Any] = client.http_request("GET", url_suffix, request_data)
 
-    results: List[Dict[str, Any]] = resp.get('results', [])
+    results: list[dict[str, Any]] = resp.get('results', [])
     if len(results) <= 0:
         return MESSAGES['NO_RECORDS_FOUND'].format('SSL certificate(s)')
 
@@ -969,7 +1558,7 @@ def ssl_cert_search_command(client: Client, args: Dict[str, Any]) -> Union[str, 
 
 
 @logger
-def get_pdns_details_command(client: Client, args: Dict[str, Any]) -> Union[str, List[CommandResults]]:
+def get_pdns_details_command(client: Client, args: dict[str, Any]) -> str | list[CommandResults]:
     """
     Retrieve passive DNS details based on ip or host.
 
@@ -1011,7 +1600,7 @@ def get_pdns_details_command(client: Client, args: Dict[str, Any]) -> Union[str,
 
 
 @logger
-def get_host_pairs_command(client: Client, args: Dict[str, Any]) -> Union[str, CommandResults]:
+def get_host_pairs_command(client: Client, args: dict[str, Any]) -> str | CommandResults:
     """
     Retrieves the host attribute pairs related to a domain or IP address.
 
@@ -1055,7 +1644,7 @@ def get_host_pairs_command(client: Client, args: Dict[str, Any]) -> Union[str, C
 
 
 @logger
-def domain_reputation_command(client_obj: Client, args: Dict[str, Any]) -> Union[str, List[CommandResults]]:
+def domain_reputation_command(client_obj: Client, args: dict[str, Any]) -> str | list[CommandResults]:
     """
     Reputation command for domain.
 
@@ -1070,10 +1659,10 @@ def domain_reputation_command(client_obj: Client, args: Dict[str, Any]) -> Union
     if len(domains) == 0:
         raise ValueError('domain(s) not specified')
 
-    command_results: List[CommandResults] = []
-    custom_domain_context: List[Dict[str, Any]] = []
-    domain_responses: List[Dict[str, Any]] = []
-
+    command_results: list[CommandResults] = []
+    custom_domain_context: list[dict[str, Any]] = []
+    domain_responses: list[dict[str, Any]] = []
+    custom_reputation_response = []
     for domain in domains:
         # argument validation
         if domain.strip() == '':
@@ -1086,15 +1675,27 @@ def domain_reputation_command(client_obj: Client, args: Dict[str, Any]) -> Union
 
         # http call
         response = client_obj.http_request(method='GET', url_suffix=URL_SUFFIX['WHOIS_SEARCH'], params=params)
+        reputation_response = client_obj.http_request(method='GET', url_suffix=URL_SUFFIX["GET_REPUTATION"],
+                                                      params=params)
+        hr_response = get_human_readable_for_reputation_command(reputation_response, domain)
+        custom_reputation_response.append(hr_response)
+        custom_reputation_context = remove_empty_elements(reputation_response)
 
         domains_response = response.get('results', [])
         if len(domains_response) <= 0:
             continue
 
+        classification = reputation_response.get('classification', '')
+        dbot_score = calculate_dbot_score(classification)
         # Creating entry context
-        standard_results, custom_context = get_context_for_whois_commands(domains_response)
+        standard_results, custom_context = get_context_for_whois_commands(domains_response, dbot_score)
+
+        # Preparing context data
         command_results.extend(standard_results)
-        custom_domain_context += custom_context
+        custom_context.append(custom_reputation_context)
+        final_context = {k: v for x in custom_context for k, v in x.items()}
+        custom_domain_context.append(final_context)
+
         domain_responses += domains_response
 
     # Creating human-readable
@@ -1103,18 +1704,22 @@ def domain_reputation_command(client_obj: Client, args: Dict[str, Any]) -> Union
         is_reputation_command=True
     )
 
+    final_hr = domain_standard_hr
+    for x in custom_reputation_response:
+        final_hr += x
+
     command_results.insert(0, CommandResults(
-        readable_output=domain_standard_hr,
+        readable_output=final_hr,
         outputs_prefix='PassiveTotal.Domain',
         outputs_key_field='domain',
-        outputs=custom_domain_context,
+        outputs=custom_domain_context
     ))
 
     return command_results
 
 
 @logger
-def get_services_command(client: Client, args: Dict[str, Any]) -> CommandResults:
+def get_services_command(client: Client, args: dict[str, Any]) -> CommandResults:
     """
     Retrieves the services for the specified IP address.
 
@@ -1156,7 +1761,7 @@ def get_services_command(client: Client, args: Dict[str, Any]) -> CommandResults
 
 
 @logger
-def pt_get_whois_command(client_obj: Client, args: Dict[str, Any]) -> CommandResults:
+def pt_get_whois_command(client_obj: Client, args: dict[str, Any]) -> CommandResults:
     """
     Gets WHOIS information records based on queries
 
@@ -1197,7 +1802,7 @@ def pt_get_whois_command(client_obj: Client, args: Dict[str, Any]) -> CommandRes
 
 
 @logger
-def get_cookies_command(client: Client, args: Dict[str, str]) -> Union[str, CommandResults]:
+def get_cookies_command(client: Client, args: dict[str, str]) -> str | CommandResults:
     """
     Retrieve cookies with hostnames or addresses based on cookie name or cookie domain.
 
@@ -1260,7 +1865,7 @@ def get_cookies_command(client: Client, args: Dict[str, str]) -> Union[str, Comm
 
 
 @logger
-def pt_get_articles_command(client_obj: Client, args: Dict[str, Any]) -> CommandResults:
+def pt_get_articles_command(client_obj: Client, args: dict[str, Any]) -> CommandResults:
     """
     Gets an article information based on queries
 
@@ -1304,6 +1909,755 @@ def pt_get_articles_command(client_obj: Client, args: Dict[str, Any]) -> Command
     )
 
 
+@logger
+def get_data_card_summary_command(client_obj: Client, args: dict[str, Any]) -> CommandResults:
+    """
+    Retrieves a summary data card associated with the given query.
+
+    :param client_obj: client object which is used to get response from API
+    :param args: it contain arguments of pt-data-card-get
+    :return: command output
+    """
+    # Retrieve arguments
+    query = args.get('query', '').strip()
+    if not query:
+        raise ValueError(MESSAGES["REQUIRED_ARGUMENT"].format("query"))
+
+    params = {
+        'query': query
+    }
+
+    # http call
+    response = client_obj.http_request(method='GET', url_suffix=URL_SUFFIX['GET_DATA_CARD_SUMMARY'], params=params)
+    context_data = remove_empty_elements(response)
+    hr_response = get_human_readable_for_data_card_command(response)
+
+    return CommandResults(
+        outputs_prefix='PassiveTotal.DataCard',
+        outputs_key_field='name',
+        outputs=context_data,
+        readable_output=hr_response,
+        raw_response=response
+    )
+
+
+@logger
+def get_reputation_command(client_obj: Client, args: dict[str, Any]) -> CommandResults:
+    """
+    Gets reputation for a given domain, host or IP.
+
+    :param client_obj: client object which is used to get response from API
+    :param args: it contain arguments of pt-reputation-get
+    :return: command output
+    """
+    # Retrieve arguments
+    query = args.get('query', '').strip()
+
+    if not query:
+        raise ValueError(MESSAGES["REQUIRED_ARGUMENT"].format("query"))
+
+    params = {
+        'query': query
+    }
+
+    # http call
+    response = client_obj.http_request(method='GET', url_suffix=URL_SUFFIX["GET_REPUTATION"], params=params)
+    context_data = remove_empty_elements(response)
+    context_data['query'] = query
+    hr_response = get_human_readable_for_reputation_command(response, query)
+
+    return CommandResults(
+        outputs_prefix='PassiveTotal.Reputation',
+        outputs_key_field='query',
+        outputs=context_data,
+        readable_output=hr_response,
+        raw_response=response
+    )
+
+
+@logger
+def ip_reputation_command(client_obj: Client, args: dict[str, Any]) -> list[CommandResults]:
+    """
+    Reputation command for IP.
+
+    :param client_obj: Client object
+    :param args: The command arguments provided by user
+    :return: Standard command result
+    """
+    # Retrieve arguments
+    ips = [x.strip() for x in argToList(args.get('ip', '')) if x.strip()]
+
+    # argument validation
+    if len(ips) == 0:
+        raise ValueError(MESSAGES["EMPTY_IP_ARGUMENT"])
+
+    command_results: list[CommandResults] = []
+
+    for ip in ips:
+        if not is_ip_valid(ip, True):
+            raise ValueError(MESSAGES["INVALID_IP_ARGUMENT"].format(ip))
+        params = {
+            'query': ip,
+        }
+        # http call
+        response = client_obj.http_request(method='GET', url_suffix=URL_SUFFIX["GET_REPUTATION"], params=params)
+
+        classification = response.get('classification', '')
+        dbot_score = calculate_dbot_score(classification)
+        standard_context = get_standard_context(dbot_score, ip)
+
+        context_data = remove_empty_elements(response)
+        context_data['query'] = ip
+
+        human_readable = get_human_readable_for_reputation_command(response, ip)
+
+        command_results.append(CommandResults(
+            readable_output=human_readable,
+            outputs_prefix='PassiveTotal.IP',
+            outputs_key_field='query',
+            outputs=context_data,
+            indicator=standard_context
+        ))
+    return command_results
+
+
+@logger
+def get_intel_profile_command(client_obj: Client, args: dict[str, Any]) -> CommandResults:
+    """
+    Retrieves the list of all profiles.
+
+    :param client_obj: client object which is used to get response from API
+    :param args: it contain arguments of pt-list-intel-profiles
+    :return: command output
+    """
+    # Retrieve arguments
+    params, page_size = validate_list_intel_profile_args(args)
+
+    profile_id = args.get("id")
+
+    if profile_id:
+        url_suffix = f'{URL_SUFFIX["LIST_INTEL_PROFILE"]}/{profile_id}'
+
+    elif args.get("indicator_value"):
+        url_suffix = URL_SUFFIX["LIST_INTEL_PROFILE_BY_INDICATOR"]
+
+    else:
+        url_suffix = URL_SUFFIX["LIST_INTEL_PROFILE"]
+
+    # http call
+    response = client_obj.http_request(method='GET', url_suffix=url_suffix, params=params)
+
+    if profile_id:
+        profiles = [response]
+    else:
+        profiles = response.get("results", [])
+
+    if not profiles:
+        return CommandResults(readable_output=MESSAGES['NO_RECORDS_FOUND'].format("profiles"))
+
+    profiles = profiles[:page_size]
+    context_data = remove_empty_elements_for_context(profiles)
+
+    hr_response = get_human_readable_for_intel_profile_command(profiles)
+
+    return CommandResults(
+        outputs_prefix='PassiveTotal.IntelProfile',
+        outputs_key_field='id',
+        outputs=context_data,
+        readable_output=hr_response,
+        raw_response=response
+    )
+
+
+@logger
+def list_intel_profile_indicators_command(client_obj: Client, args: dict[str, Any]) -> CommandResults:
+    """
+    Retrieves the indicators for the given profile.
+
+    :param client_obj: client object which is used to get response from API
+    :param args: it contain arguments of pt-list-intel-profile-indicator
+    :return: command output
+    """
+    profile_id, params = validate_list_intel_profile_indicators_args(args)
+
+    response = client_obj.http_request(method='GET',
+                                       url_suffix=URL_SUFFIX['LIST_INTEL_PROFILE_INDICATOR'].format(profile_id),
+                                       params=params)
+    indicators = response.get('results', [])
+    if not indicators or len(indicators) <= 0:
+        return CommandResults(readable_output=MESSAGES['NO_RECORDS_FOUND'].format('indicators'))
+
+    for indicator in indicators:
+        del indicator['profileId']
+
+    context_data = {'indicator': remove_empty_elements(indicators), 'id': profile_id}
+    hr_response = get_human_readable_for_intel_profile_indicator_command(response)
+
+    return CommandResults(
+        outputs_prefix='PassiveTotal.IntelProfile',
+        outputs_key_field='id',
+        outputs=context_data,
+        readable_output=hr_response,
+        raw_response=response
+    )
+
+
+@logger
+def list_my_asi_insights_command(client_obj: Client, args: dict[str, Any]) -> CommandResults:
+    """
+    Retrieves the attack surface insight information of the individual's account.
+
+    :param client_obj: client object which is used to get response from API
+    :param args: it contain arguments of pt-list-my-attack-surface-insights
+    :return: command output
+    """
+    priority_level, page_size = validate_list_my_asi_insights_args(args)
+
+    url_suffix = f'{URL_SUFFIX["LIST_ASI_INSIGHTS"]}/{priority_level}'
+
+    response = client_obj.http_request(method='GET', url_suffix=url_suffix)
+
+    insights = response.get('insights', [])
+    response['insights'] = insights[:page_size]
+    context_data = prepare_context_for_my_asi_insights(response, priority_level)
+    summary = {
+        "name": "pt-list-my-attack-surface-insights",
+        "activeInsightCount": response.get("activeInsightCount", ''),
+        "totalInsightCount": response.get("totalInsightCount", ''),
+        "totalObservations": response.get("totalObservations", '')
+
+    }
+    outputs = {
+        "PassiveTotal.Insight(val.priorityLevel == obj.priorityLevel)": context_data,
+        "PassiveTotal.Summary.Insight(val.name == obj.name)": summary
+    }
+
+    hr_response = get_human_readable_for_my_asi_insights_command(context_data, priority_level,
+                                                                 summary['activeInsightCount'],
+                                                                 summary['totalInsightCount'],
+                                                                 summary['totalObservations'])
+    outputs = remove_empty_elements_for_context(outputs)
+
+    return CommandResults(
+        outputs=outputs,
+        readable_output=hr_response,
+        raw_response=response
+    )
+
+
+@logger
+def list_third_party_asi_command(client_obj: Client, args: dict[str, Any]) -> CommandResults:
+    """
+    Retrieves the attack surface observations by severity level for the given third-party account.
+
+    :param client_obj: client object which is used to get response from API
+    :param args: it contain arguments of pt-list-third-party-attack-surface
+    :return: command output
+    """
+    params = validate_page_and_size_args(args)
+
+    vendor_id = arg_to_number(args.get('id'))
+
+    url_suffix = URL_SUFFIX['LIST_THIRD_PARTY_ASI']
+    if vendor_id:
+        url_suffix = f"{URL_SUFFIX['LIST_THIRD_PARTY_ASI']}/{vendor_id}"
+        params = {}
+
+    response = client_obj.http_request(method='GET', url_suffix=url_suffix, params=params)
+
+    if vendor_id:
+        context_data = [remove_empty_elements(response)]
+    else:
+        context_data = remove_empty_elements(response.get('vendors', []))
+
+    hr_response = get_human_readable_for_attack_surface_command(context_data)
+
+    for data in context_data:
+        data['priority'] = data.pop('priorities')
+
+    summary = {
+        "name": "pt-list-third-party-attack-surface",
+        "totalCount": response.get("totalCount", ''),
+        "totalPages": response.get("totalPages", ''),
+        "nextPage": response.get("nextPage", '')
+
+    }
+    outputs = {
+        "PassiveTotal.ThirdParty(val.id == obj.id)": context_data,
+        "PassiveTotal.Summary.ThirdPartyASI(val.name == obj.name)": summary
+    }
+    outputs = remove_empty_elements_for_context(outputs)
+
+    return CommandResults(
+        outputs=outputs,
+        readable_output=hr_response,
+        raw_response=response
+    )
+
+
+@logger
+def list_my_attack_surfaces_command(client_obj: Client, args: dict[str, Any]) -> CommandResults:
+    """
+    Retrieves the attack surface information of the individual's account.
+
+    :param client_obj: client object which is used to get response from API
+    :param args: It contain arguments of pt-list-my-attack-surfaces
+    :return: command output
+    """
+    page_size = validate_page_size_args(args)
+
+    response = client_obj.http_request(method='GET', url_suffix=URL_SUFFIX['LIST_ATTACK_SURFACE'])
+    if isinstance(response, dict):
+        response = [response]  # type: ignore
+
+    response = response[:page_size]  # type: ignore
+    context_data = remove_empty_elements_for_context(response)
+    for data in context_data:
+        data['priority'] = data.pop('priorities')
+
+    hr_response = get_human_readable_for_attack_surface_command(response)  # type: ignore
+
+    return CommandResults(
+        outputs_prefix='PassiveTotal.AttackSurface',
+        outputs_key_field='id',
+        outputs=context_data,
+        readable_output=hr_response,
+        raw_response=response
+    )
+
+
+@logger
+def list_third_party_asi_insights_command(client_obj: Client, args: dict[str, Any]):
+    """
+    Retrieves the attack surface insight information of the given third-party account.
+
+    :param client_obj: client object which is used to get response from API
+    :param args: It contain arguments of pt-list-third-party-attack-surface-insights
+    :return: command output
+    """
+    vendor_id = arg_to_number(args.get("id", ''))
+    if not vendor_id:
+        raise ValueError(MESSAGES['REQUIRED_ARGUMENT'].format('id'))
+
+    priority, page_size = validate_list_my_asi_insights_args(args)
+
+    url_suffix = URL_SUFFIX['THIRD_PARTY_ASI_INSIGHTS'].format(vendor_id, priority)
+    response = client_obj.http_request(method='GET', url_suffix=url_suffix)
+
+    insights = response.get('insights', [])
+    response['insights'] = insights[:page_size]
+
+    context_data_out = prepare_context_for_my_asi_insights(response, priority)
+    context_data_out.pop("priorityLevel")
+    context_data = {
+        "Insight": context_data_out,
+        "id": vendor_id,
+        "priorityLevel": priority
+    }
+
+    summary = {
+        "name": "pt-list-third-party-attack-surface-insights",
+        "activeInsightCount": response.get("activeInsightCount", ''),
+        "totalInsightCount": response.get("totalInsightCount", ''),
+        "totalObservations": response.get("totalObservations", '')
+    }
+    outputs = {
+        "PassiveTotal.ThirdParty(val.id == obj.id)": context_data,
+        "PassiveTotal.Summary.ThirdPartyInsight(val.name == obj.name)": summary
+    }
+    outputs = remove_empty_elements_for_context(outputs)
+
+    hr_response = get_human_readable_for_my_asi_insights_command(context_data["Insight"], priority,  # type:ignore
+                                                                 summary['activeInsightCount'],
+                                                                 summary['totalInsightCount'],
+                                                                 summary['totalObservations'])
+
+    return CommandResults(
+        outputs=outputs,
+        raw_response=response,
+        readable_output=hr_response
+    )
+
+
+@logger
+def list_my_asi_assets_command(client_obj: Client, args: dict[str, Any]) -> CommandResults:
+    """
+    Retrieves the attack surface asset information of the individual's account.
+
+    :param client_obj: client object which is used to get response from API
+    :param args: it contain arguments of pt-list-attack-surface-assets
+    :return: command output
+    """
+    insight_id, params = validate_list_my_asi_assets_args(args)
+
+    url_suffix = f'{URL_SUFFIX["LIST_ASI_ASSETS"]}/{insight_id}'
+
+    response = client_obj.http_request(method='GET', url_suffix=url_suffix, params=params)
+
+    context_data = {
+        "asset": response.get("assets", []),
+        "insightId": insight_id,
+        "segmentBy": params["segmentBy"]}
+
+    summary = {
+        "name": "pt-list-my-attack-surface-assets",
+        "totalCount": response.get("totalCount", ''),
+        "totalPages": response.get("totalPages", ''),
+        "nextPage": response.get("nextPage", '')
+
+    }
+    outputs = {
+        "PassiveTotal.Asset(val.insightId == obj.insightId && val.segmentBy == obj.segmentBy)": context_data,
+        "PassiveTotal.Summary.Asset(val.name == obj.name)": summary
+    }
+    outputs = remove_empty_elements_for_context(outputs)
+
+    hr_response = get_human_readable_for_my_asi_assets_command(response)
+
+    return CommandResults(
+        outputs=outputs,
+        readable_output=hr_response,
+        raw_response=response
+    )
+
+
+@logger
+def list_my_asi_vulnerable_components_command(client_obj: Client, args: dict[str, Any]) -> CommandResults:
+    """
+    Retrieves the attack surface vulnerable component information of the individual's account.
+
+    :param client_obj: client object which is used to get response from API
+    :param args: it contain arguments of pt-list-my-attack-surface-vulnerable-components
+    :return: command output
+    """
+    params = validate_page_and_size_args(args)
+
+    response = client_obj.http_request(method='GET', url_suffix=URL_SUFFIX["LIST_ASI_VULNERABLE_COMPONENTS"],
+                                       params=params)
+
+    result = response.get("vulnerableComponents")
+    if not result:
+        return CommandResults(readable_output=MESSAGES["NO_RECORDS_FOUND"].format("vulnerable components"))
+
+    summary = {
+        "name": "pt-list-my-attack-surface-vulnerable-components",
+        "totalCount": response.get("totalCount", ''),
+        "totalPages": response.get("totalPages", ''),
+        "nextPage": response.get("nextPage", '')
+
+    }
+    outputs = {
+        "PassiveTotal.VulnerableComponent(val.name == obj.name && val.type == obj.type)": result,
+        "PassiveTotal.Summary.VulnerableComponent(val.name == obj.name)": summary
+    }
+    outputs = remove_empty_elements_for_context(outputs)
+    hr_response = get_human_readable_for_my_asi_vulnerable_components_command(result)
+
+    return CommandResults(
+        outputs=outputs,
+        readable_output=hr_response,
+        raw_response=response
+    )
+
+
+@logger
+def list_my_asi_vulnerabilities_command(client_obj: Client, args: dict[str, Any]) -> CommandResults:
+    """
+    Retrieves the attack surface vulnerable component information of the individual's account.
+
+    :param client_obj: client object which is used to get response from API
+    :param args: it contain arguments of pt-list-my-attack-surface-vulnerabilities
+    :return: command output
+    """
+    params = validate_page_and_size_args(args)
+
+    response = client_obj.http_request(method='GET', url_suffix=URL_SUFFIX["LIST_ASI_VULNERABILITIES"],
+                                       params=params)
+
+    result = response.get("cves")
+    if not result:
+        return CommandResults(readable_output=MESSAGES["NO_RECORDS_FOUND"].format("vulnerabilities"))
+
+    summary = {
+        "name": "pt-list-my-attack-surface-vulnerabilities",
+        "totalCount": response.get("totalCount", ''),
+        "totalPages": response.get("totalPages", ''),
+        "nextPage": response.get("nextPage", '')
+
+    }
+    outputs = {
+        "PassiveTotal.Vulnerability(val.cveId == obj.cveId)": result,
+        "PassiveTotal.Summary.Vulnerability(val.name == obj.name)": summary
+    }
+    outputs = remove_empty_elements_for_context(outputs)
+    hr_response = get_human_readable_for_my_asi_vulnerabilities_command(result)
+
+    return CommandResults(
+        outputs=outputs,
+        readable_output=hr_response,
+        raw_response=response
+    )
+
+
+@logger
+def list_third_party_asi_vulnerable_components_command(client_obj: Client, args: dict[str, Any]) -> CommandResults:
+    """
+    Retrieves the attack surface vulnerable component information of the given third-party account.
+
+    :param client_obj: client object which is used to get response from API
+    :param args: it contain arguments of pt-list-third-party-attack-surface-vulnerable-components
+    :return: command output
+    """
+    vendor_id = arg_to_number(args.get("id", ''))
+    if not vendor_id:
+        raise ValueError(MESSAGES['REQUIRED_ARGUMENT'].format('id'))
+
+    params = validate_page_and_size_args(args)
+
+    response = client_obj.http_request(method='GET',
+                                       url_suffix=URL_SUFFIX["LIST_THIRD_PARTY_ASI_VULNERABLE_COMPONENTS"].format(
+                                           vendor_id),
+                                       params=params)
+
+    result = response.get("vulnerableComponents")
+    if not result:
+        return CommandResults(readable_output=MESSAGES["NO_RECORDS_FOUND"].format("third party vulnerable components"))
+
+    context_data = {
+        "id": vendor_id,
+        "VulnerableComponent": result
+    }
+
+    summary = {
+        "name": "pt-list-third-party-attack-surface-vulnerable-components",
+        "totalCount": response.get("totalCount", ''),
+        "totalPages": response.get("totalPages", ''),
+        "nextPage": response.get("nextPage", '')
+
+    }
+    outputs = {
+        "PassiveTotal.ThirdParty(val.id == obj.id)": context_data,
+        "PassiveTotal.Summary.ThirdPartyVulnerableComponent(val.name == obj.name)": summary
+    }
+    outputs = remove_empty_elements_for_context(outputs)
+
+    hr_response = get_human_readable_for_my_asi_vulnerable_components_command(result)
+
+    return CommandResults(
+        outputs=outputs,
+        readable_output=hr_response,
+        raw_response=response
+    )
+
+
+@logger
+def list_my_asi_observations_command(client_obj: Client, args: dict[str, Any]) -> CommandResults:
+    """
+    Retrieves the attack surface vulnerability observation information of the individual's account.
+
+    :param client_obj: client object which is used to get response from API
+    :param args: it contain arguments of pt-list-my-attack-surface-observations
+    :return: command output
+    """
+    cve_id = args.get("cve_id")
+    if not cve_id:
+        raise ValueError(MESSAGES["REQUIRED_ARGUMENT"].format("cve_id"))
+
+    params = validate_page_and_size_args(args)
+
+    response = client_obj.http_request(method='GET', url_suffix=URL_SUFFIX["LIST_ASI_OBSERVATIONS"].format(cve_id),
+                                       params=params)
+    result = response.get("assets")
+    if not result:
+        return CommandResults(readable_output=MESSAGES["NO_RECORDS_FOUND"].format("observations"))
+
+    summary = {
+        "name": "pt-list-my-attack-surface-observations",
+        "totalCount": response.get("totalCount", ''),
+        "totalPages": response.get("totalPages", ''),
+        "nextPage": response.get("nextPage", '')
+
+    }
+    result = {
+        "cveId": response.get("cveId", ''),
+        "cwe": response.get("cwes", []),
+        "asset": response.get("assets", [])
+    }
+    outputs = {
+        "PassiveTotal.Observation(val.cveId == obj.cveId)": result,
+        "PassiveTotal.Summary.Observation(val.name == obj.name)": summary
+    }
+    outputs = remove_empty_elements_for_context(outputs)
+    hr_response = get_human_readable_for_my_asi_observations_command(response)
+
+    return CommandResults(
+        outputs=outputs,
+        readable_output=hr_response,
+        raw_response=response
+    )
+
+
+@logger
+def list_third_party_asi_assets_command(client_obj: Client, args: dict[str, Any]):
+    """
+    Retrieves the attack surface asset information of the given third-party account.
+
+    :param client_obj: client object which is used to get response from API
+    :param args: it contain arguments of pt-list-third-party-attack-surface-assets
+    :return: command output
+    """
+    vendor_id = arg_to_number(args.get("vendor_id", ''))
+    if not vendor_id:
+        raise ValueError(MESSAGES['REQUIRED_ARGUMENT'].format('vendor_id'))
+
+    insight_id, params = validate_list_my_asi_assets_args(args)
+
+    response = client_obj.http_request(method='GET',
+                                       url_suffix=URL_SUFFIX["LIST_THIRD_PARTY_ASI_ASSETS"].format(vendor_id,
+                                                                                                   insight_id),
+                                       params=params)
+
+    context_data = {
+        "id": vendor_id,
+        "InsightAsset": {
+            "asset": response.get("assets", []),
+            "insightId": insight_id,
+            "segmentBy": params["segmentBy"]
+        }
+    }
+
+    summary = {
+        "name": "pt-list-third-party-attack-surface-assets",
+        "totalCount": response.get("totalCount", ''),
+        "totalPages": response.get("totalPages", ''),
+        "nextPage": response.get("nextPage", '')
+
+    }
+    outputs = {
+        "PassiveTotal.ThirdParty(val.id == obj.id)": context_data,
+        "PassiveTotal.Summary.ThirdPartyInsightAsset(val.name == obj.name)": summary
+    }
+    outputs = remove_empty_elements_for_context(outputs)
+
+    hr_response = get_human_readable_for_my_asi_assets_command(response)
+
+    return CommandResults(
+        outputs=outputs,
+        raw_response=response,
+        readable_output=hr_response
+    )
+
+
+@logger
+def list_third_party_asi_observations_command(client_obj: Client, args: dict[str, Any]) -> CommandResults:
+    """
+    Retrieves the attack surface vulnerability observation information of the given third-party account.
+
+    :param client_obj: client object which is used to get response from API
+    :param args: it contain arguments of pt-list-third-party-attack-surface-observations
+    :return: command output
+    """
+    vendor_id = arg_to_number(args.get("id", ''))
+    if not vendor_id:
+        raise ValueError(MESSAGES['REQUIRED_ARGUMENT'].format('id'))
+
+    cve_id = args.get("cve_id")
+    if not cve_id:
+        raise ValueError(MESSAGES["REQUIRED_ARGUMENT"].format("cve_id"))
+
+    params = validate_page_and_size_args(args)
+
+    response = client_obj.http_request(method='GET',
+                                       url_suffix=URL_SUFFIX["LIST_THIRD_PARTY_ASI_OBSERVATIONS"].format(vendor_id,
+                                                                                                         cve_id),
+                                       params=params)
+
+    result = response.get("assets")
+    if not result:
+        return CommandResults(readable_output=MESSAGES["NO_RECORDS_FOUND"].format("third party observations"))
+
+    # prepare context
+    summary = {
+        "name": "pt-list-third-party-attack-surface-observations",
+        "totalCount": response.get("totalCount", ''),
+        "totalPages": response.get("totalPages", ''),
+        "nextPage": response.get("nextPage", '')
+
+    }
+    result = {
+        "id": vendor_id,
+        "Observation": {
+            "cveId": response.get("cveId", ''),
+            "cwe": response.get("cwes", []),
+            "asset": response.get("assets", [])
+        }
+    }
+    outputs = {
+        "PassiveTotal.ThirdParty(val.id == obj.id)": result,
+        "PassiveTotal.Summary.ThirdPartyObservation(val.name == obj.name)": summary
+    }
+    outputs = remove_empty_elements_for_context(outputs)
+
+    hr_response = get_human_readable_for_my_asi_observations_command(response)
+
+    return CommandResults(
+        outputs=outputs,
+        readable_output=hr_response,
+        raw_response=response
+    )
+
+
+@logger
+def list_third_party_attack_surface_vulnerabilities_command(client_obj: Client, args: dict[str, Any]) -> CommandResults:
+    """
+    Retrieves the attack surface vulnerability information of the given third party account.
+
+    :param client_obj: client object which is used to get response from API
+    :param args: it contain arguments of pt-list-third-party-attack-surface-vulnerabilities
+    :return: command output
+    """
+    vendor_id = arg_to_number(args.get("id", ''))
+    if not vendor_id:
+        raise ValueError(MESSAGES['REQUIRED_ARGUMENT'].format('id'))
+
+    params = validate_page_and_size_args(args)
+
+    response = client_obj.http_request(method='GET',
+                                       url_suffix=URL_SUFFIX["LIST_THIRD_PARTY_ASI_VULNERABILITIES"].format(
+                                           vendor_id),
+                                       params=params)
+
+    result = response.get("cves")
+    if not result:
+        return CommandResults(readable_output=MESSAGES["NO_RECORDS_FOUND"].format("third party vulnerabilities"))
+
+    context_data = {
+        "id": vendor_id,
+        "Vulnerability": result
+    }
+
+    summary = {
+        "name": "pt-list-third-party-attack-surface-vulnerabilities",
+        "totalCount": response.get("totalCount", ''),
+        "totalPages": response.get("totalPages", ''),
+        "nextPage": response.get("nextPage", '')
+
+    }
+    outputs = {
+        "PassiveTotal.ThirdParty(val.id == obj.id)": context_data,
+        "PassiveTotal.Summary.ThirdPartyVulnerability(val.name == obj.name)": summary
+    }
+    outputs = remove_empty_elements_for_context(outputs)
+
+    hr_response = get_human_readable_for_my_asi_vulnerabilities_command(result)
+
+    return CommandResults(
+        outputs=outputs,
+        readable_output=hr_response,
+        raw_response=response
+    )
+
+
 def main() -> None:
     """
         PARSE AND VALIDATE INTEGRATION PARAMS
@@ -1320,7 +2674,24 @@ def main() -> None:
         'domain': domain_reputation_command,
         'pt-get-whois': pt_get_whois_command,
         'pt-get-cookies': get_cookies_command,
-        'pt-get-articles': pt_get_articles_command
+        'pt-get-articles': pt_get_articles_command,
+        'pt-get-data-card': get_data_card_summary_command,
+        'pt-get-reputation': get_reputation_command,
+        'ip': ip_reputation_command,
+        'pt-list-intel-profiles': get_intel_profile_command,
+        'pt-list-intel-profile-indicators': list_intel_profile_indicators_command,
+        'pt-list-third-party-attack-surface': list_third_party_asi_command,
+        'pt-list-my-attack-surface-insights': list_my_asi_insights_command,
+        'pt-list-third-party-attack-surface-insights': list_third_party_asi_insights_command,
+        'pt-list-my-attack-surface-assets': list_my_asi_assets_command,
+        'pt-list-my-attack-surface-vulnerable-components': list_my_asi_vulnerable_components_command,
+        'pt-list-my-attack-surface-vulnerabilities': list_my_asi_vulnerabilities_command,
+        'pt-list-my-attack-surface-observations': list_my_asi_observations_command,
+        'pt-list-third-party-attack-surface-assets': list_third_party_asi_assets_command,
+        'pt-list-third-party-attack-surface-vulnerable-components': list_third_party_asi_vulnerable_components_command,
+        'pt-list-third-party-attack-surface-vulnerabilities': list_third_party_attack_surface_vulnerabilities_command,
+        'pt-list-third-party-attack-surface-observations': list_third_party_asi_observations_command,
+        'pt-list-my-attack-surfaces': list_my_attack_surfaces_command
     }
 
     command = demisto.command()
@@ -1328,8 +2699,8 @@ def main() -> None:
     try:
         # Retrieve XSOAR params
         base_url = demisto.params().get('url')
-        username = demisto.params().get('username')
-        secret = demisto.params().get('secret')
+        username = demisto.params().get('credentials', {}).get('identifier') or demisto.params().get('username')
+        secret = demisto.params().get('credentials', {}).get('password') or demisto.params().get('secret')
         verify_certificate = not demisto.params().get('insecure', False)
         proxy = demisto.params().get('proxy', False)
         request_timeout = get_request_timeout()
@@ -1342,8 +2713,10 @@ def main() -> None:
         if demisto.command() == 'test-module':
             result = test_function(client)
             demisto.results(result)
+
         elif command in commands:
-            return_results(commands[command](client, demisto.args()))
+            args = {key: value.strip() for key, value in demisto.args().items()}
+            return_results(commands[command](client, args))
 
     # Log exceptions
     except Exception as e:

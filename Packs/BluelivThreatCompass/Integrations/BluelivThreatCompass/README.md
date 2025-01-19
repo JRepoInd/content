@@ -1,11 +1,8 @@
 Blueliv ThreatCompass systematically looks for information about companies,products, people, brands, logos, assets, technology and other information, depending on your needs. Blueliv ThreatCompass allows you to monitor and track all this information to keep your data, your
 organization and its employees safe
 
-## Configure Blueliv ThreatCompass on Cortex XSOAR
+## Configure Blueliv ThreatCompass in Cortex
 
-1. Navigate to **Settings** > **Integrations** > **Servers & Services**.
-2. Search for Blueliv ThreatCompass.
-3. Click **Add instance** to create and configure a new integration instance.
 
 | **Parameter** | **Description** | **Required** |
 | --- | --- | --- |
@@ -22,9 +19,8 @@ organization and its employees safe
 | fetch_status | Fetch resource status \(POSITIVE, NEGATIVE...\) | False |
 | first_fetch_time | First fetch time | False |
 
-4. Click **Test** to validate the URLs, token, and connection.
 ## Commands
-You can execute these commands from the Cortex XSOAR CLI, as part of an automation, or in a playbook.
+You can execute these commands from the CLI, as part of an automation, or in a playbook.
 After you successfully execute a command, a DBot message appears in the War Room with the command details.
 ### blueliv-resource-all
 ***
@@ -784,3 +780,46 @@ There is no context output for this command.
 #### Human Readable Output
 
 
+### blueliv-resource-favourite
+***
+Changes the favorite status of a resource.
+
+
+#### Base Command
+
+`blueliv-resource-favourite`
+#### Input
+
+| **Argument Name** | **Description** | **Required** |
+| --- | --- | --- |
+| id | Resource ID. | Required | 
+| favourite | The new favorite status of the resource. Can be "Not", "User", "Group", or "All". Possible values are: Not, User, Group, All. Default is group. | Optional | 
+
+
+#### Context Output
+
+There is no context output for this command.
+### blueliv-module-get-labels
+***
+Gets the label list of the module.
+
+
+#### Base Command
+
+`blueliv-module-get-labels`
+#### Input
+
+There are no input arguments for this command.
+
+#### Context Output
+
+| **Path** | **Type** | **Description** |
+| --- | --- | --- |
+| BluelivThreatCompass.Label.BackgroundColor | String | Hexadecimal color of the label background in the GUI. | 
+| BluelivThreatCompass.Label.Id | String | Label ID. | 
+| BluelivThreatCompass.Label.Name | String | Label name. | 
+| BluelivThreatCompass.Label.Protected | Boolean | Whether the label is protected. | 
+| BluelivThreatCompass.Label.TypeId | Number | Label type ID. | 
+| BluelivThreatCompass.Label.TypeName | String | Label type name | 
+| BluelivThreatCompass.Label.Prioritized | Boolean | Whether the label is prioritized. | 
+| BluelivThreatCompass.Label.TextColor | String | Hexadecimal color of the label text in the GUI. | 

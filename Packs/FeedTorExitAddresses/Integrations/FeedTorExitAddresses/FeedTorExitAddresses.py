@@ -3,10 +3,11 @@ from CommonServerPython import *
 from CommonServerUserPython import *
 
 import requests
-from typing import Dict, List, Optional
+import urllib3
+from typing import Optional
 
 # Disable insecure warnings
-requests.packages.urllib3.disable_warnings()
+urllib3.disable_warnings()
 
 SOURCE_NAME = "Tor Exit Addresses"
 DATE_FORMAT = '%Y-%m-%dT%H:%M:%SZ'
@@ -40,6 +41,7 @@ class Client(BaseClient):
         :return: ISO-8601 date string
         """
         parsed_date = dateparser.parse(date_string, settings={'TIMEZONE': 'UTC'})
+        assert parsed_date is not None, f'could not parse {date_string}'
         return parsed_date.strftime(DATE_FORMAT)
 
     def build_iterator(self, feedTags, limit):
@@ -70,7 +72,6 @@ class Client(BaseClient):
                 indicator['fields'] = {
                     'firstseenbysource': indicator.get('firstseenbysource'),
                     'lastseenbysource': indicator.get('lastseenbysource'),
-                    'name': indicator.get('name'),
                     'tags': feedTags,
                 }
 

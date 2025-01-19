@@ -19,9 +19,11 @@
     "selectValues": [
         "",
         "RED",
+        "AMBER+STRICT",
         "AMBER",
         "GREEN",
-        "WHITE"
+        "WHITE",
+        "CLEAR"
     ],
     "validationRegex": "",
     "useAsKpi": false,

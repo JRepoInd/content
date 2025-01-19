@@ -3,7 +3,7 @@ commonfields:
   version: -1
 name: CalculateTimeDifference
 type: python
-subtype: python2
+subtype: python3
 tags:
 - Utilities
 comment: Calculate the time difference, in minutes
@@ -24,8 +24,8 @@ outputs:
 - contextPath: Time.End
   description: End time.
 scripttarget: 0
-runonce: false
 runas: DBotWeakRole
 tests:
 - Impossible Traveler - Test
 fromversion: 5.0.0
+dockerimage: demisto/python3:3.11.10.113941

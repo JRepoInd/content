@@ -7,7 +7,7 @@
 <h2 id="phishlabs-ioc-playbooks">PhishLabs IOC Playbooks</h2>
 </div>
 <div class="cl-preview-section">
-<p><img src="https://user-images.githubusercontent.com/35098543/58381182-d8408200-7fc2-11e9-8726-8056cab1feea.png" alt="image"><br> <img src="https://user-images.githubusercontent.com/35098543/58381191-e5f60780-7fc2-11e9-84fb-7b9d9beab7f8.png" alt="image"></p>
+<p><img src="../../doc_files/58381182-d8408200-7fc2-11e9-8726-8056cab1feea.png" alt="image"><br> <img src="https://user-images.githubusercontent.com/35098543/58381191-e5f60780-7fc2-11e9-84fb-7b9d9beab7f8.png" alt="image"></p>
 </div>
 <div class="cl-preview-section">
 <h2 id="use-cases">Use Cases</h2>
@@ -1057,5 +1057,5 @@
 <h2 id="troubleshooting">Troubleshooting</h2>
 </div>
 <div class="cl-preview-section">
-<p>Retrieving indicators for an incident - if the incident was fetched to Cortex XSOAR but wasn’t found by the command, try running it with a longer duration, for example,<span> </span><code>since=30d</code>.<br> Possible error codes from the API:<br> <code>400 Bad Request</code><span> </span>- Unsupported request format<br> <code>401 Unauthorized</code><span> </span>- Incorrect credentials provided<br> <code>403 Forbidden</code><span> </span>- Insufficient permissions<br> <code>404 Not Found</code><span> </span>- Requested resource was not found<br> For further assistance, contact Cortex XSOAR Customer Success:<span> </span><a href="mailto:support@demisto.com">support@demisto.com</a>.</p>
+<p>Retrieving indicators for an incident - if the incident was fetched to Cortex XSOAR but wasn’t found by the command, try running it with a longer duration, for example,<span> </span><code>since=30d</code>.<br> Possible error codes from the API:<br> <code>400 Bad Request</code><span> </span>- Unsupported request format<br> <code>401 Unauthorized</code><span> </span>- Incorrect credentials provided<br> <code>403 Forbidden</code><span> </span>- Insufficient permissions<br> <code>404 Not Found</code><span> </span>- Requested resource was not found<br>.</p>
 </div>

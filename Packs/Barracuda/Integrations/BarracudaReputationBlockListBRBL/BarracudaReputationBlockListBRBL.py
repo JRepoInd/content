@@ -15,6 +15,9 @@ def results_return(command, thingtoreturn):
             if item['Malicious']['Vendor']:
                 score = Common.DBotScore.BAD
                 description = ip_reputation['description'] = item['Malicious']['Description']
+            else:
+                score = Common.DBotScore.NONE
+                demisto.debug(f"No Malicious Vendor {score=}")
         except LookupError:
             score = Common.DBotScore.NONE
         dbot_score = Common.DBotScore(
@@ -22,7 +25,8 @@ def results_return(command, thingtoreturn):
             indicator_type=DBotScoreType.IP,
             integration_name='Barracuda',
             malicious_description=description,
-            score=score
+            score=score,
+            reliability=demisto.params().get('integrationReliability')
         )
         ip = Common.IP(
             ip=item['Address'],

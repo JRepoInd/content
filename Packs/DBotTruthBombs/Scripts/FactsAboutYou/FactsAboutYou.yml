@@ -16,11 +16,10 @@ comment: Reveal some facts about yourself.
 commonfields:
   id: FactAboutYou
   version: -1
-dockerimage: demisto/python3:3.9.2.17957
+dockerimage: demisto/python3:3.11.10.115186
 enabled: true
 name: FactAboutYou
 runas: DBotWeakRole
-runonce: false
 script: ''
 scripttarget: 0
 subtype: python3

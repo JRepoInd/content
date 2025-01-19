@@ -1,4 +1,4 @@
-This playbook uses several sub playbooks to process and tag indicators, which is used to identify indicators that shouldn't be blacklisted. For example IP indicators that belong to business partners or important hashes we wish to not process. Additional sub playbooks can be added for improving the business logic and tagging according to the user's needs. This playbook doesn't have its own indicator query as it processes indicators provided by the parent playbook query. To enable the playbook, provide the relevant list names in the sub playbook indicators, such as the ApprovedHashList, OrganizationsExternalIPListName, BusinessPartnersIPListName, etc. Also be sure to append the results of additional sub playbooks to Set indicators to Process Indicators for the additional playbooks results to be in the outputs.
+This playbook uses several sub playbooks to process and tag indicators, which is used to identify indicators that shouldn't be added to block list. For example IP indicators that belong to business partners or important hashes. Additional sub playbooks can be added for improving the business logic and tagging according to the user's needs. This playbook doesn't have its own indicator query as it processes indicators provided by the parent playbook query. To enable the playbook, provide the relevant list names in the sub playbook indicators, such as the ApprovedHashList, OrganizationsExternalIPListName, BusinessPartnersIPListName, etc. Also be sure to append the results of additional sub playbooks to Set indicators to Process Indicators for the additional playbooks results to be in the outputs.
 
 ## Dependencies
 This playbook uses the following sub-playbooks, integrations, and scripts.
@@ -31,7 +31,7 @@ There are no inputs for this playbook.
 
 | **Path** | **Description** | **Type** |
 | --- | --- | --- |
-| ProcessedIndicators | The outputs of this playbook are tagged for manual review in the parent playbook or tagged using approved black, approved white etc. | string |
+| ProcessedIndicators | The outputs of this playbook are tagged for manual review in the parent playbook or tagged using approved_block, approved_allow etc. | string |
 
 ## Playbook Image
 ---

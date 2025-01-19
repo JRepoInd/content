@@ -7,11 +7,12 @@ import requests
 import signal
 import socket
 import struct
-from datetime import datetime, timedelta, timezone
-from typing import List, Dict, Any
+import urllib3
+from datetime import datetime, timedelta, UTC
+from typing import Any
 
 # disable insecure warnings
-requests.packages.urllib3.disable_warnings()
+urllib3.disable_warnings()
 
 # Params:
 VERIFY_SSL = not demisto.params().get('insecure', False)
@@ -65,7 +66,6 @@ SCAN_HEADERS = ['ID', 'Name', 'IP', 'Policy']
 
 class EndOfTime(Exception):
     ''' Raised when functions timeout '''
-    pass
 
 
 def function_timeout(signum, frame):
@@ -224,7 +224,7 @@ def fetch_incidents():
     try:
         new_start_time = datetime.utcnow()    # may be used to update new start_time if no incidents found.
         new_start_time_str = new_start_time.strftime("%Y-%m-%dT%H:%M:%S.%fZ")
-        incidents: List[Dict[str, Any]] = []
+        incidents: list[dict[str, Any]] = []
         last_run = demisto.getLastRun()
 
         # Check if last_run exists and has a start_time to continue:
@@ -428,7 +428,7 @@ def get_host_id_from_ip_address(ip_address):
     if len(hosts_with_given_ip) < 1:
         msg = 'Host not found within Frontline.Cloud given host IP Address. Host will not be included in querying vulnerabilities'
         demisto.error('Frontline.Cloud get_host_id_from_ip_address -- ' + msg)  # print to demisto log in ERROR
-        demisto.log('Frontline.Cloud get_host_id_from_ip_address -- ' + msg)    # print to war room
+        demisto.debug('Frontline.Cloud get_host_id_from_ip_address -- ' + msg)
     first_relevant_host = hosts_with_given_ip[0]
     return first_relevant_host.get('id')
 
@@ -602,7 +602,7 @@ def build_scan(low_ip_address, high_ip_address, scan_policy, scan_name):
     scanner_data = get_scan_data(network_data, low_ip_number, high_ip_number)
 
     # Set time for scan:
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     time_zone = "UTC"
     tzoffset = 0
     scan = {}   # type: Dict[str, Any]
@@ -672,6 +672,8 @@ def scan_asset(ip_address, scan_policy, scan_name, ip_range_start, ip_range_end)
             low_ip_address = ip_range_start
             high_ip_address = ip_range_end
         else:
+            low_ip_address = ""
+            high_ip_address = ""
             msg = "Invalid arguments. Must input either a single ip_address or range of ip addresses to scan."
             demisto.debug(msg)
             return_error(msg)
@@ -704,10 +706,7 @@ def scan_policy_exists(policy_selected):
         resp = requests.get(policy_url, headers=API_AUTH_HEADER, verify=VERIFY_SSL)
         resp.raise_for_status()
         data = json.loads(resp.text)
-        for policy in data:
-            if policy_selected == policy.get('name', ""):
-                return True
-        return False
+        return any(policy_selected == policy.get('name', '') for policy in data)
     except Exception as err:
         return_error("Error: FrontlineVM scan_policy_exists failed " + str(err))
 
@@ -787,7 +786,7 @@ def test_module():
 
 def main():
     ''' Integration main method '''
-    LOG('command is %s' % (demisto.command(), ))
+    LOG(f'command is {demisto.command()}')
     try:
         if demisto.command() == 'test-module':
             test_module()

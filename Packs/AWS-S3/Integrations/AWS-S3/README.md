@@ -5,28 +5,24 @@ This integration was integrated and tested with API Version 2012-11-05.
 For detailed instructions about setting up authentication, see: [AWS Integrations - Authentication](https://xsoar.pan.dev/docs/reference/articles/aws-integrations---authentication).
 
 
-## Configure AWS - S3 on Cortex XSOAR
+## Configure AWS - S3 in Cortex
 
-1. Navigate to **Settings** > **Integrations** > **Servers & Services**.
-2. Search for AWS - S3.
-3. Click **Add instance** to create and configure a new integration instance.
 
-    | **Parameter** | **Description** | **Required** |
-    | --- | --- | --- |
-    | roleArn | Role Arn | False |
-    | roleSessionName | Role Session Name | False |
-    | defaultRegion | AWS Default Region | False |
-    | sessionDuration | Role Session Duration | False |
-    | access_key | Access Key | False |
-    | secret_key | Secret Key | False |
-    | timeout | The time in seconds till a timeout exception is reached. You can specify just the read timeout \(for example 60\) or also the connect timeout followed after a comma \(for example 60,10\). If a connect timeout is not specified, a default of 10 second will be used. | False |
-    | retries | The maximum number of retry attempts when connection or throttling errors are encountered. Set to 0 to disable retries. The default value is 5 and the limit is 10. Note: Increasing the number of retries will increase the execution time. | False |
-    | insecure | Trust any certificate (not secure) | False |
-    | proxy | Use system proxy settings | False |
+| **Parameter** | **Description** | **Required** |
+| --- | --- | --- |
+| roleArn | Role Arn | False |
+| roleSessionName | Role Session Name | False |
+| defaultRegion | AWS Default Region | False |
+| sessionDuration | Role Session Duration | False |
+| access_key | Access Key | False |
+| secret_key | Secret Key | False |
+| timeout | The time in seconds till a timeout exception is reached. You can specify just the read timeout \(for example 60\) or also the connect timeout followed after a comma \(for example 60,10\). If a connect timeout is not specified, a default of 10 second will be used. | False |
+| retries | The maximum number of retry attempts when connection or throttling errors are encountered. Set to 0 to disable retries. The default value is 5 and the limit is 10. Note: Increasing the number of retries will increase the execution time. | False |
+| insecure | Trust any certificate (not secure) | False |
+| proxy | Use system proxy settings | False |
 
-4. Click **Test** to validate the URLs, token, and connection.
 ## Commands
-You can execute these commands from the Cortex XSOAR CLI, as part of an automation, or in a playbook.
+You can execute these commands from the CLI, as part of an automation, or in a playbook.
 After you successfully execute a command, a DBot message appears in the War Room with the command details.
 ### aws-s3-create-bucket
 ***
@@ -252,6 +248,8 @@ List object in S3 bucket.
 | **Argument Name** | **Description** | **Required** |
 | --- | --- | --- |
 | bucket | The name of S3 bucket. | Required | 
+| prefix | Limits the response to keys that begin with the specified prefix. | Optional |
+| delimiter | A delimiter is a character you use to group keys. | Optional |
 | region | The AWS Region, if not specified the default region will be used. | Optional | 
 | roleArn | The Amazon Resource Name (ARN) of the role to assume. | Optional | 
 | roleSessionName | An identifier for the assumed role session. | Optional | 
@@ -268,7 +266,7 @@ List object in S3 bucket.
 
 
 #### Command Example
-``` !aws-s3-list-bucket-objects bucket=test```
+``` !aws-s3-list-bucket-objects bucket=test prefix=testing delimiter='/'```
 
 #### Human Readable Output
 AWS S3 Bucket Objects
@@ -342,3 +340,135 @@ There is no context output for this command.
 #### Human Readable Output
 
 File {file name to be displayed} was uploaded successfully to {bucket name}'
+
+
+### aws-s3-get-public-access-block
+***
+Retrieves the PublicAccessBlock configuration for an Amazon S3 bucket.
+
+
+#### Base Command
+
+`aws-s3-get-public-access-block`
+#### Input
+
+| **Argument Name** | **Description** | **Required** |
+| --- | --- | --- |
+| bucket | The name of the Amazon S3 bucket whose PublicAccessBlock configuration you want to retrieve. | Required | 
+| region | The AWS Region, if not specified the default region will be used. | Optional | 
+| roleArn | The Amazon Resource Name (ARN) of the role to assume. | Optional | 
+| roleSessionName | An identifier for the assumed role session. | Optional | 
+| roleSessionDuration | The duration, in seconds, of the role session. The value can range from 900 seconds (15 minutes) up to the maximum session duration setting for the role. | Optional | 
+
+
+#### Context Output
+
+| **Path** | **Type** | **Description** |
+| --- | --- | --- |
+| AWS.S3.Buckets.BucketName.PublicAccessBlockConfiguration.BlockPublicAcls | Boolean | Specifies whether Amazon S3 should block public access control lists (ACLs) for this bucket and objects in this bucket. | 
+| AWS.S3.Buckets.BucketName.PublicAccessBlockConfiguration.IgnorePublicAcls | Boolean | Specifies whether Amazon S3 should ignore public ACLs for this bucket and objects in this bucket. | 
+| AWS.S3.Buckets.BucketName.PublicAccessBlockConfiguration.BlockPublicPolicy | Boolean | Specifies whether Amazon S3 should block public bucket policies for this bucket. | 
+| AWS.S3.Buckets.BucketName.PublicAccessBlockConfiguration.RestrictPublicBuckets | Boolean | Specifies whether Amazon S3 should restrict public bucket policies for this bucket. | 
+
+#### Command Example
+``` !aws-s3-get-public-access-block bucket="bucket name"```
+
+#### Human Readable Output
+
+AWS S3 Bucket Public Access Block
+
+| BlockPublicAcls | IgnorePublicAcls | BlockPublicPolicy | RestrictPublicBuckets |
+| --- | --- | --- | --- | 
+| True | False | True | False |
+
+
+### aws-s3-put-public-access-block
+***
+Creates or modifies the PublicAccessBlock configuration for an Amazon S3 bucket.
+
+
+#### Base Command
+
+`aws-s3-put-public-access-block`
+#### Input
+
+| **Argument Name** | **Description** | **Required** |
+| --- | --- | --- |
+| bucket | The name of the bucket to upload to. | Required | 
+| BlockPublicAcls | Specifies whether Amazon S3 should block public access control lists (ACLs) for this bucket and objects in this bucket. | Required | 
+| IgnorePublicAcls | Specifies whether Amazon S3 should ignore public ACLs for this bucket and objects in this bucket. | Required | 
+| BlockPublicPolicy | Specifies whether Amazon S3 should block public bucket policies for this bucket. | Required | 
+| RestrictPublicBuckets | Specifies whether Amazon S3 should restrict public bucket policies for this bucket. | Required | 
+| region | The AWS Region, if not specified the default region will be used. | Optional | 
+| roleArn | The Amazon Resource Name (ARN) of the role to assume. | Optional | 
+| roleSessionName | An identifier for the assumed role session. | Optional | 
+| roleSessionDuration | The duration, in seconds, of the role session. The value can range from 900 seconds (15 minutes) up to the maximum session duration setting for the role. | Optional | 
+
+
+#### Context Output
+
+There is no context output for this command.
+
+#### Command Example
+``` !aws-s3-put-public-access-block bucket="bucket name" BlockPublicAcls=True IgnorePublicAcls=False BlockPublicPolicy=True RestrictPublicBuckets=True```
+
+#### Human Readable Output
+
+Successfully applied public access block to the {bucket} bucket.
+
+### aws-s3-get-bucket-encryption
+***
+Get AWS S3 Bucket Encryption
+
+#### Base Command
+
+`aws-s3-get-bucket-encryption`
+
+#### Input
+
+| **Argument Name** | **Description** | **Required** |
+| --- | --- | --- |
+| bucket | The name of the bucket from which the server-side encryption configuration is retrieved. | Required |
+| expectedBucketOwner | The account ID of the exepcted bucket owner. | Optional |
+| region | The AWS Region, if not specified the default region will be used. | Optional |
+| roleArn | The Amazon Resource Name (ARN) of the role to assume. | Optional |
+| roleSessionName | An identifier for the assumed role session. | Optional |
+| roleSessionDuration | The duration, in seconds, of the role session. The value can range from 900 seconds (15 minutes) up to the maximum session duration setting for the role. | Optional |
+
+#### Context Output
+
+| **Path** | **Type** | **Description** |
+| --- | --- | --- |
+| AWS.S3.Buckets.BucketName.ServerSideEncryptionConfiguration.Rules.ApplyServerSideEncryptionByDefault.SSEAlgorithm | String | S3 Bucket Encryption SSE Algorithm. |
+| AWS.S3.Buckets.BucketName.ServerSideEncryptionConfiguration.Rules.ApplyServerSideEncryptionByDefault.KMSMasterKeyID | String | S3 Bucket Encryption KMS Master Key ID. |
+| AWS.S3.Buckets.BucketName.ServerSideEncryptionConfiguration.Rules.BucketKeyEnabled | Boolean | S3 Bucket Encryption Key Enabled. |
+
+#### Command Example
+
+``` !aws-s3-put-public-access-block bucket="bucket name" BlockPublicAcls=True IgnorePublicAcls=False BlockPublicPolicy=True RestrictPublicBuckets=True```
+
+
+#### Context Example
+
+```
+{
+    "AWS": {
+        "S3": {
+            "Buckets": [
+                {
+                    "BucketName": "bucket-a",
+                    "ServerSideEncryptionConfiguration": {
+                        "Rules": [
+                            {
+                                "ApplyServerSideEncryptionByDefault": {
+                                    "SSEAlgorithm": "AES256"
+                                }
+                            }
+                        ]
+                    }
+                }
+            ]
+        }
+    }
+}
+```

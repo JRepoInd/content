@@ -1,5 +1,4 @@
 import json
-import io
 from copy import deepcopy
 
 import pytest
@@ -14,7 +13,7 @@ from CommonServerPython import *  # noqa # pylint: disable=unused-wildcard-impor
 # from Packs
 
 def util_load_json(path):
-    with io.open(path, mode='r', encoding='utf-8') as f:
+    with open(path, encoding='utf-8') as f:
         return json.loads(f.read())
 
 
@@ -142,7 +141,7 @@ def test_calculate_amount_of_incidents_raise_error(mocker):
 
     with pytest.raises(DemistoException,
                        match='Could not calculate page size, last page number was not found:\n'
-                             'https://content.demisto.works:57585/api/sp/v7/alerts/?'):
+                             'https://xsoar-example:57585/api/sp/v7/alerts/?'):
         client.calculate_amount_of_incidents('', {})
 
 

@@ -41,10 +41,10 @@ scripttarget: 0
 dependson:
   must:
   - VMRay|||upload_sample
-runonce: false
 runas: DBotWeakRole
 timeout: 0s
 deprecated: true
 tests:
 - No tests
 fromversion: 5.0.0
+dockerimage: demisto/python:2.7.18.20958

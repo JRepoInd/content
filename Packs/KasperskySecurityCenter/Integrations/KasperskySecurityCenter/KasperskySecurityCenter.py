@@ -2,7 +2,8 @@ import demistomock as demisto
 from CommonServerPython import *
 from CommonServerUserPython import *
 
-requests.packages.urllib3.disable_warnings()
+import urllib3
+urllib3.disable_warnings()
 
 HOST_FIELDS = [
     'KLHST_WKS_FQDN',
@@ -98,6 +99,7 @@ class Client(BaseClient):
                 'Authorization': f'KSCBasic user="{encoded_username}", pass="{encoded_password}"',
                 'Content-Type': 'application/json',
             },
+            resp_type='response'
         )
 
     def _raise_for_error(self, res: Dict):

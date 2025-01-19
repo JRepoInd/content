@@ -1,15 +1,33 @@
-import os
-import shutil
-import dateparser
-from urllib import parse
-from typing import List, Tuple, Dict, Callable, Any, Union, Optional
+import demistomock as demisto  # noqa: F401
+from CommonServerPython import *  # noqa: F401
+import re
+from collections.abc import Callable, Iterable
 
-from CommonServerPython import *
+
+import mimetypes
 
 # disable insecure warnings
-requests.packages.urllib3.disable_warnings()
+import urllib3
+urllib3.disable_warnings()
+
+DEFAULT_FETCH_TIME = '10 minutes'
+
+INCIDENT = 'incident'
+SIR_INCIDENT = 'sn_si_incident'
 
 COMMAND_NOT_IMPLEMENTED_MSG = 'Command not implemented'
+
+DATE_FORMAT = '%Y-%m-%d %H:%M:%S'
+
+DATE_FORMAT_OPTIONS = {
+    'MM-dd-yyyy': '%m-%d-%Y %H:%M:%S',
+    'MM/dd/yyyy': '%m/%d/%Y %H:%M:%S',
+    'dd/MM/yyyy': '%d/%m/%Y %H:%M:%S',
+    'dd-MM-yyyy': '%d-%m-%Y %H:%M:%S',
+    'dd.MM.yyyy': '%d.%m.%Y %H:%M:%S',
+    'yyyy-MM-dd': '%Y-%m-%d %H:%M:%S',
+    'mmm-dd-yyyy': '%b-%d-%Y %H:%M:%S'
+}
 
 TICKET_STATES = {
     'incident': {
@@ -51,7 +69,25 @@ TICKET_STATES = {
         '3': '3 - Closed',
         '4': '4 - Rejected'
     },
+    SIR_INCIDENT: {
+        '3': 'Closed',
+        '7': 'Cancelled',
+        '10': 'Draft',
+        '16': 'Analysis',
+        '18': 'Contain',
+        '19': 'Eradicate'
+    }
 }
+
+
+TICKET_TYPE_TO_CLOSED_STATE = {INCIDENT: '7',
+                               'problem': '4',
+                               'change_request': '3',
+                               'sc_task': '3',
+                               'sc_request': '3',
+                               'sc_req_item': '3',
+                               SIR_INCIDENT: '3'}
+
 
 TICKET_APPROVAL = {
     'sc_req_item': {
@@ -71,6 +107,20 @@ TICKET_PRIORITY = {
     '5': '5 - Planning'
 }
 
+TICKET_IMPACT = {
+    '1': '1 - Enterprise',
+    '2': '2 - Region / Market',
+    '3': '3 - Ministry',
+    '4': '4 - Department / Function',
+    '5': '5 - Caregiver'
+}
+
+BUSINESS_IMPACT = {
+    '1': '1 - Critical',
+    '2': '2 - High',
+    '3': '3 - Non-Critical'
+}
+
 SNOW_ARGS = ['active', 'activity_due', 'opened_at', 'short_description', 'additional_assignee_list', 'approval_history',
              'approval', 'approval_set', 'assigned_to', 'assignment_group',
              'business_duration', 'business_service', 'business_stc', 'change_type', 'category', 'caller',
@@ -82,7 +132,11 @@ SNOW_ARGS = ['active', 'activity_due', 'opened_at', 'short_description', 'additi
              'problem_id', 'reassignment_count', 'reopen_count', 'resolved_at', 'resolved_by', 'rfc',
              'severity', 'sla_due', 'state', 'subcategory', 'sys_tags', 'sys_updated_by', 'sys_updated_on',
              'time_worked', 'title', 'type', 'urgency', 'user_input', 'watch_list', 'work_end', 'work_notes',
-             'work_notes_list', 'work_start']
+             'work_notes_list', 'work_start', 'business_criticality', 'risk_score']
+
+SIR_OUT_FIELDS = ['attack_vector', 'affected_user', 'change_request', 'incident', 'parent_security_incident',
+                  'substate']
+
 
 # Every table in ServiceNow should have those fields
 DEFAULT_RECORD_FIELDS = {
@@ -92,7 +146,6 @@ DEFAULT_RECORD_FIELDS = {
     'sys_created_by': 'CreatedBy',
     'sys_created_on': 'CreatedAt'
 }
-
 
 MIRROR_DIRECTION = {
     'None': None,
@@ -121,9 +174,8 @@ def arg_to_timestamp(arg: Any, arg_name: str, required: bool = False) -> int:
         returns ``None`` if arg is ``None`` and required is set to ``False``
         otherwise throws an Exception
     """
-    if arg is None:
-        if required is True:
-            raise ValueError(f'Missing "{arg_name}"')
+    if arg is None and required is True:
+        raise ValueError(f'Missing "{arg_name}"')
 
     if isinstance(arg, str) and arg.isdigit():
         # timestamp is a str containing digits - we just convert it to int
@@ -138,7 +190,7 @@ def arg_to_timestamp(arg: Any, arg_name: str, required: bool = False) -> int:
             raise ValueError(f'Invalid date: {arg_name}')
 
         return int(date.timestamp())
-    if isinstance(arg, (int, float)):
+    if isinstance(arg, int | float):
         # Convert to int if the input is a float
         return int(arg)
     raise ValueError(f'Invalid date: "{arg_name}"')
@@ -181,7 +233,7 @@ def get_item_human_readable(data: dict) -> dict:
     return item
 
 
-def create_ticket_context(data: dict, additional_fields: list = None) -> Any:
+def create_ticket_context(data: dict, additional_fields: list | None = None) -> Any:
     """Create ticket context.
 
     Args:
@@ -203,8 +255,11 @@ def create_ticket_context(data: dict, additional_fields: list = None) -> Any:
     }
     if additional_fields:
         for additional_field in additional_fields:
-            if additional_field in data.keys() and camelize_string(additional_field) not in context.keys():
-                context[additional_field] = data.get(additional_field)
+            if camelize_string(additional_field) not in context:
+                # in case of a nested additional field (in the form of field1.field2)
+                nested_additional_field_list = additional_field.split('.')
+                if value := dict_safe_get(data, nested_additional_field_list):
+                    context[additional_field] = value
 
     # These fields refer to records in the database, the value is their system ID.
     closed_by = data.get('closed_by')
@@ -231,7 +286,11 @@ def create_ticket_context(data: dict, additional_fields: list = None) -> Any:
     # Try to map fields
     priority = data.get('priority')
     if priority:
-        context['Priority'] = TICKET_PRIORITY.get(priority, priority)
+        if isinstance(priority, dict):
+            context['Priority'] = TICKET_PRIORITY.get(str(int(priority.get('value', ''))),
+                                                      str(int(priority.get('value', '')))),
+        else:
+            context['Priority'] = TICKET_PRIORITY.get(priority, priority)
     state = data.get('state')
     if state:
         context['State'] = state
@@ -239,7 +298,7 @@ def create_ticket_context(data: dict, additional_fields: list = None) -> Any:
     return createContext(context, removeNull=True)
 
 
-def get_ticket_context(data: Any, additional_fields: list = None) -> Any:
+def get_ticket_context(data: Any, additional_fields: list | None = None) -> Any:
     """Manager of ticket context creation.
 
     Args:
@@ -258,7 +317,7 @@ def get_ticket_context(data: Any, additional_fields: list = None) -> Any:
     return tickets
 
 
-def get_ticket_human_readable(tickets, ticket_type: str, additional_fields: list = None) -> list:
+def get_ticket_human_readable(tickets, ticket_type: str, additional_fields: list | None = None) -> list:
     """Get ticket human readable.
 
     Args:
@@ -330,7 +389,9 @@ def get_ticket_human_readable(tickets, ticket_type: str, additional_fields: list
 
         if additional_fields:
             for additional_field in additional_fields:
-                hr[additional_field] = ticket.get(additional_field)
+                # in case of a nested additional field (in the form of field1.field2)
+                nested_additional_field_list = additional_field.split('.')
+                hr[additional_field] = dict_safe_get(ticket, nested_additional_field_list)
         result.append(hr)
 
     return result
@@ -356,15 +417,30 @@ def get_ticket_fields(args: dict, template_name: dict = {}, ticket_type: str = '
 
     inv_severity = {v: k for k, v in ticket_severity.items()}
     inv_priority = {v: k for k, v in TICKET_PRIORITY.items()}
+    inv_business_impact = {v: k for k, v in BUSINESS_IMPACT.items()}
     states = TICKET_STATES.get(ticket_type)
     inv_states = {v: k for k, v in states.items()} if states else {}
     approval = TICKET_APPROVAL.get(ticket_type)
     inv_approval = {v: k for k, v in approval.items()} if approval else {}
+    fields_to_clear = argToList(
+        args.get('clear_fields', []))  # This argument will contain fields to allow their value empty
+
+    # This is for updating null fields for update_remote_system function for example: assigned_to.
+    for arg in args:
+        if not args[arg]:
+            fields_to_clear.append(arg)
+    demisto.debug(f'Fields to clear {fields_to_clear}')
 
     ticket_fields = {}
     for arg in SNOW_ARGS:
         input_arg = args.get(arg)
-        if input_arg:
+
+        if arg in fields_to_clear:
+            if input_arg:
+                raise DemistoException(f"Could not set a value for the argument '{arg}' and add it to the clear_fields. \
+                You can either set or clear the field value.")
+            ticket_fields[arg] = ""
+        elif input_arg:
             if arg in ['impact', 'urgency', 'severity']:
                 ticket_fields[arg] = inv_severity.get(input_arg, input_arg)
             elif arg == 'priority':
@@ -376,6 +452,8 @@ def get_ticket_fields(args: dict, template_name: dict = {}, ticket_type: str = '
             elif arg == 'change_type':
                 # this change is required in order to use type 'Standard' as well.
                 ticket_fields['type'] = input_arg
+            elif arg == 'business_criticality':
+                ticket_fields[arg] = inv_business_impact.get(input_arg, input_arg)
             else:
                 ticket_fields[arg] = input_arg
         elif template_name and arg in template_name:
@@ -435,24 +513,67 @@ def split_fields(fields: str = '', delimiter: str = ';') -> dict:
     return dic_fields
 
 
-def build_query_for_request_params(query):
-    """Split query that contains '&' to a list of queries.
+def split_notes(raw_notes, note_type, time_info):
+    notes: list = []
+    # The notes should be in this form:
+    # '16/05/2023 15:49:56 - John Doe (Additional comments)\nsecond note first line\n\nsecond line\n\nthird
+    # line\n\n2023-05-10 15:41:38 - פלוני אלמוני (Additional comments)\nfirst note first line\n\nsecond line\n\n
+    delimiter = r'([0-9]{1,4}(?:\/|-|\.)[0-9]{1,2}(?:\/|-|\.)[0-9]{1,4}.*\((?:Additional comments|Work notes)\))'
+    notes_split = list(filter(None, re.split(delimiter, raw_notes)))
+    for note_info, note_value in zip(notes_split[::2], notes_split[1::2]):
+        created_on, _, created_by = note_info.partition(" - ")
+        created_by = created_by.split(' (')[0]
+        if not created_on or not created_by:
+            raise Exception(f'Failed to extract the required information from the following note: {note_info} - {note_value}')
 
+        # convert note creation time to UTC
+        try:
+            display_date_format = time_info.get('display_date_format')
+            created_on = (created_on.replace('AM', '').replace('PM', '')).strip()
+            created_on_UTC = datetime.strptime(created_on, display_date_format) + time_info.get('timezone_offset')
+        except ValueError as e:
+            raise Exception(f'Failed to convert {created_on} to a datetime object. Error: {e}')
+
+        if time_info.get('filter') and created_on_UTC < time_info.get('filter'):
+            # If a time_filter was passed and the note was created before this time, do not return it.
+            demisto.debug(f'Using time filter: {time_info.get("filter")}. Not including note: {note_info} - {note_value}.')
+            continue
+        note_dict = {
+            "sys_created_on": created_on_UTC.strftime(DATE_FORMAT),
+            "value": note_value.strip(),
+            "sys_created_by": created_by,
+            "element": note_type
+        }
+        notes.append(note_dict)
+    return notes
+
+
+def convert_to_notes_result(ticket: dict, time_info: dict) -> dict:
+    """
+    Converts the response of a ticket to the response format when making a query for notes only.
     Args:
-        query: query (Example: "id=5&status=1")
+        ticket (dict): The ServiceNow ticket response dictionary.
+        time_info (dict): A dictionary with time zone information to convert timestamps.
 
     Returns:
-        List of sub queries. (Example: ["id=5", "status=1"])
+        dict: A dictionary containing the key "result" which maps to a list
+        of notes extracted from the ticket comments and work notes.
     """
+    if not ticket:
+        return {}
 
-    if '&' in query:
-        query_params = []  # type: ignore
-        query_args = parse.parse_qsl(query)
-        for arg in query_args:
-            query_params.append(parse.urlencode([arg]))  # type: ignore
-        return query_params
-    else:
-        return query
+    all_notes = []
+    raw_comments = ticket.get('comments', '')
+    if raw_comments:
+        comments = split_notes(raw_comments, 'comments', time_info=time_info)
+        all_notes.extend(comments)
+
+    raw_work_notes = ticket.get('work_notes', '')
+    if raw_work_notes:
+        work_notes = split_notes(raw_work_notes, 'work_notes', time_info=time_info)
+        all_notes.extend(work_notes)
+
+    return {'result': all_notes}
 
 
 class Client(BaseClient):
@@ -460,14 +581,17 @@ class Client(BaseClient):
     Client to use in the ServiceNow integration. Overrides BaseClient.
     """
 
-    def __init__(self, server_url: str, sc_server_url: str, username: str, password: str, verify: bool, fetch_time: str,
-                 sysparm_query: str, sysparm_limit: int, timestamp_field: str, ticket_type: str, get_attachments: bool,
-                 incident_name: str, oauth_params: dict = None, version: str = None):
+    def __init__(self, server_url: str, sc_server_url: str, cr_server_url: str, username: str,
+                 password: str, verify: bool, fetch_time: str, sysparm_query: str,
+                 sysparm_limit: int, timestamp_field: str, ticket_type: str, get_attachments: bool,
+                 incident_name: str, oauth_params: dict | None = None, version: str | None = None, look_back: int = 0,
+                 use_display_value: bool = False, display_date_format: str = ''):
         """
 
         Args:
             server_url: SNOW server url
             sc_server_url: SNOW Service Catalog url
+            cr_server_url: SNOW Change Management url
             username: SNOW username
             password: SNOW password
             oauth_params: (optional) the parameters for the ServiceNowClient that should be used to create an
@@ -480,16 +604,18 @@ class Client(BaseClient):
             ticket_type: default ticket type
             get_attachments: whether to get ticket attachments by default
             incident_name: the ServiceNow ticket field to be set as the incident name
+            look_back: defines how much backwards (minutes) should we go back to try to fetch incidents.
         """
         oauth_params = oauth_params if oauth_params else {}
         self._base_url = server_url
         self._sc_server_url = sc_server_url
+        self._cr_server_url = cr_server_url
         self._version = version
         self._verify = verify
         self._username = username
         self._password = password
         self._proxies = handle_proxy(proxy_param_name='proxy', checkbox_default_value=False)
-        self.use_oauth = True if oauth_params else False
+        self.use_oauth = bool(oauth_params)
         self.fetch_time = fetch_time
         self.timestamp_field = timestamp_field
         self.ticket_type = ticket_type
@@ -498,6 +624,12 @@ class Client(BaseClient):
         self.sys_param_query = sysparm_query
         self.sys_param_limit = sysparm_limit
         self.sys_param_offset = 0
+        self.look_back = look_back
+        self.use_display_value = use_display_value
+        self.display_date_format = DATE_FORMAT_OPTIONS.get(display_date_format)
+        if self.use_display_value:
+            assert self.display_date_format, 'A display date format must be selected in the instance configuration when ' \
+                                             'using the `Use Display Value` option.'
 
         if self.use_oauth:  # if user selected the `Use OAuth` checkbox, OAuth2 authentication should be used
             self.snow_client: ServiceNowClient = ServiceNowClient(credentials=oauth_params.get('credentials', {}),
@@ -511,8 +643,29 @@ class Client(BaseClient):
         else:
             self._auth = (self._username, self._password)
 
-    def send_request(self, path: str, method: str = 'GET', body: dict = None, params: dict = None,
-                     headers: dict = None, file=None, sc_api: bool = False):
+    def generic_request(self, method: str, path: str, body: Optional[dict] = None, headers: Optional[dict] = None,
+                        sc_api: bool = False, cr_api: bool = False, custom_api: str = ""):
+        """Generic request to ServiceNow api.
+
+        Args:
+            (Required Arguments)
+            method (str) required: The HTTP method, for example, GET, POST, and so on.
+            path (str) required: The API endpoint.
+            (Optional Arguments)
+            body (dict): The body to send in a 'POST' request. Default is None.
+            header (dict): requests headers. Default is None.
+            sc_api: Whether to send the request to the Service Catalog API
+            cr_api: Whether to send the request to the Change Request REST API
+            custom_api: the custom api root to use
+
+        Returns:
+            Response object or Exception
+        """
+        return self.send_request(path, method, body, headers=headers, sc_api=sc_api, cr_api=cr_api, custom_api=custom_api)
+
+    def send_request(self, path: str, method: str = 'GET', body: dict | None = None, params: dict | None = None,
+                     headers: dict | None = None, file=None, sc_api: bool = False, cr_api: bool = False,
+                     get_attachments: bool = False, no_record_found_res: dict = {'result': []}, custom_api: str = ''):
         """Generic request to ServiceNow.
 
         Args:
@@ -522,44 +675,61 @@ class Client(BaseClient):
             params: request params
             headers: request headers
             file: request  file
-            sc_api: Whether to send the request to the SC API
+            sc_api: Whether to send the request to the Service Catalog API
+            cr_api: Whether to send the request to the Change Request REST API
+            get_attachments: if to get attachments or not.
+            custom_api: the custom api root to use
 
         Returns:
             response from API
         """
         body = body if body is not None else {}
         params = params if params is not None else {}
-        # if sc_api is set to true, then sending the request to the 'Service Catalog' instead of the 'now' API.
-        url = f'{self._base_url}{path}' if not sc_api else f'{self._sc_server_url}{path}'
+
+        if custom_api:
+            if not custom_api.startswith("/"):
+                return_error("Argument custom_api must start with a leading forward slash '/'")
+            server_url = demisto.params().get('url')
+            url = f'{get_server_url(server_url)}{custom_api}{path}'
+        elif sc_api:
+            url = f'{self._sc_server_url}{path}'
+        elif cr_api:
+            url = f'{self._cr_server_url}{path}'
+        else:
+            url = f'{self._base_url}{path}'
 
         if not headers:
             headers = {
                 'Accept': 'application/json',
                 'Content-Type': 'application/json'
             }
+        # The attachments table does not support v2 api version
+        if get_attachments:
+            url = url.replace('/v2', '/v1')
+
         max_retries = 3
         num_of_tries = 0
         while num_of_tries < max_retries:
             if file:
                 # Not supported in v2
-                url = url.replace('v2', 'v1')
+                url = url.replace('/v2', '/v1')
                 try:
                     file_entry = file['id']
                     file_name = file['name']
-                    shutil.copy(demisto.getFilePath(file_entry)['path'], file_name)
-                    with open(file_name, 'rb') as f:
+                    file_path = demisto.getFilePath(file_entry)['path']
+                    with open(file_path, 'rb') as f:
+                        file_info = (file_name, f, self.get_content_type(file_name))
                         if self.use_oauth:
                             access_token = self.snow_client.get_access_token()
                             headers.update({
                                 'Authorization': f'Bearer {access_token}'
                             })
                             res = requests.request(method, url, headers=headers, data=body, params=params,
-                                                   files={'file': f}, verify=self._verify, proxies=self._proxies)
+                                                   files={'file': file_info}, verify=self._verify, proxies=self._proxies)
                         else:
                             res = requests.request(method, url, headers=headers, data=body, params=params,
-                                                   files={'file': f}, auth=self._auth,
+                                                   files={'file': file_info}, auth=self._auth,
                                                    verify=self._verify, proxies=self._proxies)
-                    shutil.rmtree(demisto.getFilePath(file_entry)['name'], ignore_errors=True)
                 except Exception as err:
                     raise Exception('Failed to upload file - ' + str(err))
             else:
@@ -588,14 +758,19 @@ class Client(BaseClient):
                 raise Exception(f'Error parsing reply - {str(res.content)} - {str(err)}')
 
             if 'error' in json_res:
-                message = json_res.get('error', {}).get('message')
-                details = json_res.get('error', {}).get('detail')
-                if message == 'No Record found':
-                    return {'result': []}  # Return an empty results array
+                error = json_res.get('error', {})
                 if res.status_code == 401:
                     demisto.debug(f'Got status code 401 - {json_res}. Retrying ...')
                 else:
-                    raise Exception(f'ServiceNow Error: {message}, details: {details}')
+                    if isinstance(error, dict):
+                        message = json_res.get('error', {}).get('message')
+                        details = json_res.get('error', {}).get('detail')
+                        if message == 'No Record found':
+                            return no_record_found_res
+                        else:
+                            raise Exception(f'ServiceNow Error: {message}, details: {details}')
+                    else:
+                        raise Exception(f'ServiceNow Error: {error}')
 
             if res.status_code < 200 or res.status_code >= 300:
                 if res.status_code != 401 or num_of_tries == (max_retries - 1):
@@ -607,6 +782,22 @@ class Client(BaseClient):
             num_of_tries += 1
 
         return json_res
+
+    def get_content_type(self, file_name):
+        """Get the correct content type for the POST request.
+
+        Args:
+            file_name: file name
+
+        Returns:
+            the content type - image with right type for images , and general for other types..
+        """
+        file_type = None
+        if not file_name:
+            demisto.debug("file name was not supllied, uploading with general type")
+        else:
+            file_type, _ = mimetypes.guess_type(file_name)
+        return file_type or '*/*'
 
     def get_table_name(self, ticket_type: str = '') -> str:
         """Get the relevant table name from th client.
@@ -659,7 +850,7 @@ class Client(BaseClient):
         query = f'table_sys_id={ticket_id}'
         if sys_created_on:
             query += f'^sys_created_on>{sys_created_on}'
-        return self.send_request('attachment', 'GET', params={'sysparm_query': query})
+        return self.send_request('attachment', 'GET', params={'sysparm_query': query}, get_attachments=True)
 
     def get_ticket_attachment_entries(self, ticket_id: str, sys_created_on: Optional[str] = None) -> list:
         """Get ticket attachments, including file attachments
@@ -673,7 +864,11 @@ class Client(BaseClient):
             Array of attachments entries.
         """
         entries = []
-        links = []  # type: List[Tuple[str, str]]
+        links = []  # type: List[tuple[str, str]]
+        headers = {
+            'Accept': 'application/json',
+            'Content-Type': 'application/json'
+        }
         attachments_res = self.get_ticket_attachments(ticket_id, sys_created_on)
         if 'result' in attachments_res and len(attachments_res['result']) > 0:
             attachments = attachments_res['result']
@@ -681,14 +876,21 @@ class Client(BaseClient):
                      for attachment in attachments]
 
         for link in links:
-            file_res = requests.get(link[0], auth=(self._username, self._password), verify=self._verify,
-                                    proxies=self._proxies)
+            if self.use_oauth:
+                access_token = self.snow_client.get_access_token()
+                headers.update({'Authorization': f'Bearer {access_token}'})
+                file_res = requests.get(link[0], headers=headers, verify=self._verify, proxies=self._proxies)
+            else:
+                file_res = requests.get(link[0], auth=(self._username, self._password), verify=self._verify,
+                                        proxies=self._proxies)
+
             if file_res is not None:
                 entries.append(fileResult(link[1], file_res.content))
 
         return entries
 
-    def get(self, table_name: str, record_id: str, custom_fields: dict = {}, number: str = None) -> dict:
+    def get(self, table_name: str, record_id: str, custom_fields: dict = {}, number: str | None = None,
+            no_record_found_res: dict = {'result': []}, use_display_value: bool = False) -> dict:
         """Get a ticket by sending a GET request.
 
         Args:
@@ -696,6 +898,7 @@ class Client(BaseClient):
             record_id: the record ID
             custom_fields: custom fields of the record to query
             number: record number
+            use_display_value: whether to get the display values as well
 
         Returns:
             Response from API.
@@ -715,7 +918,10 @@ class Client(BaseClient):
             # Only in cases where the table is of type ticket
             raise ValueError('servicenow-get-ticket requires either ticket ID (sys_id) or ticket number.')
 
-        return self.send_request(path, 'GET', params=query_params)
+        if use_display_value:
+            query_params['sysparm_display_value'] = "all"
+
+        return self.send_request(path, 'GET', params=query_params, no_record_found_res=no_record_found_res)
 
     def update(self, table_name: str, record_id: str, fields: dict = {}, custom_fields: dict = {},
                input_display_value: bool = False) -> dict:
@@ -813,6 +1019,17 @@ class Client(BaseClient):
         return self.send_request('attachment/upload', 'POST', headers={'Accept': 'application/json'},
                                  body=body, file={'id': file_id, 'name': file_name})
 
+    def delete_attachment(self, attachment_file_id: str) -> dict:
+        """Deletes an attachment file by sending a DELETE request.
+
+        Args:
+        attachment_file_id: ID of the attachment file.
+
+        Returns:
+            Response from API.
+        """
+        return self.send_request(f'attachment/{attachment_file_id}', 'DELETE')
+
     def add_tag(self, ticket_id: str, tag_id: str, title: str, ticket_type: str) -> dict:
         """Adds a tag to a ticket by sending a POST request.
 
@@ -846,7 +1063,7 @@ class Client(BaseClient):
 
         query_params = {'sysparm_limit': sys_param_limit, 'sysparm_offset': sys_param_offset}
         if sys_param_query:
-            query_params['sysparm_query'] = build_query_for_request_params(sys_param_query)
+            query_params['sysparm_query'] = sys_param_query
         if system_params:
             query_params.update(system_params)
         if sysparm_fields:
@@ -904,6 +1121,28 @@ class Client(BaseClient):
         body = {'document_sys_id': document_id, 'document_table': document_table}
         return self.send_request(f'awa/queues/{queue_id}/work_item', 'POST', body=body)
 
+    def create_co_from_template(self, template: str):
+        """Creates a standard change request from template by sending a POST request.
+
+        Args:
+        fields: fields to update
+        Returns:
+            Response from API.
+        """
+        return self.send_request(f'change/standard/{template}', 'POST', body={},
+                                 cr_api=True)
+
+    def get_co_tasks(self, sys_id: str) -> dict:
+        """Get item details from service catalog by sending a GET request to the Change Request REST API.
+
+        Args:
+        id: item id
+
+        Returns:
+            Response from API.
+        """
+        return self.send_request(f'change/{sys_id}/task', 'GET', cr_api=True)
+
 
 def get_ticket_command(client: Client, args: dict):
     """Get a ticket.
@@ -923,7 +1162,8 @@ def get_ticket_command(client: Client, args: dict):
     custom_fields = split_fields(str(args.get('custom_fields', '')), fields_delimiter)
     additional_fields = argToList(str(args.get('additional_fields', '')))
 
-    result = client.get(ticket_type, ticket_id, generate_body({}, custom_fields), number)
+    result = client.get(ticket_type, ticket_id, generate_body({}, custom_fields),
+                        number, use_display_value=client.use_display_value)
     if not result or 'result' not in result:
         return 'Ticket was not found.'
 
@@ -933,6 +1173,9 @@ def get_ticket_command(client: Client, args: dict):
         ticket = result['result'][0]
     else:
         ticket = result['result']
+
+    if client.use_display_value:
+        ticket = format_incidents_response_with_display_values(ticket)[0]
 
     entries = []  # type: List[Dict]
 
@@ -964,7 +1207,7 @@ def get_ticket_command(client: Client, args: dict):
     return entries
 
 
-def update_ticket_command(client: Client, args: dict) -> Tuple[Any, Dict, Dict, bool]:
+def update_ticket_command(client: Client, args: dict) -> tuple[Any, dict, dict, bool]:
     """Update a ticket.
 
     Args:
@@ -976,7 +1219,13 @@ def update_ticket_command(client: Client, args: dict) -> Tuple[Any, Dict, Dict, 
     """
     fields_delimiter = args.get('fields_delimiter', ';')
     custom_fields = split_fields(str(args.get('custom_fields', '')), fields_delimiter)
-    ticket_type = client.get_table_name(str(args.get('ticket_type', '')))
+    ticket_type_value = args.get('ticket_type')
+    demisto.debug(f'args(ticket_type): {ticket_type_value}')
+    if not ticket_type_value:
+        ticket_type_value = demisto.params().get('ticket_type')
+        demisto.debug(f'Empty args(ticket_type), params(ticket_type): {ticket_type_value}')
+    ticket_type = client.get_table_name(str(ticket_type_value))
+    demisto.debug(f'Using ticket_type: {ticket_type}, from {ticket_type_value}')
     ticket_id = str(args.get('id', ''))
     additional_fields = split_fields(str(args.get('additional_fields', '')), fields_delimiter)
     additional_fields_keys = list(additional_fields.keys())
@@ -1004,7 +1253,7 @@ def update_ticket_command(client: Client, args: dict) -> Tuple[Any, Dict, Dict, 
     return human_readable, entry_context, result, True
 
 
-def create_ticket_command(client: Client, args: dict) -> Tuple[str, Dict, Dict, bool]:
+def create_ticket_command(client: Client, args: dict) -> tuple[str, dict, dict, bool]:
     """Create a ticket.
 
     Args:
@@ -1060,7 +1309,7 @@ def create_ticket_command(client: Client, args: dict) -> Tuple[str, Dict, Dict, 
     return human_readable, entry_context, result, True
 
 
-def delete_ticket_command(client: Client, args: dict) -> Tuple[str, Dict, Dict, bool]:
+def delete_ticket_command(client: Client, args: dict) -> tuple[str, dict, dict, bool]:
     """Delete a ticket.
 
     Args:
@@ -1078,7 +1327,7 @@ def delete_ticket_command(client: Client, args: dict) -> Tuple[str, Dict, Dict, 
     return f'Ticket with ID {ticket_id} was successfully deleted.', {}, result, True
 
 
-def query_tickets_command(client: Client, args: dict) -> Tuple[str, Dict, Dict, bool]:
+def query_tickets_command(client: Client, args: dict) -> tuple[str, dict, dict, bool]:
     """Query tickets.
 
     Args:
@@ -1118,7 +1367,7 @@ def query_tickets_command(client: Client, args: dict) -> Tuple[str, Dict, Dict, 
     return human_readable, entry_context, result, True
 
 
-def add_link_command(client: Client, args: dict) -> Tuple[str, Dict, Dict, bool]:
+def add_link_command(client: Client, args: dict) -> tuple[str, dict, dict, bool]:
     """Add a link.
 
     Args:
@@ -1150,7 +1399,7 @@ def add_link_command(client: Client, args: dict) -> Tuple[str, Dict, Dict, bool]
     return human_readable, {}, result, True
 
 
-def add_comment_command(client: Client, args: dict) -> Tuple[str, Dict, Dict, bool]:
+def add_comment_command(client: Client, args: dict) -> tuple[str, dict, dict, bool]:
     """Add a comment.
 
     Args:
@@ -1181,7 +1430,7 @@ def add_comment_command(client: Client, args: dict) -> Tuple[str, Dict, Dict, bo
     return human_readable, {}, result, True
 
 
-def upload_file_command(client: Client, args: dict) -> Tuple[str, Dict, Dict, bool]:
+def upload_file_command(client: Client, args: dict) -> tuple[str, dict, dict, bool]:
     """Upload a file.
 
     Args:
@@ -1228,7 +1477,50 @@ def upload_file_command(client: Client, args: dict) -> Tuple[str, Dict, Dict, bo
     return human_readable, entry_context, result, True
 
 
-def add_tag_command(client: Client, args: dict) -> Tuple[str, Dict, Dict, bool]:
+def delete_attachment_command(client: Client, args: dict) -> tuple[str, dict, dict, bool]:
+    """Deletes an attachment file.
+    Note: This function exclusively returns 404 error responses,
+    while all other types of errors are managed within the send_request function.
+
+    Args:
+        client: Client object used to make requests.
+        args: The command arguments provided by user.
+
+    return: a tuple for CommandResults containing:
+        - Human readable message.
+        - Entry context data.
+        - The raw response.
+        - Ignore auto extract flag.
+
+    :raises DemistoException: Raised if no record is found for the provided attachment file ID.
+    """
+    attachment_file_id = str(args.get('file_sys_id', ''))
+
+    result = client.delete_attachment(attachment_file_id)
+    if not result:  # successful response is 204 (empty response)
+        return f'Attachment with Sys ID {attachment_file_id} was successfully deleted.', {}, result, True
+    raise DemistoException("Error: No record found. Record doesn't exist or ACL restricts the record retrieval.")
+
+
+def get_attachment_command(client: Client, args: dict) -> list | CommandResults:
+    """Retreives attachment from a ticket.
+
+    Args:
+        client: Client object with request.
+        args: Usually demisto.args()
+
+    Returns:
+        Command results and file results.
+    """
+    sys_id = str(args.get('sys_id', ''))
+
+    result = client.get_ticket_attachment_entries(sys_id)
+    if result:
+        return [CommandResults(readable_output=f'Successfully retrieved attachments for ticket with sys id {sys_id}.'), result]
+    return CommandResults(readable_output=f'Ticket with sys id {sys_id} has no attachments to retrieve.')
+
+
+def add_tag_command(client: Client, args: dict) -> tuple[str, dict, dict, bool]:
     """Add tag to a ticket.
 
     Args:
@@ -1265,7 +1557,7 @@ def add_tag_command(client: Client, args: dict) -> Tuple[str, Dict, Dict, bool]:
     return human_readable, entry_context, result, True
 
 
-def get_ticket_notes_command(client: Client, args: dict) -> Tuple[str, Dict, Dict, bool]:
+def get_ticket_notes_command(client: Client, args: dict, params: dict,) -> list[CommandResults | dict]:
     """Get the ticket's note.
 
     Args:
@@ -1278,13 +1570,32 @@ def get_ticket_notes_command(client: Client, args: dict) -> Tuple[str, Dict, Dic
     ticket_id = args.get('id')
     sys_param_limit = args.get('limit', client.sys_param_limit)
     sys_param_offset = args.get('offset', client.sys_param_offset)
+    add_as_entry = argToBoolean(args.get('add_as_entry', False))
 
-    sys_param_query = f'element_id={ticket_id}^element=comments^ORelement=work_notes'
+    use_display_value = argToBoolean(args.get('use_display_value', client.use_display_value))
 
-    result = client.query('sys_journal_field', sys_param_limit, sys_param_offset, sys_param_query)
+    return_results: list = []
+
+    if use_display_value:  # make query using sysparm_display_value=all (requires less permissions)
+        assert client.display_date_format, 'A display date format must be selected in the instance configuration when' \
+                                           ' retrieving notes using the display value option.'
+        ticket_type = client.get_table_name(str(args.get('ticket_type', client.ticket_type)))
+        path = f'table/{ticket_type}/{ticket_id}'
+        query_params = {'sysparm_limit': sys_param_limit, 'sysparm_offset': sys_param_offset, 'sysparm_display_value': 'all'}
+        response = client.send_request(path, 'GET', params=query_params).get('result', {})
+        timezone_offset = get_timezone_offset(response, client.display_date_format)
+        format_response = format_incidents_response_with_display_values(response)[0]
+        result = convert_to_notes_result(format_response, time_info={
+                                         'display_date_format': client.display_date_format, 'timezone_offset': timezone_offset})
+    else:
+        sys_param_query = f'element_id={ticket_id}^element=comments^ORelement=work_notes'
+        result = client.query('sys_journal_field', sys_param_limit, sys_param_offset, sys_param_query)
 
     if not result or 'result' not in result:
-        return f'No comment found on ticket {ticket_id}.', {}, {}, True
+        return [CommandResults(raw_response=f'No comment found on ticket {ticket_id}.')]
+
+    if add_as_entry:
+        return_results.extend(get_entries_for_notes(result['result'], params))
 
     headers = ['Value', 'CreatedOn', 'CreatedBy', 'Type']
 
@@ -1296,7 +1607,7 @@ def get_ticket_notes_command(client: Client, args: dict) -> Tuple[str, Dict, Dic
     } for note in result['result']]
 
     if not mapped_notes:
-        return f'No comment found on ticket {ticket_id}.', {}, {}, True
+        return [CommandResults(raw_response=f'No comment found on ticket {ticket_id}.')]
 
     ticket = {
         'ID': ticket_id,
@@ -1305,12 +1616,53 @@ def get_ticket_notes_command(client: Client, args: dict) -> Tuple[str, Dict, Dic
 
     human_readable = tableToMarkdown(f'ServiceNow notes for ticket {ticket_id}', t=mapped_notes, headers=headers,
                                      headerTransform=pascalToSpace, removeNull=True)
-    entry_context = {'ServiceNow.Ticket(val.ID===obj.ID)': createContext(ticket, removeNull=True)}
 
-    return human_readable, entry_context, result, True
+    return_results.append(
+        CommandResults(
+            outputs_prefix="ServiceNow.Ticket",
+            outputs_key_field="ID",
+            outputs=createContext(ticket, removeNull=True),
+            readable_output=human_readable,
+            raw_response=result
+        )
+    )
+    return return_results
 
 
-def get_record_command(client: Client, args: dict) -> Tuple[str, Dict, Dict, bool]:
+def get_entries_for_notes(notes: list[dict], params) -> list[dict]:
+    entries = []
+    for note in notes:
+        if 'Mirrored from Cortex XSOAR' not in note.get('value', ''):
+            comments_context = {'comments_and_work_notes': note.get('value')}
+
+            if (tagsstr := note.get('tags', 'none')) == 'none':
+                if note.get('element') == 'comments':
+                    tags = [params.get('comment_tag_from_servicenow', 'CommentFromServiceNow')]
+                else:
+                    tags = [params.get('work_notes_tag_from_servicenow', 'WorkNoteFromServiceNow')]
+            else:
+                if str(note.get('element')) == 'comments':
+                    tags = tagsstr + params.get('comment_tag_from_servicenow', 'CommentFromServiceNow')
+                    tags = argToList(tags)
+                else:
+                    tags = tagsstr + params.get('work_notes_tag_from_servicenow', 'WorkNoteFromServiceNow')
+                    tags = argToList(tags)
+
+            entries.append({
+                'Type': note.get('type', 1),
+                'Category': note.get('category'),
+                'Contents': f"Type: {note.get('element')}\nCreated By: {note.get('sys_created_by')}\n"
+                            f"Created On: {note.get('sys_created_on')}\n{note.get('value')}",
+                'ContentsFormat': note.get('format'),
+                'Tags': tags,
+                'Note': True,
+                'EntryContext': comments_context
+            })
+
+    return entries
+
+
+def get_record_command(client: Client, args: dict) -> tuple[str, dict, dict, bool]:
     """Get a record.
 
     Args:
@@ -1358,7 +1710,7 @@ def get_record_command(client: Client, args: dict) -> Tuple[str, Dict, Dict, boo
     return human_readable, entry_context, result, True
 
 
-def create_record_command(client: Client, args: dict) -> Tuple[Any, Dict[Any, Any], Any, bool]:
+def create_record_command(client: Client, args: dict) -> tuple[Any, dict[Any, Any], Any, bool]:
     """Create a record.
 
     Args:
@@ -1395,7 +1747,7 @@ def create_record_command(client: Client, args: dict) -> Tuple[Any, Dict[Any, An
     return human_readable, entry_context, result, True
 
 
-def update_record_command(client: Client, args: dict) -> Tuple[Any, Dict[Any, Any], Dict[Any, Any], bool]:
+def update_record_command(client: Client, args: dict) -> tuple[Any, dict[Any, Any], dict[Any, Any], bool]:
     """Update a record.
 
     Args:
@@ -1411,10 +1763,11 @@ def update_record_command(client: Client, args: dict) -> Tuple[Any, Dict[Any, An
     custom_fields_str = str(args.get('custom_fields', ''))
     input_display_value = argToBoolean(args.get('input_display_value', 'false'))
     fields_delimiter = args.get('fields_delimiter', ';')
+    fields = get_ticket_fields(args, ticket_type=table_name)
 
-    fields = {}
     if fields_str:
-        fields = split_fields(fields_str, fields_delimiter)
+        additional_fields = split_fields(fields_str, fields_delimiter)
+        fields.update(additional_fields)
     custom_fields = {}
     if custom_fields_str:
         custom_fields = split_fields(custom_fields_str, fields_delimiter)
@@ -1433,7 +1786,7 @@ def update_record_command(client: Client, args: dict) -> Tuple[Any, Dict[Any, An
     return human_readable, entry_context, result, True
 
 
-def delete_record_command(client: Client, args: dict) -> Tuple[str, Dict[Any, Any], Dict, bool]:
+def delete_record_command(client: Client, args: dict) -> tuple[str, dict[Any, Any], dict, bool]:
     """Delete a record.
 
     Args:
@@ -1451,7 +1804,7 @@ def delete_record_command(client: Client, args: dict) -> Tuple[str, Dict[Any, An
     return f'ServiceNow record with ID {record_id} was successfully deleted.', {}, result, True
 
 
-def query_table_command(client: Client, args: dict) -> Tuple[str, Dict, Dict, bool]:
+def query_table_command(client: Client, args: dict) -> tuple[str, dict, dict, bool]:
     """Query a table.
 
     Args:
@@ -1467,19 +1820,19 @@ def query_table_command(client: Client, args: dict) -> Tuple[str, Dict, Dict, bo
     system_params = split_fields(args.get('system_params', ''))
     sys_param_offset = args.get('offset', client.sys_param_offset)
     fields = args.get('fields')
+    if fields and 'sys_id' not in fields:
+        fields = f'{fields},sys_id'  # ID is added by default
 
-    result = client.query(table_name, sys_param_limit, sys_param_offset, sys_param_query, system_params)
+    result = client.query(table_name, sys_param_limit, sys_param_offset, sys_param_query, system_params,
+                          sysparm_fields=fields)
     if not result or 'result' not in result or len(result['result']) == 0:
         return 'No results found', {}, {}, False
     table_entries = result.get('result', {})
 
     if fields:
         fields = argToList(fields)
-        if 'sys_id' not in fields:
-            # ID is added by default
-            fields.append('sys_id')
         # Filter the records according to the given fields
-        records = [dict([kv_pair for kv_pair in iter(r.items()) if kv_pair[0] in fields]) for r in table_entries]
+        records = [{k.replace('.', '_'): v for k, v in r.items() if k in fields} for r in table_entries]
         for record in records:
             record['ID'] = record.pop('sys_id')
             for k, v in record.items():
@@ -1497,7 +1850,7 @@ def query_table_command(client: Client, args: dict) -> Tuple[str, Dict, Dict, bo
     return human_readable, entry_context, result, False
 
 
-def query_computers_command(client: Client, args: dict) -> Tuple[Any, Dict[Any, Any], Dict[Any, Any], bool]:
+def query_computers_command(client: Client, args: dict) -> tuple[Any, dict[Any, Any], dict[Any, Any], bool]:
     """Query computers.
 
     Args:
@@ -1569,7 +1922,7 @@ def query_computers_command(client: Client, args: dict) -> Tuple[Any, Dict[Any, 
     return human_readable, entry_context, result, False
 
 
-def query_groups_command(client: Client, args: dict) -> Tuple[Any, Dict[Any, Any], Dict[Any, Any], bool]:
+def query_groups_command(client: Client, args: dict) -> tuple[Any, dict[Any, Any], dict[Any, Any], bool]:
     """Query groups.
 
     Args:
@@ -1622,7 +1975,7 @@ def query_groups_command(client: Client, args: dict) -> Tuple[Any, Dict[Any, Any
     return human_readable, entry_context, result, False
 
 
-def query_users_command(client: Client, args: dict) -> Tuple[Any, Dict[Any, Any], Dict[Any, Any], bool]:
+def query_users_command(client: Client, args: dict) -> tuple[Any, dict[Any, Any], dict[Any, Any], bool]:
     """Query users.
 
     Args:
@@ -1673,7 +2026,7 @@ def query_users_command(client: Client, args: dict) -> Tuple[Any, Dict[Any, Any]
     return human_readable, entry_context, result, False
 
 
-def list_table_fields_command(client: Client, args: dict) -> Tuple[Any, Dict[Any, Any], Dict[Any, Any], bool]:
+def list_table_fields_command(client: Client, args: dict) -> tuple[Any, dict[Any, Any], dict[Any, Any], bool]:
     """List table fields.
 
     Args:
@@ -1701,7 +2054,7 @@ def list_table_fields_command(client: Client, args: dict) -> Tuple[Any, Dict[Any
     return human_readable, entry_context, result, False
 
 
-def get_table_name_command(client: Client, args: dict) -> Tuple[Any, Dict[Any, Any], Dict[Any, Any], bool]:
+def get_table_name_command(client: Client, args: dict) -> tuple[Any, dict[Any, Any], dict[Any, Any], bool]:
     """List table fields.
 
     Args:
@@ -1739,7 +2092,7 @@ def get_table_name_command(client: Client, args: dict) -> Tuple[Any, Dict[Any, A
     return human_readable, entry_context, result, False
 
 
-def query_items_command(client: Client, args: dict) -> Tuple[Any, Dict[Any, Any], Dict[Any, Any], bool]:
+def query_items_command(client: Client, args: dict) -> tuple[Any, dict[Any, Any], dict[Any, Any], bool]:
     """Query items.
 
     Args:
@@ -1778,7 +2131,7 @@ def query_items_command(client: Client, args: dict) -> Tuple[Any, Dict[Any, Any]
     return human_readable, entry_context, result, True
 
 
-def get_item_details_command(client: Client, args: dict) -> Tuple[Any, Dict[Any, Any], Dict[Any, Any], bool]:
+def get_item_details_command(client: Client, args: dict) -> tuple[Any, dict[Any, Any], dict[Any, Any], bool]:
     """Get item details.
 
     Args:
@@ -1805,7 +2158,7 @@ def get_item_details_command(client: Client, args: dict) -> Tuple[Any, Dict[Any,
     return human_readable, entry_context, result, True
 
 
-def create_order_item_command(client: Client, args: dict) -> Tuple[Any, Dict[Any, Any], Dict[Any, Any], bool]:
+def create_order_item_command(client: Client, args: dict) -> tuple[Any, dict[Any, Any], dict[Any, Any], bool]:
     """Create item order.
 
     Args:
@@ -1835,7 +2188,7 @@ def create_order_item_command(client: Client, args: dict) -> Tuple[Any, Dict[Any
     return human_readable, entry_context, result, True
 
 
-def document_route_to_table(client: Client, args: dict) -> Tuple[Any, Dict[Any, Any], Dict[Any, Any], bool]:
+def document_route_to_table(client: Client, args: dict) -> tuple[Any, dict[Any, Any], dict[Any, Any], bool]:
     """Document routes to table.
 
     Args:
@@ -1870,96 +2223,212 @@ def document_route_to_table(client: Client, args: dict) -> Tuple[Any, Dict[Any, 
     return human_readable, entry_context, result, True
 
 
+def get_ticket_file_attachments(client: Client, ticket: dict) -> list:
+    """
+    Extract file attachment from a service now ticket.
+    """
+    file_names = []
+    if client.get_attachments:
+        file_entries = client.get_ticket_attachment_entries(ticket.get('sys_id', ''))
+        if isinstance(file_entries, list):
+            for file_result in file_entries:
+                if file_result['Type'] == entryTypes['error']:
+                    raise Exception(f"Error getting attachment: {str(file_result.get('Contents', ''))}")
+                file_names.append({
+                    'path': file_result.get('FileID', ''),
+                    'name': file_result.get('File', '')
+                })
+    return file_names
+
+
+def get_mirroring():
+    """
+    Get tickets mirroring.
+    """
+    params = demisto.params()
+
+    return {
+        'mirror_direction': MIRROR_DIRECTION.get(params.get('mirror_direction')),
+        'mirror_tags': [
+            params.get('comment_tag'),  # comment tag to service now
+            params.get('comment_tag_from_servicenow'),
+            params.get('file_tag'),  # file tag to service now
+            params.get('file_tag_from_service_now'),
+            params.get('work_notes_tag'),  # work not tag to service now
+            params.get('work_notes_tag_from_servicenow')
+        ],
+        'mirror_instance': demisto.integrationInstance()
+    }
+
+
+def is_time_field(field: str) -> bool:
+    """Checks if a given field contains a valid date/time string in the format: %Y-%m-%d %H:%M:%S.
+
+    Args:
+        field (str): The field value to check.
+
+    Returns:
+        bool: True if field can be converted to a datetime, False otherwise.
+    """
+    try:
+        datetime.strptime(field, DATE_FORMAT)
+        return True
+    except Exception:
+        return False
+
+
+def format_incidents_response_with_display_values(incidents_res: list | dict) -> list[dict]:
+    """Format the incidents response to use display values by key.
+
+    Args:
+        incidents_res (list of dict or specific dict): The original incidents response
+
+    Returns:
+        list[dict]: The formatted incidents.
+    """
+    if not isinstance(incidents_res, list):
+        incidents_res = [incidents_res]
+
+    format_incidents = []
+
+    for incident in incidents_res:
+        format_incident = {}
+
+        for item in incident:
+            if item in ("opened_by", "sys_domain", "assignment_group", "assigned_to", "caller_id"):
+                if incident[item].get("value"):
+                    format_incident[item] = incident[item]
+                else:
+                    format_incident[item] = ""
+            elif is_time_field(incident[item]["value"]):
+                format_incident[item] = incident[item]["value"]
+            else:
+                format_incident[item] = incident[item]["display_value"]
+
+        format_incidents.append(format_incident)
+
+    return format_incidents
+
+
 def fetch_incidents(client: Client) -> list:
     query_params = {}
     incidents = []
 
     last_run = demisto.getLastRun()
-    if 'time' not in last_run:
-        snow_time, _ = parse_date_range(client.fetch_time, '%Y-%m-%d %H:%M:%S')
-    else:
-        snow_time = last_run['time']
+    demisto.debug("ServiceNowv2 - Start fetching")
+
+    start_snow_time, end_snow_time = get_fetch_run_time_range(
+        last_run=last_run, first_fetch=client.fetch_time, look_back=client.look_back, date_format=DATE_FORMAT
+    )
+    snow_time_as_date = datetime.strptime(start_snow_time, DATE_FORMAT)
+
+    fetch_limit = last_run.get('limit') or client.sys_param_limit
 
     query = ''
     if client.sys_param_query:
         query += f'{client.sys_param_query}^'
-    query += f'ORDERBY{client.timestamp_field}^{client.timestamp_field}>{snow_time}'
+    # get the tickets which occurred after the 'start_snow_time'
+    query += f'ORDERBY{client.timestamp_field}^{client.timestamp_field}>{start_snow_time}'
 
     if query:
         query_params['sysparm_query'] = query
-    query_params['sysparm_limit'] = str(client.sys_param_limit)
+    query_params['sysparm_limit'] = fetch_limit  # type: ignore[assignment]
+    if client.use_display_value:
+        query_params['sysparm_display_value'] = "all"
 
-    demisto.info(f'Fetching ServiceNow incidents. with the query params: {str(query_params)}')
-    res = client.send_request(f'table/{client.ticket_type}', 'GET', params=query_params)
-
+    demisto.debug(f"ServiceNowV2 - Last run: {json.dumps(last_run)}")
+    demisto.debug(f"ServiceNowV2 - Query sent to the server: {str(query_params)}")
+    tickets_response = client.send_request(f'table/{client.ticket_type}', 'GET', params=query_params).get('result', [])
     count = 0
-    parsed_snow_time = datetime.strptime(snow_time, '%Y-%m-%d %H:%M:%S')
+    skipped_incidents = 0
 
-    severity_map = {'1': 3, '2': 2, '3': 1}  # Map SNOW severity to Demisto severity for incident creation
+    # Map SNOW severity to Demisto severity for incident creation
+    severity_map = {'1': 3, '1 - High': 3, '2': 2, '2 - Medium': 2, '3': 1, '3 - Low': 1}
 
-    for result in res.get('result', []):
-        labels = []
+    if client.use_display_value:
+        tickets_response = format_incidents_response_with_display_values(incidents_res=tickets_response)
 
-        result['mirror_direction'] = MIRROR_DIRECTION.get(demisto.params().get('mirror_direction'))
-        result['mirror_tags'] = [
-            demisto.params().get('comment_tag'),
-            demisto.params().get('file_tag'),
-            demisto.params().get('work_notes_tag')
-        ]
-        result['mirror_instance'] = demisto.integrationInstance()
+    # remove duplicate incidents which were already fetched
+    tickets_response = filter_incidents_by_duplicates_and_limit(
+        incidents_res=tickets_response, last_run=last_run, fetch_limit=client.sys_param_limit, id_field='sys_id'
+    )
 
-        if client.timestamp_field not in result:
+    for ticket in tickets_response:
+        ticket.update(get_mirroring())
+
+        if client.timestamp_field not in ticket:
             raise ValueError(f"The timestamp field [{client.timestamp_field}] does not exist in the ticket")
 
-        if count > client.sys_param_limit:
+        if count > fetch_limit:
             break
 
         try:
-            if datetime.strptime(result[client.timestamp_field], '%Y-%m-%d %H:%M:%S') < parsed_snow_time:
+            if datetime.strptime(ticket[client.timestamp_field], DATE_FORMAT) < snow_time_as_date:
+                skipped_incidents += 1
+                demisto.debug(
+                    f"ServiceNowV2 - -Skipping incident with sys_id={ticket.get('sys_id')} and date="
+                    f"{ticket.get(client.timestamp_field)} because its creation time is smaller than the last fetch.")
                 continue
-        except Exception:
-            pass
-
-        for k, v in result.items():
-            if isinstance(v, str):
-                labels.append({
-                    'type': k,
-                    'value': v
-                })
-            else:
-                labels.append({
-                    'type': k,
-                    'value': json.dumps(v)
-                })
-
-        severity = severity_map.get(result.get('severity', ''), 0)
-
-        file_names = []
-        if client.get_attachments:
-            file_entries = client.get_ticket_attachment_entries(result.get('sys_id', ''))
-            if isinstance(file_entries, list):
-                for file_result in file_entries:
-                    if file_result['Type'] == entryTypes['error']:
-                        raise Exception(f"Error getting attachment: {str(file_result.get('Contents', ''))}")
-                    file_names.append({
-                        'path': file_result.get('FileID', ''),
-                        'name': file_result.get('File', '')
-                    })
+            parse_dict_ticket_fields(client, ticket)
+        except Exception as e:
+            demisto.debug(f"Got the following error: {e}")
 
         incidents.append({
-            'name': f"ServiceNow Incident {result.get(client.incident_name)}",
-            'labels': labels,
-            'details': json.dumps(result),
-            'severity': severity,
-            'attachment': file_names,
-            'rawJSON': json.dumps(result)
+            'name': f"ServiceNow Incident {ticket.get(client.incident_name)}",
+            'labels': [
+                {'type': _type, 'value': value if isinstance(value, str) else json.dumps(value)}
+                for _type, value in ticket.items()
+            ],
+            'details': json.dumps(ticket),
+            'severity': severity_map.get(ticket.get('severity', ''), 0),
+            'attachment': get_ticket_file_attachments(client=client, ticket=ticket),
+            'occurred': ticket.get(client.timestamp_field),
+            'sys_id': ticket.get('sys_id'),
+            'rawJSON': json.dumps(ticket)
         })
-
         count += 1
-        snow_time = result.get(client.timestamp_field)
 
-    demisto.setLastRun({'time': snow_time})
+    last_run = update_last_run_object(
+        last_run=last_run,
+        incidents=incidents,
+        fetch_limit=client.sys_param_limit,
+        start_fetch_time=start_snow_time,
+        end_fetch_time=end_snow_time,
+        look_back=client.look_back,
+        created_time_field='occurred',
+        id_field='sys_id',
+        date_format=DATE_FORMAT
+    )
+
+    demisto.debug(f"ServiceNowV2 - Last run after incidents fetching: {json.dumps(last_run)}")
+    demisto.debug(f"ServiceNowV2 - Number of incidents before filtering: {len(tickets_response)}")
+    demisto.debug(f"ServiceNowV2 - Number of incidents after filtering: {len(incidents)}")
+    demisto.debug(f"ServiceNowV2 - Number of incidents skipped: {skipped_incidents}")
+
+    for ticket in incidents:
+        # the occurred time requires to be in ISO format.
+        occurred = datetime.strptime(ticket.get('occurred'), DATE_FORMAT).isoformat()  # type: ignore[arg-type]
+        ticket['occurred'] = f"{occurred}Z"
+
+    if demisto.params().get("mirror_notes_for_new_incidents", False):
+        store_ids_for_first_mirroring(incidents)
+
+    demisto.setLastRun(last_run)
     return incidents
+
+
+def store_ids_for_first_mirroring(incidents: list):
+    """
+    Stores the fetched incident IDs in the integration context to trigger mirroring.
+    We're triggering mirroring for new incidents to mirror existing comments and notes.
+
+    Args:
+        incidents (list): List of fetched incidents.
+    """
+    int_context = get_integration_context()
+    int_context.setdefault("last_fetched_incident_ids", []).extend([incident["sys_id"] for incident in incidents])
+    demisto.debug(f"ServiceNowV2 - Saving the following incident ids in the integration context: {int_context=}")
+    set_integration_context(int_context)
 
 
 def test_instance(client: Client):
@@ -1968,9 +2437,9 @@ def test_instance(client: Client):
     function will raise an exception and cause the test_module/oauth_test_module function to fail.
     """
     # Validate fetch_time parameter is valid (if not, parse_date_range will raise the error message)
-    parse_date_range(client.fetch_time, '%Y-%m-%d %H:%M:%S')
-
-    result = client.send_request(f'table/{client.ticket_type}', params={'sysparm_limit': 1}, method='GET')
+    parse_date_range(client.fetch_time, DATE_FORMAT)
+    params = {'sysparm_limit': 1, 'sysparm_query': 'active=true'}
+    result = client.send_request(f'table/{client.ticket_type}', params=params, method='GET')
     if 'result' not in result:
         raise Exception('ServiceNow error: ' + str(result))
     ticket = result.get('result')
@@ -1983,7 +2452,7 @@ def test_instance(client: Client):
             raise ValueError(f"The field [{client.incident_name}] does not exist in the ticket.")
 
 
-def test_module(client: Client, *_) -> Tuple[str, Dict[Any, Any], Dict[Any, Any], bool]:
+def test_module(client: Client, *_) -> tuple[str, dict[Any, Any], dict[Any, Any], bool]:
     """
     Test the instance configurations when using basic authorization.
     """
@@ -1999,7 +2468,7 @@ def test_module(client: Client, *_) -> Tuple[str, Dict[Any, Any], Dict[Any, Any]
     return 'ok', {}, {}, True
 
 
-def oauth_test_module(client: Client, *_) -> Tuple[str, Dict[Any, Any], Dict[Any, Any], bool]:
+def oauth_test_module(client: Client, *_) -> tuple[str, dict[Any, Any], dict[Any, Any], bool]:
     """
     Test the instance configurations when using OAuth authentication.
     """
@@ -2013,7 +2482,7 @@ def oauth_test_module(client: Client, *_) -> Tuple[str, Dict[Any, Any], Dict[Any
     return hr, {}, {}, True
 
 
-def login_command(client: Client, args: Dict[str, Any]) -> Tuple[str, Dict[Any, Any], Dict[Any, Any], bool]:
+def login_command(client: Client, args: dict[str, Any]) -> tuple[str, dict[Any, Any], dict[Any, Any], bool]:
     """
     Login the user using OAuth authorization
     Args:
@@ -2036,13 +2505,81 @@ def login_command(client: Client, args: Dict[str, Any]) -> Tuple[str, Dict[Any, 
         hr = '### Logged in successfully.\n A refresh token was saved to the integration context. This token will be ' \
              'used to generate a new access token once the current one expires.'
     except Exception as e:
-        return_error(f'Failed to login. Please verify that the provided username and password are correct, and that you '
-                     f'entered the correct client id and client secret in the instance configuration (see ? for'
-                     f'correct usage when using OAuth).\n\n{e}')
+        return_error(
+            f'Failed to login. Please verify that the provided username and password are correct, and that you '
+            f'entered the correct client id and client secret in the instance configuration (see ? for'
+            f'correct usage when using OAuth).\n\n{e}')
     return hr, {}, {}, True
 
 
-def get_remote_data_command(client: Client, args: Dict[str, Any], params: Dict) -> Union[List[Dict[str, Any]], str]:
+def check_assigned_to_field(client: Client, assigned_to: dict) -> Optional[str]:
+    if assigned_to:
+        user_result = client.get('sys_user', assigned_to.get('value'),  # type: ignore[arg-type]
+                                 no_record_found_res={'result': {}})
+        user = user_result.get('result', {})
+        if user:
+            user_email = user.get('email')
+            return user_email
+        else:
+            demisto.debug(f'Could not assign user {assigned_to.get("value")} since it does not exist in ServiceNow')
+    return ''
+
+
+def parse_dict_ticket_fields(client: Client, ticket: dict) -> dict:
+
+    # Parse user dict to email
+    assigned_to = ticket.get('assigned_to', {})
+    caller = ticket.get('caller_id', {})
+    assignment_group = ticket.get('assignment_group', {})
+
+    if assignment_group:
+        group_result = client.get('sys_user_group', assignment_group.get('value'), no_record_found_res={'result': {}})
+        group = group_result.get('result', {})
+        group_name = group.get('name')
+        ticket['assignment_group'] = group_name
+
+    if ticket:
+        user_assigned = check_assigned_to_field(client, assigned_to)
+        ticket['assigned_to'] = user_assigned
+
+    if caller:
+        user_result = client.get('sys_user', caller.get('value'), no_record_found_res={'result': {}})
+        user = user_result.get('result', {})
+        user_email = user.get('email')
+        ticket['caller_id'] = user_email
+
+    return ticket
+
+
+def get_timezone_offset(ticket: dict, display_date_format: str):
+    """
+    Receives ticket response of a ticket query from SNOW and computes the timezone offset between the timezone of the
+    instance and UTC.
+
+    Args:
+        ticket (dict): The ticket response from the SNOW query.
+        display_date_format (str): The date format of the display_value field in the ticket.
+
+    Returns:
+        datetime.timedelta: The timezone offset between the SNOW instance and UTC.
+    """
+    try:
+        local_time: str = ticket.get('sys_created_on', {}).get('display_value', '')
+        # With %H hour format, AM/PM is redundant info.
+        local_time = (local_time.replace('AM', '').replace('PM', '')).strip()
+        local_time_dt = datetime.strptime(local_time, display_date_format)
+    except Exception as e:
+        raise Exception(f'Failed to get the display value offset time. ERROR: {e}')
+    try:
+        utc_time = ticket.get('sys_created_on', {}).get('value', '')
+        utc_time = datetime.strptime(utc_time, DATE_FORMAT)
+    except ValueError as e:
+        raise Exception(f'Failed to convert {utc_time} to datetime object. ERROR: {e}')
+    offset = utc_time - local_time_dt
+    return offset
+
+
+def get_remote_data_command(client: Client, args: dict[str, Any], params: dict) -> Union[list[dict[str, Any]], str]:
     """
     get-remote-data command: Returns an updated incident and entries
     Args:
@@ -2065,10 +2602,11 @@ def get_remote_data_command(client: Client, args: Dict[str, Any], params: Dict) 
     demisto.debug(f'last_update is {last_update}')
 
     ticket_type = client.ticket_type
-    result = client.get(ticket_type, ticket_id)
+    result = client.get(ticket_type, ticket_id, use_display_value=client.use_display_value)
 
+    is_new_ticket_id = is_new_incident(ticket_id)
     if not result or 'result' not in result:
-        return 'Ticket was not found.'
+        return f'Ticket {ticket_id=} was not found.'
 
     if isinstance(result['result'], list):
         if len(result['result']) == 0:
@@ -2079,20 +2617,31 @@ def get_remote_data_command(client: Client, args: Dict[str, Any], params: Dict) 
     else:
         ticket = result['result']
 
+    if client.use_display_value and client.display_date_format:
+        timezone_offset = get_timezone_offset(ticket, client.display_date_format)
+        ticket = format_incidents_response_with_display_values(ticket)[0]
+    else:
+        timezone_offset = None
+        demisto.debug(f"not ({client.use_display_value=} and {client.display_date_format=}) setting {timezone_offset=}")
+
     ticket_last_update = arg_to_timestamp(
         arg=ticket.get('sys_updated_on'),
         arg_name='sys_updated_on',
         required=False
     )
 
-    demisto.debug(f'ticket_last_update is {ticket_last_update}')
-
-    if last_update > ticket_last_update:
-        demisto.debug('Nothing new in the ticket')
+    demisto.debug(f'ticket_last_update of {ticket_id=} is {ticket_last_update}')
+    is_fetch = demisto.params().get('isFetch')
+    if is_fetch and last_update > ticket_last_update and not is_new_ticket_id:
+        demisto.debug(f'Nothing new in the ticket {ticket_id=}')
         ticket = {}
 
     else:
+        # in case we use SNOW just to mirror by setting the incident with mirror fields
+        # is_fetch will be false, so we will update even the XSOAR incident will be updated then SNOW ticket.
         demisto.debug(f'ticket is updated: {ticket}')
+
+    parse_dict_ticket_fields(client, ticket)
 
     # get latest comments and files
     entries = []
@@ -2100,73 +2649,135 @@ def get_remote_data_command(client: Client, args: Dict[str, Any], params: Dict) 
     if file_entries:
         for file in file_entries:
             if '_mirrored_from_xsoar' not in file.get('File'):
+                file['Tags'] = [params.get('file_tag_from_service_now')]
                 entries.append(file)
 
-    sys_param_limit = args.get('limit', client.sys_param_limit)
-    sys_param_offset = args.get('offset', client.sys_param_offset)
+    if client.use_display_value:
+        try:
+            time_info = {'display_date_format': client.display_date_format, 'timezone_offset': timezone_offset}
+            if not is_new_ticket_id:
+                time_info.update({'filter': datetime.fromtimestamp(last_update)})
+            comments_result = convert_to_notes_result(ticket, time_info)
 
-    sys_param_query = f'element_id={ticket_id}^sys_created_on>' \
-        f'{datetime.fromtimestamp(last_update)}^element=comments^ORelement=work_notes'
+        except Exception as e:
+            demisto.debug(f'Failed to retrieve notes using display value. Continuing without retrieving notes.\n Error: {e}')
+            comments_result = {'result': []}
+    else:
+        sys_param_limit = args.get('limit', client.sys_param_limit)
+        sys_param_offset = args.get('offset', client.sys_param_offset)
 
-    comments_result = client.query('sys_journal_field', sys_param_limit, sys_param_offset, sys_param_query)
+        sys_param_query = f'element_id={ticket_id}^element=comments^ORelement=work_notes'
+        if not is_new_ticket_id:  # for latest fetch run incidents do not filter by last_update
+            sys_param_query += f'^sys_created_on>{datetime.fromtimestamp(last_update)}'
+
+        comments_result = client.query('sys_journal_field', sys_param_limit, sys_param_offset, sys_param_query)
     demisto.debug(f'Comments result is {comments_result}')
 
     if not comments_result or 'result' not in comments_result:
-        demisto.debug(f'Pull result is {ticket}')
+        demisto.debug(f'ServiceNowV2 - Pull result is {ticket}')
         return [ticket] + entries
 
-    for note in comments_result.get('result', []):
-        if 'Mirrored from Cortex XSOAR' not in note.get('value'):
-            comments_context = {'comments_and_work_notes': note.get('value')}
-            entries.append({
-                'Type': note.get('type'),
-                'Category': note.get('category'),
-                'Contents': note.get('value'),
-                'ContentsFormat': note.get('format'),
-                'Tags': note.get('tags'),
-                'Note': True,
-                'EntryContext': comments_context
-            })
-    # Parse user dict to email
-    assigned_to = ticket.get('assigned_to', {})
-    caller = ticket.get('caller_id', {})
-    assignment_group = ticket.get('assignment_group', {})
+    entries.extend(get_entries_for_notes(comments_result.get('result', []), params))
 
-    if assignment_group:
-        group_result = client.get('sys_user_group', assignment_group.get('value'))
-        group = group_result.get('result', {})
-        group_name = group.get('name')
-        ticket['assignment_group'] = group_name
-
-    if assigned_to:
-        user_result = client.get('sys_user', assigned_to.get('value'))
-        user = user_result.get('result', {})
-        user_email = user.get('email')
-        ticket['assigned_to'] = user_email
-
-    if caller:
-        user_result = client.get('sys_user', caller.get('value'))
-        user = user_result.get('result', {})
-        user_email = user.get('email')
-        ticket['caller_id'] = user_email
-
-    if ticket.get('resolved_by') or ticket.get('closed_at'):
-        if params.get('close_incident'):
-            demisto.debug(f'ticket is closed: {ticket}')
+    # Handle closing ticket/incident in XSOAR
+    close_incident = params.get('close_incident')
+    if close_incident != 'None':
+        server_close_custom_state = params.get('server_close_custom_state', '')
+        server_custom_close_code = params.get('server_custom_close_code', '')
+        ticket_state = ticket.get('state', '')
+        ticket_close_code = ticket.get('close_code', '')
+        # The first condition is for closing the incident if the ticket's state is in the
+        # `Mirrored XSOAR Ticket custom close state code` parameter, which is configured by the user in the
+        # integration configuration.
+        if (ticket_state and ticket_state in server_close_custom_state) \
+            or (ticket_close_code and ticket_close_code in server_custom_close_code) \
+                or (ticket.get('closed_at') and close_incident == 'closed') \
+                    or (ticket.get('resolved_at') and close_incident == 'resolved'):  # noqa: E127
+            demisto.debug(f'SNOW ticket changed state - should be closed in XSOAR: {ticket}')
             entries.append({
                 'Type': EntryType.NOTE,
                 'Contents': {
                     'dbotIncidentClose': True,
-                    'closeReason': f'From ServiceNow: {ticket.get("close_notes")}'
+                    'closeNotes': ticket.get("close_notes"),
+                    'closeReason': converts_close_code_or_state_to_close_reason(ticket_state, ticket_close_code,
+                                                                                server_close_custom_state,
+                                                                                server_custom_close_code)
                 },
                 'ContentsFormat': EntryFormat.JSON
             })
 
-    demisto.debug(f'Pull result is {ticket}')
+    demisto.debug(f'ServiceNowV2 - Pull result is {ticket=}, {entries=}')
     return [ticket] + entries
 
 
-def update_remote_system_command(client: Client, args: Dict[str, Any], params: Dict[str, Any]) -> str:
+def is_new_incident(ticket_id: str) -> bool:
+    """
+    Returns whether the ticket id is a new fetched incident in XSOAR which should mirror existing notes.
+
+    Args:
+        ticket_id (str): The ticket ID.
+
+    Returns:
+        bool: Whether its a new incident in XSOAR.
+    """
+    int_context = get_integration_context()
+    last_fetched_ids = int_context.get("last_fetched_incident_ids") or []
+    demisto.debug(f"ServiceNowV2 - Last fetched incident ids are: {last_fetched_ids}")
+    if ticket_id_in_last_fetch := ticket_id in last_fetched_ids:
+        last_fetched_ids.remove(ticket_id)
+        int_context["last_fetched_incident_ids"] = last_fetched_ids
+        set_integration_context(int_context)
+    return ticket_id_in_last_fetch
+
+
+def converts_close_code_or_state_to_close_reason(ticket_state: str, ticket_close_code: str, server_close_custom_state: str,
+                                                 server_custom_close_code: str):
+    """
+    determine the XSOAR incident close reason based on the ServiceNow ticket close_code or state.
+    if 'Mirrored XSOAR Ticket custom close resolution code' parameter is set, the function will try to use it to
+    determine the close reason.
+    else if 'Mirrored XSOAR Ticket custom close state code' parameter is set, the function will try to use it to
+    determine the close reason.
+    the close reason should be corresponding to a user-defined list of close reasons in the server configuration.
+    then it will try using 'closed' or 'resolved' state, if set using 'Mirrored XSOAR Ticket closure method' parameter.
+    otherwise, it will use the default 'out of the box' server incident close reason.
+    Args:
+        ticket_state: Service now ticket state
+        ticket_close_code: Service now ticket close code
+        server_close_custom_state: server close custom state parameter
+        server_custom_close_code: server custom close code parameter
+    Returns:
+        The XSOAR state
+    """
+
+    # if custom close code parameter is set and ticket close code is returned from the SNOW incident
+    if server_custom_close_code and ticket_close_code:
+        demisto.debug(f'trying to close XSOAR incident using custom resolution code: {server_custom_close_code}, with \
+            received close code: {ticket_close_code}')
+        # parse custom close code parameter into a dictionary of custom close codes and their names (label)
+        server_close_custom_code_dict = dict(item.strip().split("=") for item in server_custom_close_code.split(","))
+        # check if close code is in the parsed dictionary
+        if close_code_label := server_close_custom_code_dict.get(ticket_close_code):
+            demisto.debug(f'incident closed using custom close code. Close Code: {ticket_close_code}, Label: {close_code_label}')
+            return close_code_label
+    # if custom state parameter is set and ticket state is returned from incident is not empty
+    if server_close_custom_state and ticket_state:
+        demisto.debug(f'trying to close XSOAR incident using custom states: {server_close_custom_state}, with \
+            received state code: {ticket_state}')
+        # parse custom state parameter into a dictionary of custom state codes and their names (label)
+        server_close_custom_state_dict = dict(item.strip().split("=") for item in server_close_custom_state.split(","))
+        # check if state code is in the parsed dictionary
+        if state_label := server_close_custom_state_dict.get(ticket_state):
+            demisto.debug(f'incident closed using custom state. State Code: {ticket_state}, Label: {state_label}')
+            return state_label
+    if ticket_state in ['6', '7']:  # default states for closed (6) and resolved (7)
+        demisto.debug(f'incident should be closed using default state. State Code: {ticket_state}')
+        return 'Resolved'
+    demisto.debug(f'incident is closed using default close reason "Other". State Code: {ticket_state}')
+    return 'Other'
+
+
+def update_remote_system_command(client: Client, args: dict[str, Any], params: dict[str, Any]) -> str:
     """
     This command pushes local changes to the remote system.
     Args:
@@ -2188,22 +2799,46 @@ def update_remote_system_command(client: Client, args: Dict[str, Any], params: D
 
     ticket_type = client.ticket_type
     ticket_id = parsed_args.remote_incident_id
+    closure_case = get_closure_case(params)
+    demisto.debug(f"closure case= {closure_case}")
+    is_custom_close = False
+    close_custom_state = params.get('close_custom_state', None)
+    demisto.debug(f"state will change to= {parsed_args.data.get('state')}")
     if parsed_args.incident_changed:
         demisto.debug(f'Incident changed: {parsed_args.incident_changed}')
-        # Closing sc_type ticket. This ticket type can be closed only when changing the ticket state.
-        if (ticket_type == 'sc_task' or ticket_type == 'sc_req_item')\
-                and parsed_args.inc_status == IncidentStatus.DONE and params.get('close_ticket'):
-            parsed_args.data['state'] = '3'
-        # Closing incident ticket.
-        if ticket_type == 'incident' and parsed_args.inc_status == IncidentStatus.DONE and params.get('close_ticket'):
-            parsed_args.data['state'] = '7'
+        if parsed_args.inc_status == IncidentStatus.DONE:
+            demisto.debug('Closing incident by closure case')
+            if closure_case and ticket_type in {'sc_task', 'sc_req_item', SIR_INCIDENT}:
+                parsed_args.data['state'] = '3'
+            # These ticket types are closed by changing their state.
+            if closure_case == 'closed' and ticket_type == INCIDENT:
+                parsed_args.data['state'] = '7'  # Closing incident ticket.
+            elif closure_case == 'resolved' and ticket_type == INCIDENT:
+                parsed_args.data['state'] = '6'  # resolving incident ticket.
+            if close_custom_state:  # Closing by custom state
+                demisto.debug(f'Closing by custom state = {close_custom_state}')
+                is_custom_close = True
+                parsed_args.data['state'] = close_custom_state
 
         fields = get_ticket_fields(parsed_args.data, ticket_type=ticket_type)
-        if not params.get('close_ticket'):
+        demisto.debug(f"all fields= {fields}")
+        if closure_case:
+            # Convert the closing state to the right one if the ticket type is not incident in order to close the
+            # ticket/incident via XSOAR
+            if parsed_args.data.get('state') == '7 - Closed' and not is_custom_close:
+                fields['state'] = TICKET_TYPE_TO_CLOSED_STATE[ticket_type]
+
             fields = {key: val for key, val in fields.items() if key != 'closed_at' and key != 'resolved_at'}
 
         demisto.debug(f'Sending update request to server {ticket_type}, {ticket_id}, {fields}')
         result = client.update(ticket_type, ticket_id, fields)
+
+        # Handle case of custom state doesn't exist, reverting to the original close state
+        if is_custom_close and demisto.get(result, 'result.state') != close_custom_state:
+            fields['state'] = TICKET_TYPE_TO_CLOSED_STATE[ticket_type]
+            demisto.debug(f'Given custom state doesn\'t exist - Sending second update request to server with '
+                          f'default closed state: {ticket_type}, {ticket_id}, {fields}')
+            result = client.update(ticket_type, ticket_id, fields)
 
         demisto.info(f'Ticket Update result {result}')
 
@@ -2214,14 +2849,21 @@ def update_remote_system_command(client: Client, args: Dict[str, Any], params: D
         for entry in entries:
             demisto.debug(f'Sending entry {entry.get("id")}, type: {entry.get("type")}')
             # Mirroring files as entries
-            if entry.get('type') == 3:
+            if is_entry_type_mirror_supported(entry.get('type')):
                 path_res = demisto.getFilePath(entry.get('id'))
                 full_file_name = path_res.get('name')
                 file_name, file_extension = os.path.splitext(full_file_name)
                 if not file_extension:
                     file_extension = ''
-                client.upload_file(ticket_id, entry.get('id'), file_name + '_mirrored_from_xsoar' + file_extension,
-                                   ticket_type)
+                if params.get('file_tag_from_service_now') not in entry.get('tags', []):
+                    try:
+                        client.upload_file(ticket_id, entry.get('id'), file_name + '_mirrored_from_xsoar' + file_extension,
+                                           ticket_type)
+                    except Exception as e:
+                        demisto.error(f"An attempt to mirror a file has failed. entry_id={entry.get('id')}, {file_name=}\n{e}")
+                        text_for_snow_comment = "An attempt to mirror a file from Cortex XSOAR was failed." \
+                                                f"\nFile name: {file_name}\nError from integration: {e}"
+                        client.add_comment(ticket_id, ticket_type, 'comments', text_for_snow_comment)
             else:
                 # Mirroring comment and work notes as entries
                 tags = entry.get('tags', [])
@@ -2230,11 +2872,44 @@ def update_remote_system_command(client: Client, args: Dict[str, Any], params: D
                     key = 'work_notes'
                 elif params.get('comment_tag') in tags:
                     key = 'comments'
-                user = entry.get('user', 'dbot')
-                text = f"({user}): {str(entry.get('contents', ''))}\n\n Mirrored from Cortex XSOAR"
+                # Sometimes user is an empty str, not None, therefore nothing is displayed in ServiceNow
+                user = entry.get('user', 'dbot') or 'dbot'
+                if str(entry.get('format')) == 'html':
+                    contents = str(entry.get('contents', ''))
+                    text = f"({user}): <br/><br/>[code]{contents} <br/><br/>[/code] Mirrored from Cortex XSOAR"
+                else:
+                    text = f"({user}): {str(entry.get('contents', ''))}\n\n Mirrored from Cortex XSOAR"
                 client.add_comment(ticket_id, ticket_type, key, text)
 
     return ticket_id
+
+
+def get_closure_case(params: dict[str, Any]):
+    """
+    return the right incident closing states according to old and new close_ticket integration param.
+    Args:
+        params: the integration params dict.
+
+    Returns: None if no closure method is specified. otherwise returns (str) The right closure method.
+    """
+    if params.get('close_ticket_multiple_options') != 'None':
+        return params.get('close_ticket_multiple_options')
+    elif params.get('close_ticket'):
+        return 'closed'
+    else:
+        return None
+
+
+def is_entry_type_mirror_supported(entry_type):
+    """
+        Args:
+            entry_type (int)
+        Return:
+            True if the entry type supports mirroring otherwise False
+    """
+    supported_mirror_entries = [EntryType.FILE, EntryType.ENTRY_INFO_FILE, EntryType.IMAGE,
+                                EntryType.VIDEO_FILE, EntryType.STATIC_VIDEO_FILE]
+    return entry_type in supported_mirror_entries
 
 
 def get_mapping_fields_command(client: Client) -> GetMappingFieldsResponse:
@@ -2250,7 +2925,9 @@ def get_mapping_fields_command(client: Client) -> GetMappingFieldsResponse:
     incident_type_scheme = SchemeTypeMapping(type_name=client.ticket_type)
     demisto.debug(f'Collecting incident mapping for incident type - "{client.ticket_type}"')
 
-    for field in SNOW_ARGS:
+    # If the type is sn_si_incident then add it specific fields else use the snow args as is.
+    out_fields = SNOW_ARGS + SIR_OUT_FIELDS if client.ticket_type == SIR_INCIDENT else SNOW_ARGS
+    for field in out_fields:
         incident_type_scheme.add_field(field)
 
     mapping_response = GetMappingFieldsResponse()
@@ -2261,12 +2938,14 @@ def get_mapping_fields_command(client: Client) -> GetMappingFieldsResponse:
 
 def get_modified_remote_data_command(
         client: Client,
-        args: Dict[str, str],
+        args: dict[str, str],
         update_timestamp_field: str = 'sys_updated_on',
         mirror_limit: str = '100',
 ) -> GetModifiedRemoteDataResponse:
     remote_args = GetModifiedRemoteDataArgs(args)
-    last_update = dateparser.parse(remote_args.last_update, settings={'TIMEZONE': 'UTC'}).strftime('%Y-%m-%d %H:%M:%S')
+    parsed_date = dateparser.parse(remote_args.last_update, settings={'TIMEZONE': 'UTC'})
+    assert parsed_date is not None, f'could not parse {remote_args.last_update}'
+    last_update = parsed_date.strftime(DATE_FORMAT)
 
     demisto.debug(f'Running get-modified-remote-data command. Last update is: {last_update}')
 
@@ -2283,7 +2962,241 @@ def get_modified_remote_data_command(
     if result and (modified_records := result.get('result')):
         modified_records_ids = [record.get('sys_id') for record in modified_records if 'sys_id' in record]
 
-    return GetModifiedRemoteDataResponse(modified_records_ids)
+    modified_records_ids = extend_with_new_incidents(modified_records_ids)
+    demisto.debug(f'ServiceNowV2 - returning the following incident ids: {modified_records_ids}')
+    return GetModifiedRemoteDataResponse(
+        modified_records_ids
+    )
+
+
+def extend_with_new_incidents(modified_records_ids: list) -> list:
+    """
+    Extend list of modified incidents with new fetched incidents to trigger mirroring.
+    We're triggering mirroring for new incidents to mirror existing comments and notes.
+
+    Args:
+        modified_records_ids (list): List of modified incidents.
+
+    Returns:
+        list: Extended list of incidents to trigger mirroring.
+    """
+    int_context = get_integration_context()
+    modified_records_ids.extend(int_context.get("last_fetched_incident_ids") or [])
+    modified_records_ids = list(set(modified_records_ids))  # remove duplicates
+    return modified_records_ids
+
+
+def add_custom_fields(params):
+    global SNOW_ARGS
+    custom_fields = argToList(params.get('custom_fields'))
+    SNOW_ARGS += custom_fields
+
+
+def get_tasks_from_co_human_readable(data: dict, ticket_type: str) -> dict:
+    """Get item human readable.
+
+    Args:
+        data: item data.
+
+    Returns:
+        item human readable.
+        :param data: the task data
+        :param ticket_type: ticket type
+    """
+    states = TICKET_STATES.get(ticket_type, {})
+    state = data.get('state', {}).get('value')
+    item = {
+        'ID': data.get('sys_id', {}).get('value', ''),
+        'Name': data.get('number', {}).get('value', ''),
+        'Description': data.get('short_description', {}).get('value', ''),
+        'State': states.get(str(int(state)), str(int(state))),
+        'Variables': []
+    }
+    variables = data.get('variables')
+    if variables and isinstance(variables, list):
+        for var in variables:
+            if var:
+                pretty_variables = {
+                    'Question': var.get('label', ''),
+                    'Type': var.get('display_type', ''),
+                    'Name': var.get('name', ''),
+                    'Mandatory': var.get('mandatory', '')
+                }
+                item['Variables'].append(pretty_variables)
+    return item
+
+
+def get_tasks_for_co_command(client: Client, args: dict) -> CommandResults:
+    """Get tasks for a change request
+
+    Args:
+        client: Client object with request.
+        args: Usually demisto.args()
+
+    Returns:
+        Demisto Outputs.
+    """
+    sys_id = str(args.get('id', ''))
+    result = client.get_co_tasks(sys_id)
+    if not result or 'result' not in result:
+        return CommandResults(
+            outputs_prefix="ServiceNow.Tasks",
+            readable_output='Item was not found.',
+            raw_response=result
+        )
+    items = result.get('result', {})
+    if not isinstance(items, list):
+        items_list = [items]
+    else:
+        items_list = items
+    if len(items_list) == 0:
+        return CommandResults(
+            outputs_prefix="ServiceNow.Tasks",
+            readable_output='No items were found.',
+            raw_response=result
+        )
+
+    mapped_items = []
+    for item in items_list:
+        mapped_items.append(get_tasks_from_co_human_readable(item, client.ticket_type))
+
+    headers = ['ID', 'Name', 'State', 'Description']
+    human_readable = tableToMarkdown('ServiceNow Catalog Items', mapped_items, headers=headers,
+                                     removeNull=True, headerTransform=pascalToSpace)
+    entry_context = {'ServiceNow.Tasks(val.ID===obj.ID)': createContext(mapped_items, removeNull=True)}
+
+    return CommandResults(
+        outputs_prefix="ServiceNow.Tasks",
+        outputs=entry_context,
+        readable_output=human_readable,
+        raw_response=result
+    )
+
+
+def create_co_from_template_command(client: Client, args: dict) -> CommandResults:
+    """Create a change request from a template.
+
+    Args:
+        client: Client object with request.
+        args: Usually demisto.args()
+
+    Returns:
+        Demisto Outputs.
+    """
+
+    template = args.get('template', "")
+    result = client.create_co_from_template(template)
+    if not result or 'result' not in result:
+        raise Exception('Unable to retrieve response.')
+    ticket = result['result']
+    human_readable_table = get_co_human_readable(ticket=ticket, ticket_type='change_request')
+    headers = ['System ID', 'Number', 'Impact', 'Urgency', 'Severity', 'Priority', 'State', 'Approval',
+               'Created On', 'Created By', 'Active', 'Close Notes', 'Close Code', 'Description', 'Opened At',
+               'Due Date', 'Resolved By', 'Resolved At', 'SLA Due', 'Short Description', 'Additional Comments']
+    human_readable = tableToMarkdown('ServiceNow ticket was created successfully.', t=human_readable_table,
+                                     headers=headers, removeNull=True)
+    created_ticket_context = get_ticket_context(ticket)
+    entry_context = {
+        'Ticket(val.ID===obj.ID)': created_ticket_context,
+        'ServiceNow.Ticket(val.ID===obj.ID)': created_ticket_context
+    }
+    return CommandResults(
+        outputs_prefix="ServiceNow.Ticket",
+        outputs=entry_context,
+        readable_output=human_readable,
+        raw_response=result
+    )
+
+
+def get_co_human_readable(ticket: dict, ticket_type: str, additional_fields: Iterable = ()) -> dict:
+    """Get co human readable.
+
+    Args:
+        ticket: tickets data. in the form of a dict.
+        ticket_type: ticket type.
+        additional_fields: additional fields to extract from the ticket
+
+    Returns:
+        ticket human readable.
+    """
+
+    states = TICKET_STATES.get(ticket_type, {})
+    state = ticket.get('state', {}).get('value', '')
+    priority = ticket.get('priority', {}).get('value', '')
+
+    item = {
+        'System ID': ticket.get('sys_id', {}).get('value', ''),
+        'Number': ticket.get('number', {}).get('value', ''),
+        'Impact': TICKET_IMPACT.get(str(int(ticket.get('impact', {}).get('value', ''))), ''),
+        'Business Impact': BUSINESS_IMPACT.get(str(ticket.get('business_criticality', {}).get('value', '')), ''),
+        'Urgency': ticket.get('urgency', {}).get('display_value', ''),
+        'Severity': ticket.get('severity', {}).get('value', ''),
+        'Priority': TICKET_PRIORITY.get(str(int(priority)), str(int(priority))),
+        'State': states.get(str(int(state)), str(int(state))),
+        'Approval': ticket.get('approval_history', {}).get('value', ''),
+        'Created On': ticket.get('sys_created_on', {}).get('value', ''),
+        'Created By': ticket.get('sys_created_by', {}).get('value', ''),
+        'Active': ticket.get('active', {}).get('value', ''),
+        'Close Notes': ticket.get('close_notes', {}).get('value', ''),
+        'Close Code': ticket.get('close_code', {}).get('value', ''),
+        'Description': ticket.get('description', {}).get('value', ''),
+        'Opened At': ticket.get('opened_at', {}).get('value', ''),
+        'Due Date': ticket.get('due_date', {}).get('value', ''),
+        'Resolved By': ticket.get('closed_by', {}).get('value', ''),
+        'Resolved At': ticket.get('closed_at', {}).get('value', ''),
+        'SLA Due': ticket.get('sla_due', {}).get('value', ''),
+        'Short Description': ticket.get('short_description', {}).get('value', ''),
+        'Additional Comments': ticket.get('comments', {}).get('value', '')
+    }
+    for field in additional_fields:
+        item.update({field: ticket.get(field, {}).get('value', '')})
+
+    return item
+
+
+def generic_api_call_command(client: Client, args: dict) -> Union[str, CommandResults]:
+    """make a call to ServiceNow api
+    Args:
+        (Required Arguments)
+        method (str) required: The HTTP method, for example, GET, POST, and so on.
+        url_suffix (str) required: The API endpoint.
+        (Optional Arguments)
+        body (dict): The body to send in a 'POST' request. Default is None.
+        header (dict): requests headers. Default is None.
+        custom_api (str): custom API root. Default is None.
+
+    Return:
+        Generic Api Response.
+    """
+    methods = ("GET", "POST", "PATCH", "DELETE")
+    method = str(args.get("method"))
+    path = str(args.get("path"))
+    headers = json.loads(str(args.get("headers", {})))
+    custom_api = args.get('custom_api', '')
+    try:
+        body: dict = json.loads(str(args.get("body", {})))
+    except ValueError:
+        body = args.get("body", "")
+    sc_api: bool = argToBoolean(args.get("sc_api", False))
+    cr_api: bool = argToBoolean(args.get("cr_api", False))
+
+    if method.upper() not in methods:
+        return f"{method} method not supported.\nTry something from {', '.join(methods)}"
+
+    response = None
+    response = client.generic_request(method=method, path=path, body=body, headers=headers,
+                                      sc_api=sc_api, cr_api=cr_api, custom_api=custom_api)
+
+    if response is not None:
+        resp = response
+        human_readable: str = f"Request for {method} method is successful"
+        return CommandResults(
+            outputs_prefix="ServiceNow.Generic.Response",
+            outputs=resp,
+            readable_output=human_readable,
+        )
+
+    return f"Request for {method} method is not successful"
 
 
 def main():
@@ -2294,6 +3207,7 @@ def main():
     LOG(f'Executing command {command}')
 
     params = demisto.params()
+    args = demisto.args()
     verify = not params.get('insecure', False)
     use_oauth = params.get('use_oauth', False)
     oauth_params = {}
@@ -2324,33 +3238,81 @@ def main():
         password = params.get('credentials', {}).get('password')
 
     version = params.get('api_version')
-    if version:
+
+    force_default_url = argToBoolean(args.get('force_default_url', 'false'))
+    if version and not force_default_url:
         api = f'/api/now/{version}/'
         sc_api = f'/api/sn_sc/{version}/'
+        cr_api = f'/api/sn_chg_rest/{version}/'
     else:
+        if force_default_url:
+            """
+            force_default_url is given as part of the arguments of the command servicenow-create-co-from-template,
+            if True, then the request will not use the configured api version
+            """
+            demisto.debug(f'{force_default_url=}, ignoring api {version=} configured in parameters')
+        # Either no API version configured, OR force_default_url=True
         api = '/api/now/'
         sc_api = '/api/sn_sc/'
+        cr_api = '/api/sn_chg_rest/'
     server_url = params.get('url')
     sc_server_url = f'{get_server_url(server_url)}{sc_api}'
+    cr_server_url = f'{get_server_url(server_url)}{cr_api}'
     server_url = f'{get_server_url(server_url)}{api}'
 
-    fetch_time = params.get('fetch_time', '10 minutes').strip()
+    fetch_time = (params.get('fetch_time') or DEFAULT_FETCH_TIME).strip()
     sysparm_query = params.get('sysparm_query')
     sysparm_limit = int(params.get('fetch_limit', 10))
     timestamp_field = params.get('timestamp_field', 'opened_at')
-    ticket_type = params.get('ticket_type', 'incident')
+    ticket_type = params.get('ticket_type', INCIDENT)
     incident_name = params.get('incident_name', 'number') or 'number'
     get_attachments = params.get('get_attachments', False)
     update_timestamp_field = params.get('update_timestamp_field', 'sys_updated_on') or 'sys_updated_on'
     mirror_limit = params.get('mirror_limit', '100') or '100'
+    look_back = arg_to_number(params.get('look_back')) or 0
+    use_display_value = argToBoolean(params.get('use_display_value', False))
+    display_date_format = params.get('display_date_format', '')
+    add_custom_fields(params)
+
+    file_tag_from_service_now, file_tag_to_service_now = (
+        params.get('file_tag_from_service_now'), params.get('file_tag')
+    )
+
+    if file_tag_from_service_now == file_tag_to_service_now:
+        raise Exception(
+            f'File Entry Tag To ServiceNow and File Entry Tag '
+            f'From ServiceNow cannot be the same name [{file_tag_from_service_now}].'
+        )
+
+    comment_tag_from_servicenow, comment_tag = (
+        params.get('comment_tag_from_servicenow'), params.get('comment_tag')
+    )
+
+    if comment_tag_from_servicenow == comment_tag:
+        raise Exception(
+            f'Comment Entry Tag To ServiceNow and Comment Entry Tag '
+            f'From ServiceNow cannot be the same name [{comment_tag_from_servicenow}].'
+        )
+
+    work_notes_tag_from_servicenow, work_notes_tag = (
+        params.get('work_notes_tag_from_servicenow'), params.get('work_notes_tag')
+    )
+
+    if work_notes_tag_from_servicenow == work_notes_tag:
+        raise Exception(
+            f'Work note Entry Tag To ServiceNow and Work Note Entry Tag '
+            f'From ServiceNow cannot be the same name [{work_notes_tag_from_servicenow}].'
+        )
 
     raise_exception = False
     try:
-        client = Client(server_url=server_url, sc_server_url=sc_server_url, username=username, password=password,
-                        verify=verify, fetch_time=fetch_time, sysparm_query=sysparm_query, sysparm_limit=sysparm_limit,
+        client = Client(server_url=server_url, sc_server_url=sc_server_url, cr_server_url=cr_server_url,
+                        username=username, password=password, verify=verify, fetch_time=fetch_time,
+                        sysparm_query=sysparm_query, sysparm_limit=sysparm_limit,
                         timestamp_field=timestamp_field, ticket_type=ticket_type, get_attachments=get_attachments,
-                        incident_name=incident_name, oauth_params=oauth_params, version=version)
-        commands: Dict[str, Callable[[Client, Dict[str, str]], Tuple[str, Dict[Any, Any], Dict[Any, Any], bool]]] = {
+                        incident_name=incident_name, oauth_params=oauth_params, version=version, look_back=look_back,
+                        use_display_value=use_display_value, display_date_format=display_date_format)
+        commands: dict[str, Callable[[Client, dict[str, str]], tuple[str, dict[Any, Any], dict[Any, Any], bool]]] = {
             'test-module': test_module,
             'servicenow-oauth-test': oauth_test_module,
             'servicenow-oauth-login': login_command,
@@ -2362,7 +3324,6 @@ def main():
             'servicenow-add-comment': add_comment_command,
             'servicenow-upload-file': upload_file_command,
             'servicenow-add-tag': add_tag_command,
-            'servicenow-get-ticket-notes': get_ticket_notes_command,
             'servicenow-get-record': get_record_command,
             'servicenow-update-record': update_record_command,
             'servicenow-create-record': create_record_command,
@@ -2377,14 +3338,16 @@ def main():
             'servicenow-get-item-details': get_item_details_command,
             'servicenow-create-item-order': create_order_item_command,
             'servicenow-document-route-to-queue': document_route_to_table,
+            'servicenow-delete-file': delete_attachment_command,
         }
-        args = demisto.args()
         if command == 'fetch-incidents':
             raise_exception = True
             incidents = fetch_incidents(client)
             demisto.incidents(incidents)
         elif command == 'servicenow-get-ticket':
             demisto.results(get_ticket_command(client, args))
+        elif command == "servicenow-generic-api-call":
+            return_results(generic_api_call_command(client, args))
         elif command == 'get-remote-data':
             return_results(get_remote_data_command(client, demisto.args(), demisto.params()))
         elif command == 'update-remote-system':
@@ -2393,6 +3356,14 @@ def main():
             return_results(get_mapping_fields_command(client))
         elif demisto.command() == 'get-modified-remote-data':
             return_results(get_modified_remote_data_command(client, args, update_timestamp_field, mirror_limit))
+        elif demisto.command() == 'servicenow-create-co-from-template':
+            return_results(create_co_from_template_command(client, demisto.args()))
+        elif demisto.command() == 'servicenow-get-tasks-for-co':
+            return_results(get_tasks_for_co_command(client, demisto.args()))
+        elif demisto.command() == 'servicenow-get-ticket-notes':
+            return_results(get_ticket_notes_command(client, args, params))
+        elif demisto.command() == 'servicenow-get-ticket-attachments':
+            return_results(get_attachment_command(client, args))
         elif command in commands:
             md_, ec_, raw_response, ignore_auto_extract = commands[command](client, args)
             return_outputs(md_, ec_, raw_response, ignore_auto_extract=ignore_auto_extract)
@@ -2410,7 +3381,6 @@ def main():
 
 
 from ServiceNowApiModule import *  # noqa: E402
-
 
 if __name__ in ('__main__', '__builtin__', 'builtins'):
     main()

@@ -4,11 +4,11 @@ from CommonServerUserPython import *
 
 ''' IMPORTS '''
 
-import requests
+import urllib3
 import urllib.parse
 
 # Disable insecure warnings
-requests.packages.urllib3.disable_warnings()
+urllib3.disable_warnings()
 
 ''' HELPER FUNCTIONS '''
 
@@ -109,6 +109,7 @@ def vulndb_vulnerability_to_entry(vuln):
 
 
 def vulndb_vulnerability_results_to_demisto_results(res):
+    results = []
     if 'vulnerability' in res:
         results = [res['vulnerability']]
     elif 'results' in res:
@@ -293,6 +294,7 @@ def vulndb_get_updates_by_dates_or_hours_command(args: dict, client: Client):
     hours_ago = args.get('hours_ago')
     max_size = args.get('max_size')
 
+    res = ""
     if start_date:
         url_suffix = f'/vulnerabilities/find_by_date?start_date={start_date}'
         if end_date:
@@ -312,6 +314,7 @@ def vulndb_get_vendor_command(args: dict, client: Client):
     vendor_name = args.get('vendor_name')
     max_size = args.get('max_size')
 
+    res = ""
     if vendor_id is not None and vendor_name is not None:
         return_error('Provide either vendor id or vendor name or neither, not both.')
     elif vendor_id:
@@ -329,6 +332,7 @@ def vulndb_get_product_command(args: dict, client: Client):
     vendor_name = args.get('vendor_name')
     max_size = args.get('max_size')
 
+    res = ""
     if vendor_id is not None and vendor_name is not None:
         return_error('Provide either vendor id or vendor name or neither, not both.')
     elif vendor_id:
@@ -346,36 +350,66 @@ def vulndb_get_version_command(args: dict, client: Client):
     product_name = args.get('product_name')
     max_size = args.get('max_size')
 
+    res = ""
     if product_id is not None and product_name is not None:
         return_error('Provide either product id or vendor name, not both.')
     elif product_id:
         res = client.http_request(f'/versions/by_product_id?product_id={product_id}', max_size)
     elif product_name:
         res = client.http_request(f'/versions/by_product_name?product_name={product_name}', max_size)
+    else:
+        res = ""
+        demisto.debug(f"No product_id and no product_name -> {res=}")
 
     vulndb_product_results_to_demisto_results(res)
 
 
-def vulndb_get_cve_command(args: dict, client: Client):
-    cve_id = args['cve_id']
-    max_size = args.get('max_size')
+def vulndb_get_cve_command(args: dict, client: Client, dbot_score_reliability: DBotScoreReliability):
+    cve_ids = args.get('cve_id', '') or args.get('cve', '')
 
-    res = client.http_request(f'/vulnerabilities/{cve_id}/find_by_cve_id', max_size)
-    results = res.get("results")
-    if not results:
-        return_error('Could not find "results" in the returned JSON')
-    result = results[0]
-    cvss_metrics_details = result.get("cvss_metrics", [])
-    data = {
-        "ID": cve_id,
-        "CVSS": cvss_metrics_details[0].get("score", "0") if cvss_metrics_details else "0",
-        "Published": result.get('vulndb_published_date', '').rstrip('Z'),
-        "Modified": result.get('vulndb_last_modified', '').rstrip('Z'),
-        "Description": result.get("description", '')
-    }
-    human_readable = tableToMarkdown(f'Result for CVE ID: {cve_id}', data)
-    ec = {'CVE(val.ID === obj.ID)': data}
-    return_outputs(human_readable, outputs=ec, raw_response=res)
+    if not cve_ids:
+        raise DemistoException("You must provide a value to the `cve` argument")
+
+    cve_ids = argToList(cve_ids)
+    max_size = args.get('max_size')
+    command_results = []
+    for cve_id in cve_ids:
+        response = client.http_request(f'/vulnerabilities/{cve_id}/find_by_cve_id', max_size)
+        results = response.get("results")
+        if not results:
+            return_error('Could not find "results" in the returned JSON')
+        result = results[0]
+        cvss_metrics_details = result.get("cvss_metrics", [])
+
+        data = {
+            "ID": cve_id,
+            "CVSS": cvss_metrics_details[0].get("score", "0") if cvss_metrics_details else "0",
+            "Published": result.get('vulndb_published_date', '').rstrip('Z'),
+            "Modified": result.get('vulndb_last_modified', '').rstrip('Z'),
+            "Description": result.get("description", ''),
+        }
+
+        cve_data = Common.CVE(
+            id=data["ID"],
+            cvss=data["CVSS"],
+            published=data["Published"],
+            modified=data["Modified"],
+            description=data["Description"],
+            dbot_score=Common.DBotScore(
+                indicator=cve_id,
+                indicator_type=DBotScoreType.CVE,
+                integration_name="VulnDB",
+                score=Common.DBotScore.NONE,
+                reliability=dbot_score_reliability,
+            ),
+        )
+
+        command_results.append(CommandResults(
+            indicator=cve_data,
+            readable_output=tableToMarkdown(f'Result for CVE ID: {cve_id}', data, removeNull=True),
+            raw_response=response,
+        ))
+    return_results(command_results)
 
 
 ''' COMMANDS MANAGER / SWITCH PANEL '''
@@ -385,10 +419,13 @@ def main():
     params = demisto.params()
     # Remove trailing slash to prevent wrong URL path to service
     api_url = params['api_url']
-    client_id = params['client_id']
-    client_secret = params['client_secret']
+    client_id = params.get('credentials', {}).get('identifier') or params.get('client_id')
+    client_secret = params.get('credentials', {}).get('password') or params.get('client_secret')
+    if not (client_id and client_secret):
+        return_error('Please provide a Client ID and Secret')
     use_ssl = not params.get('insecure', False)
     proxy = params.get('proxy', False)
+    dbot_score_reliability = params['integration_reliability']
     client = Client(proxy, use_ssl, api_url, client_id, client_secret)
     args = demisto.args()
     command = demisto.command()
@@ -419,7 +456,7 @@ def main():
         elif command == 'vulndb-get-updates-by-dates-or-hours':
             vulndb_get_updates_by_dates_or_hours_command(args, client)
         elif command == 'cve':
-            vulndb_get_cve_command(args, client)
+            vulndb_get_cve_command(args, client, dbot_score_reliability)
     except Exception as e:
         error_message = f'Failed to execute {command} command. Error: {str(e)}'
         return_error(error_message)

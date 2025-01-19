@@ -1,7 +1,8 @@
 import json
 
 import demistomock as demisto
-from PaloAltoNetworks_IoT import Client, iot_get_device, fetch_incidents, iot_list_devices, iot_resolve_alert, iot_resolve_vuln
+from PaloAltoNetworks_IoT import Client, iot_get_device, fetch_incidents, iot_list_devices, \
+    iot_resolve_alert, iot_resolve_vuln, iot_get_device_by_ip
 
 
 def test_iot_get_device(requests_mock):
@@ -56,7 +57,8 @@ def test_fetch_incidents(requests_mock, monkeypatch):
 
     mock_vuln_response = json.loads('''{"ver":"v4.0","api":"/vulnerability/list","items":[{"name":"HPD41936",
 "ip":"10.55.132.114","deviceid":"a0:d3:c1:d4:19:36","detected_date":"2020-05-31T23:59:59.000Z",
-"vulnerability_name":"SMB v1 Usage"}]}''')
+"vulnerability_name":"SMB v1 Usage"},{"name":"HPD41936","ip":"10.55.132.114","deviceid":"a0:d3:c1:d4:19:36",
+"detected_date":["2020-05-31T23:59:59.000Z"],"vulnerability_name":"SMB v1 Usage"}]}''')
     requests_mock.get('https://test.com/pub/v4.0/vulnerability/list?customerid=foobar&offset=0&pagelength=10'
                       '&stime=1970-01-01T00:00:00.001000Z&type=vulnerability&status=Confirmed&groupby=device',
                       json=mock_vuln_response)
@@ -70,7 +72,9 @@ def test_fetch_incidents(requests_mock, monkeypatch):
         'last_alerts_fetch': 1579064810.54,
         'last_vulns_fetch': 1590969599.0
     }
-    assert len(incidents) == 3
+    assert len(incidents) == 4
+    for incident in incidents:
+        assert (isinstance(incident.get('occurred'), str))
 
 
 def test_fetch_incidents_special(requests_mock, monkeypatch):
@@ -257,3 +261,28 @@ def test_iot_resolve_vuln(requests_mock):
         'full_name': 'vuln_full_name'
     }
     assert outputs == 'Vulnerability 123 was resolved successfully'
+
+
+def test_get_device_by_ip(requests_mock):
+    """
+    Scenario: Geting device by ip
+
+    Given
+    - ip
+
+    When
+    - Fetching device details with IP
+
+    Then
+    - Ensure the IP is correct and return the device values.
+    """
+    mock_response = json.loads('''{"devices":{"hostname":"00:0a:e4:1c:62:26","ip_address":"1.1.1.1","profile_type":"Non_IoT"}}''')
+    requests_mock.get('https://test.com/pub/v4.0/device/ip', json=mock_response)
+
+    client = Client(base_url='https://test.com/pub/v4.0', tenant_id="foobar", verify=False)
+    args = {
+        'ip': "1.1.1.1"
+    }
+    outputs = iot_get_device_by_ip(client, args).outputs
+
+    assert outputs == {"hostname": "00:0a:e4:1c:62:26", "ip_address": "1.1.1.1", "profile_type": "Non_IoT"}

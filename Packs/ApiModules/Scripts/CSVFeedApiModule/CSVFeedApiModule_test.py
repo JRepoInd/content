@@ -1,6 +1,6 @@
 import requests_mock
 from CSVFeedApiModule import *
-import io
+import pytest
 
 
 def test_get_indicators_1():
@@ -150,12 +150,20 @@ def test_get_feed_content():
             assert client.get_feed_content_divided_to_lines(url, raw_response) == expected_output
 
 
-def test_date_format_parsing():
-    formatted_date = date_format_parsing('2020-02-01 12:13:14')
-    assert formatted_date == '2020-02-01T12:13:14Z'
-
-    formatted_date = date_format_parsing('2020-02-01 12:13:14.11111')
-    assert formatted_date == '2020-02-01T12:13:14Z'
+@pytest.mark.parametrize('date_string,expected_result', [
+    ("2020-02-10 13:39:14", '2020-02-10T13:39:14Z'), ("2020-02-10T13:39:14", '2020-02-10T13:39:14Z'),
+    ("2020-02-10 13:39:14.123", '2020-02-10T13:39:14Z'), ("2020-02-10T13:39:14.123", '2020-02-10T13:39:14Z'),
+    ("2020-02-10T13:39:14Z", '2020-02-10T13:39:14Z'), ("2020-11-01T04:16:13-04:00", '2020-11-01T08:16:13Z')])
+def test_date_format_parsing(date_string, expected_result):
+    """
+    Given
+    - A string represting a date.
+    When
+    - running date_format_parsing on the date.
+    Then
+    - Ensure the datestring is converted to the ISO-8601 format.
+    """
+    assert expected_result == date_format_parsing(date_string)
 
 
 class TestTagsParam:
@@ -234,7 +242,7 @@ class TestTagsParam:
 
 
 def util_load_json(path):
-    with io.open(path, mode='r', encoding='utf-8') as f:
+    with open(path, encoding='utf-8') as f:
         return json.loads(f.read())
 
 
@@ -288,18 +296,18 @@ def test_get_indicators_with_relations():
             }
         }
     }
-    expected_res = [{'value': 'test.com', 'type': 'IP',
-                     'rawJSON': {'value': 'test.com', 'a': 'Domain used by Test c&c',
-                                 None: ['2021-04-22 06:03',
-                                        'https://test.com/manual/test-iplist.txt'],
-                                 'type': 'IP'},
-                     'fields': {'AAA': 'Domain used by Test c&c', 'relationship_entity_b': 'Test',
-                                'tags': []},
-                     'relationships': [
-                         {'name': 'resolved-from', 'reverseName': 'resolves-to', 'type': 'IndicatorToIndicator',
-                          'entityA': 'test.com', 'entityAFamily': 'Indicator', 'entityAType': 'IP',
-                          'entityB': 'Test', 'entityBFamily': 'Indicator', 'entityBType': 'IP',
-                          'fields': {}}]}]
+    expected_res = ([{'value': 'test.com', 'type': 'IP',
+                      'rawJSON': {'value': 'test.com', 'a': 'Domain used by Test c&c',
+                                  None: ['2021-04-22 06:03',
+                                         'https://test.com/manual/test-iplist.txt'],
+                                  'type': 'IP'},
+                      'fields': {'AAA': 'Domain used by Test c&c', 'relationship_entity_b': 'Test',
+                                 'tags': []},
+                      'relationships': [
+                          {'name': 'resolved-from', 'reverseName': 'resolves-to', 'type': 'IndicatorToIndicator',
+                           'entityA': 'test.com', 'entityAFamily': 'Indicator', 'entityAType': 'IP',
+                           'entityB': 'Test', 'entityBFamily': 'Indicator', 'entityBType': 'IP',
+                           'fields': {}}]}], True)
 
     ip_ranges = 'test.com,Domain used by Test c&c,2021-04-22 06:03,https://test.com/manual/test-iplist.txt'
 
@@ -313,6 +321,56 @@ def test_get_indicators_with_relations():
         indicators = fetch_indicators_command(client, default_indicator_type=itype, auto_detect=False,
                                               limit=35, create_relationships=True)
         assert indicators == expected_res
+
+
+def test_fetch_indicators_with_enrichment_excluded(requests_mock):
+    """
+    Given:
+    - Raw json of the csv row extracted
+
+    When:
+    - Fetching indicators from csv rows
+    - enrichment_excluded param is set to True
+
+    Then:
+    - Validate the returned list of indicators have enrichment exclusion set.
+    """
+
+    feed_url_to_config = {
+        'https://ipstack.com': {
+            'fieldnames': ['value', 'a'],
+            'indicator_type': 'IP',
+            'relationship_entity_b_type': 'IP',
+            'relationship_name': 'resolved-from',
+            'mapping': {
+                'AAA': 'a',
+                'relationship_entity_b': ('a', r'.*used\s+by\s(.*?)\s', None),
+            }
+        }
+    }
+    expected_res = ([{'value': 'test.com', 'type': 'IP',
+                      'rawJSON': {'value': 'test.com', 'a': 'Domain used by Test c&c',
+                                  None: ['2021-04-22 06:03',
+                                         'https://test.com/manual/test-iplist.txt'],
+                                  'type': 'IP'},
+                      'fields': {'AAA': 'Domain used by Test c&c', 'relationship_entity_b': 'Test',
+                                 'tags': []},
+                      'relationships': [],
+                      'enrichmentExcluded': True,
+                      }],
+                    True)
+
+    ip_ranges = 'test.com,Domain used by Test c&c,2021-04-22 06:03,https://test.com/manual/test-iplist.txt'
+
+    itype = 'IP'
+    requests_mock.get('https://ipstack.com', content=ip_ranges.encode('utf8'))
+    client = Client(
+        url="https://ipstack.com",
+        feed_url_to_config=feed_url_to_config
+    )
+    indicators = fetch_indicators_command(client, default_indicator_type=itype, auto_detect=False,
+                                          limit=35, create_relationships=False, enrichment_excluded=True)
+    assert indicators == expected_res
 
 
 def test_get_indicators_without_relations():
@@ -340,13 +398,13 @@ def test_get_indicators_without_relations():
             }
         }
     }
-    expected_res = [{'value': 'test.com', 'type': 'IP',
-                     'rawJSON': {'value': 'test.com', 'a': 'Domain used by Test c&c',
-                                 None: ['2021-04-22 06:03',
-                                        'https://test.com/manual/test-iplist.txt'],
-                                 'type': 'IP'},
-                     'fields': {'AAA': 'Domain used by Test c&c', 'relationship_entity_b': 'Test',
-                                'tags': []}, 'relationships': []}]
+    expected_res = ([{'value': 'test.com', 'type': 'IP',
+                      'rawJSON': {'value': 'test.com', 'a': 'Domain used by Test c&c',
+                                  None: ['2021-04-22 06:03',
+                                         'https://test.com/manual/test-iplist.txt'],
+                                  'type': 'IP'},
+                      'fields': {'AAA': 'Domain used by Test c&c', 'relationship_entity_b': 'Test',
+                                 'tags': []}, 'relationships': []}], True)
 
     ip_ranges = 'test.com,Domain used by Test c&c,2021-04-22 06:03,https://test.com/manual/test-iplist.txt'
 
@@ -360,3 +418,171 @@ def test_get_indicators_without_relations():
         indicators = fetch_indicators_command(client, default_indicator_type=itype, auto_detect=False,
                                               limit=35, create_relationships=False)
         assert indicators == expected_res
+
+
+def test_get_no_update_value(mocker):
+    """
+    Given
+    - response with last_modified and etag headers with the same values like in the integration context.
+
+    When
+    - Running get_no_update_value method.
+
+    Then
+    - Ensure that the response is False
+    """
+    mocker.patch.object(demisto, 'debug')
+
+    class MockResponse:
+        headers = {'Last-Modified': 'Fri, 30 Jul 2021 00:24:13 GMT',  # guardrails-disable-line
+                   'ETag': 'd309ab6e51ed310cf869dab0dfd0d34b'}  # guardrails-disable-line
+        status_code = 200
+
+    no_update = get_no_update_value(MockResponse(), 'https://test.com/manual/test-iplist.txt')
+    assert not no_update
+    assert demisto.debug.call_args[0][0] == 'New indicators fetched - the Last-Modified value has been updated,' \
+                                            ' createIndicators will be executed with noUpdate=False.'
+
+
+def test_build_iterator_not_modified_header(mocker):
+    """
+    Given
+    - response with status code 304(Not Modified)
+
+    When
+    - Running build_iterator method.
+
+    Then
+    - Ensure that the results are empty and No_update value is True.
+    """
+    mocker.patch.object(demisto, 'debug')
+    mocker.patch('CommonServerPython.get_demisto_version', return_value={"version": "6.5.0"})
+    with requests_mock.Mocker() as m:
+        m.get('https://api.github.com/meta', status_code=304)
+
+        client = Client(
+            url='https://api.github.com/meta'
+        )
+        result = client.build_iterator()
+        assert result
+        assert result[0]['https://api.github.com/meta']
+        assert list(result[0]['https://api.github.com/meta']['result']) == []
+        assert result[0]['https://api.github.com/meta']['no_update']
+        assert demisto.debug.call_args[0][0] == 'No new indicators fetched, ' \
+                                                'createIndicators will be executed with noUpdate=True.'
+
+
+def test_build_iterator_with_version_6_2_0(mocker):
+    """
+    Given
+    - server version 6.2.0
+
+    When
+    - Running build_iterator method.
+
+    Then
+    - Ensure that the no_update value is True
+    - Request is called without headers "If-None-Match" and "If-Modified-Since"
+    """
+    mocker.patch.object(demisto, 'debug')
+    mocker.patch('CommonServerPython.get_demisto_version', return_value={"version": "6.2.0"})
+
+    with requests_mock.Mocker() as m:
+        m.get('https://api.github.com/meta', status_code=304)
+
+        client = Client(
+            url='https://api.github.com/meta',
+            headers={}
+        )
+        result = client.build_iterator()
+        assert result[0]['https://api.github.com/meta']['no_update']
+        assert list(result[0]['https://api.github.com/meta']['result']) == []
+        assert 'If-None-Match' not in client.headers
+        assert 'If-Modified-Since' not in client.headers
+
+
+def test_get_no_update_value_without_headers(mocker):
+    """
+    Given
+    - response without last_modified and etag headers.
+
+    When
+    - Running get_no_update_value.
+
+    Then
+    - Ensure that the response is False.
+    """
+    mocker.patch.object(demisto, 'debug')
+
+    class MockResponse:
+        headers = {}
+        status_code = 200
+
+    no_update = get_no_update_value(MockResponse(), 'https://test.com/manual/test-iplist.txt')
+    assert not no_update
+    assert demisto.debug.call_args[0][0] == 'Last-Modified and Etag headers are not exists,' \
+                                            'createIndicators will be executed with noUpdate=False.'
+
+
+def test_build_iterator_modified_headers(mocker):
+    """
+    Given
+    - Using basic authentication
+    - Last run has etag and last_modified in it
+
+    When
+    - Running build_iterator method.
+
+    Then
+    - Ensure that prepreq.headers are not overwritten when using basic authentication.
+    """
+    mocker.patch.object(demisto, 'debug')
+    mock_session = mocker.patch.object(requests.Session, 'send')
+    mocker.patch('CommonServerPython.get_demisto_version', return_value={"version": "6.5.0"})
+    mocker.patch('demistomock.getLastRun', return_value={
+        'https://api.github.com/meta': {
+            'etag': 'etag',
+            'last_modified': '2023-05-29T12:34:56Z'
+        }})
+
+    client = Client(
+        url='https://api.github.com/meta',
+        credentials={'identifier': 'user', 'password': 'password'},
+    )
+
+    result = client.build_iterator()
+    assert 'Authorization' in mock_session.call_args[0][0].headers
+    assert result
+
+
+@pytest.mark.parametrize('has_passed_time_threshold_response, expected_result', [
+    (True, {}),
+    (False, {'If-None-Match': 'etag', 'If-Modified-Since': '2023-05-29T12:34:56Z'})
+])
+def test_build_iterator__with_and_without_passed_time_threshold(mocker, has_passed_time_threshold_response, expected_result):
+    """
+    Given
+    - A boolean result from the has_passed_time_threshold function
+    When
+    - Running build_iterator method.
+    Then
+    - Ensure the next request headers will be as expected:
+        case 1: has_passed_time_threshold_response is True, no headers will be added
+        case 2: has_passed_time_threshold_response is False, headers containing 'last_modified' and 'etag' will be added
+    """
+    mocker.patch('CommonServerPython.get_demisto_version', return_value={"version": "6.5.0"})
+    mock_session = mocker.patch.object(requests.Session, 'send')
+    mocker.patch('CSVFeedApiModule.has_passed_time_threshold', return_value=has_passed_time_threshold_response)
+    mocker.patch('demistomock.getLastRun', return_value={
+        'https://api.github.com/meta': {
+            'etag': 'etag',
+            'last_modified': '2023-05-29T12:34:56Z',
+            'last_updated': '2023-05-05T09:09:06Z'
+        }})
+    client = Client(
+        url='https://api.github.com/meta',
+        credentials={'identifier': 'user', 'password': 'password'})
+
+    client.build_iterator()
+    assert mock_session.call_args[0][0].headers.get('If-None-Match') == expected_result.get('If-None-Match')
+    assert mock_session.call_args[0][0].headers.get('If-Modified-Since') == expected_result.get('If-Modified-Since')

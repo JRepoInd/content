@@ -1,46 +1,93 @@
-# -*- coding: utf-8 -*-
+from pytest_mock import MockFixture
 import demistomock as demisto
-from ExtractDomainAndFQDNFromUrlAndEmail import extract_fqdn_or_domain, main
+from ExtractDomainAndFQDNFromUrlAndEmail import extract_fqdn, main
 import pytest
 
 
-@pytest.mark.parametrize('input,fqdn,domain', [  # noqa: E501 disable-secrets-detection
-    ('http://this.is.test.com', 'this.is.test.com', 'test.com'),
-    ('https://caseapi.phishlabs.com', 'caseapi.phishlabs.com', 'phishlabs.com'),
-    ('www.bücher.de', 'www.bücher.de', 'bücher.de'),
-    ('https://urldefense.proofpoint.com/v2/url?u=http-3A__go.getpostman.com_y4wULsdG0h0DDMY0Dv00100&d=DwMFaQ&c'
-     '=ywDJJevdGcjv4rm9P3FcNg&r=s5kA2oIAQRXsacJiBKmTORIWyRN39ZKhobje2GyRgNs&m'
-     '=vN1dVSiZvEoM9oExtQqEptm9Dbvq9tnjACDZzrBLaWI&s=zroN7KQdBCPBOfhOmv5SP1DDzZKZ1y9I3x4STS5PbHA&e=',
-     'go.getpostman.com', 'getpostman.com'),  # noqa: E501
-    ('hxxps://www[.]demisto[.]com', 'www.demisto.com', 'demisto.com'),
-    ('https://emea01.safelinks.protection.outlook.com/?url=https%3A%2F%2Ftwitter.com%2FPhilipsBeLux&data=02|01'
-     '||cb2462dc8640484baf7608d638d2a698|1a407a2d76754d178692b3ac285306e4|0|0|636758874714819880&sdata'
-     '=dnJiphWFhnAKsk5Ps0bj0p%2FvXVo8TpidtGZcW6t8lDQ%3D&reserved=0%3E%5bcid:image003.gif@01CF4D7F.1DF62650%5d'
-     '%3C',
-     '', 'twitter.com'),  # noqa: E501 disable-secrets-detection
-    ('dummy@recipient.com', '', 'recipient.com'),
-    ('content-test-service-acc@content-test-236508.iam.gserviceaccount.com',
-     'content-test-236508.iam.gserviceaccount.com', 'gserviceaccount.com'),  # noqa: E501
-    ('CAJaFoefy_acEKaqSMGfojbLzKoUnzfpPcnNemuD6K0oQZ2PikQ@mail.gmail.com', 'mail.gmail.com', 'gmail.com'),
-    ('5be9245893ff486d98c3640879bb2657.protect@whoisguard.com', '', 'whoisguard.com'),
-    ('test@www.bücher.de', 'www.bücher.de', 'bücher.de'),
-    ('test@www[.]demisto[.]com', 'www.demisto.com', 'demisto.com'),
-    ('AB@1Ab.Vt', '', ''),
+@pytest.mark.parametrize('input,fqdn', [  # noqa: E501 disable-secrets-detection
+    # no processing needed
+    ('www.static.attackiqtes.com', 'www.static.attackiqtes.com'),
+    ('attackiqtes.co.il', 'attackiqtes.co.il'),
+    ('this.is.test.com', 'this.is.test.com'),
+    ('www.bücher.de', 'www.bücher.de'),
+
+    # no fqdn extracted
+    ('www.test.fake', ''),
+    ('https://emea01.safelinks.protection.outlook.com/', ''),
+    ('https://urldefense.proofpoint.com/', ''),
+    ('https://urldefense.com/', ''),  # noqa: E501
+
+    # remove protocol prefixes
+    ('ftp://www.test.com/test2/dev', 'www.test.com'),
+    ('http://www.test.com/test2/dev', 'www.test.com'),
+    ('hxxps://path.test.com/check', 'path.test.com'),
+    ('hxxps://path.test.com/check', 'path.test.com'),
+    ('hxxps://path.hxxp.com/check', 'path.hxxp.com'),
+    ('hxXps://path.hxxp.com/check', 'path.hxxp.com'),
+    ('meow://path.meow.com/check', 'path.meow.com'),
+    ('meow://path.mEow.com/check', 'path.meow.com'),
+    ('meOw://path.mEow.com/check', 'path.meow.com'),
+    ('http-3A__go.getpostman.com_', 'go.getpostman.com'),
+    ('http://survey.lavulcamktg.cl/index.php/', 'survey.lavulcamktg.cl'),
+
+    # unquote protocol prefixes
+    ('https%3A%2F%2Fdulunggakada40[.]com', 'dulunggakada40.com'),
+    ('https%3A%2F%2Fpath.test.com', 'path.test.com'),
+    ('https%3A%2F%2Ftwitter.com%2F', 'twitter.com'),
+    ('hxxps%3A%2F%2Ftwitter.com%2F', 'twitter.com'),
+
+    # handle special charecter
+    ('www[.]demisto[.]com', 'www.demisto.com'),
+    ('hxxp://www[.]demisto[.]com', 'www.demisto.com'),
+    ('www[.]demisto.test[.]com', 'www.demisto.test.com'),
+    ('www[.]demisto[.]test2.com', 'www.demisto.test2.com'),
+
+    # lowercase charecter
+    ('AAA23.1105test.com', 'aaa23.1105test.com'),
+
+    # excessive charecters test
+    ('test[.]com. ', 'test.com'),
+    ('ftp://www.test.com/', 'www.test.com'),
+    ('testing.com.com,', 'testing.com.com'),
+    ('nowwwtest.com"', 'nowwwtest.com'),
+    ('test.co.il ', 'test.co.il'),
+    ('test.co.il)', 'test.co.il'),
+    ('/evil3.com', 'evil3.com'),  # noqa: E501 disable-secrets-detection
+    ('<br>kasai.qlmsourcing.com', 'kasai.qlmsourcing.com'),  # disable-secrets-detection
+    ('test.com@', ''),  # disable-secrets-detection
+    ('%40subdomain.domain.com', 'subdomain.domain.com'),  # disable-secrets-detection
 ])  # noqa: E124
-def test_extract_fqdn_or_domain(input, fqdn, domain):
-    extracted_fqdn = extract_fqdn_or_domain(input, is_fqdn=True)
-    extracted_domain = extract_fqdn_or_domain(input, is_domain=True)
+def test_extract_fqdn_or_domain(input, fqdn):
+    extracted_fqdn = extract_fqdn(input)
+    # extracted_domain = extract_fqdn_or_domain(input, is_domain=True)
 
     assert extracted_fqdn == fqdn
-    assert extracted_domain == domain
+    # assert extracted_domain == domain
 
 
 def test_extract_fqdn_or_domain_empty_indicators(mocker):
-
-    mocker.patch.object(demisto, 'args', return_value={'input': 'AB@1Ab.Vt'})
+    mocker.patch.object(demisto, 'args', return_value={'input': '1Ab.Vt'})
     mocker.patch.object(demisto, 'results')
 
     main()
     results = demisto.results.call_args[0]
 
-    assert results[0] == [{'Contents': [], 'ContentsFormat': 'json', 'Type': 1}]
+    assert results[0] == [{'Contents': [], 'ContentsFormat': 'json', 'Type': 1, 'EntryContext': {'Domain': '1Ab.Vt'}}]
+
+
+def test_main_raise_error(mocker: MockFixture):
+    """
+    Given:
+        - Exception during the automation
+    When:
+        - Running the automation
+    Then:
+        - Ensure the return_error is called with the correct error message.
+    """
+    return_error_mock = mocker.patch('ExtractDomainAndFQDNFromUrlAndEmail.return_error')
+    mocker.patch('ExtractDomainAndFQDNFromUrlAndEmail.argToList', side_effect=Exception('Test Exception'))
+
+    main()
+
+    assert return_error_mock.call_count == 1
+    assert 'Error: \nTest Exception' in return_error_mock.call_args[0][0]

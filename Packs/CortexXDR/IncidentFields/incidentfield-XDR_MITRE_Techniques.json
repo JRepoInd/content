@@ -4,7 +4,8 @@
         "Cortex XDR Device Control Violations",
         "Cortex XDR Disconnected endpoints",
         "Cortex XDR Incident",
-        "Cortex XDR Port Scan"
+        "Cortex XDR Port Scan",
+        "Cortex XDR - Lite"
     ],
     "caseInsensitive": true,
     "cliName": "xdrmitretechniques",
@@ -20,9 +21,7 @@
     "neverSetAsRequired": false,
     "ownerOnly": false,
     "required": false,
-    "selectValues": [
-       
-    ],
+    "selectValues": [],
     "sla": 0,
     "system": false,
     "threshold": 72,
@@ -31,5 +30,6 @@
     "unsearchable": false,
     "useAsKpi": true,
     "version": -1,
-    "fromVersion": "5.0.0"
+    "fromVersion": "5.0.0",
+    "openEnded": true
 }

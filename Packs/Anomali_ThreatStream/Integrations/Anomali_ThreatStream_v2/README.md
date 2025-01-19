@@ -10,11 +10,8 @@ Use Anomali ThreatStream to query and submit threats.
 3. Import indicators to ThreatStream platform.
 4. Submit file or URL to sandbox and receive an analysis report.
 
-## Configure Anomali ThreatStream v2 on Cortex XSOAR
+## Configure Anomali ThreatStream v2 in Cortex
 
-1. Navigate to **Settings** > **Integrations** > **Servers & Services**.
-2. Search for Anomali ThreatStream v2.
-3. Click **Add instance** to create and configure a new integration instance.
 
 | **Parameter** | **Description** | **Required** |
 | --- | --- | --- |
@@ -22,12 +19,12 @@ Use Anomali ThreatStream to query and submit threats.
 | username | Username | True |
 | apikey | API Key | True |
 | default_threshold | Threshold of the indicator. | True |
+| Source Reliability | Reliability of the source providing the intelligence data. The default value is B - Usually reliable. | True |
 | insecure | Trust any certificate \(not secure\) | False |
 | proxy | Use system proxy settings | False |
 
-4. Click **Test** to validate the URLs, token, and connection.
 ## Commands
-You can execute these commands from the Cortex XSOAR CLI, as part of an automation, or in a playbook.
+You can execute these commands from the CLI, as part of an automation, or in a playbook.
 After you successfully execute a command, a DBot message appears in the War Room with the command details.
 ### ip
 ***

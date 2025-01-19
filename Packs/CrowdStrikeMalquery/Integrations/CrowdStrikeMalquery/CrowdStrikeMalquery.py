@@ -2,8 +2,9 @@ import demistomock as demisto
 from CommonServerPython import *  # noqa: E402 lgtm [py/polluting-import]
 from CommonServerUserPython import *  # noqa: E402 lgtm [py/polluting-import]
 
+import urllib3
 # Disable insecure warnings
-requests.packages.urllib3.disable_warnings()
+urllib3.disable_warnings()
 
 # CONSTANTS
 DATE_FORMAT = '%Y-%m-%dT%H:%M:%SZ'
@@ -159,7 +160,7 @@ def test_module(client: Client, args: dict):
         'ok' if test passed, anything else will fail the test.
     """
     try:
-        client.get_access_token()
+        client.get_quotas()
     except Exception as e:
         raise DemistoException(
             f"Test failed. Please check your parameters. \n {e}")
@@ -302,7 +303,8 @@ def get_file_metadata_command(client: Client, args: dict):
             indicator=sha256,
             indicator_type=DBotScoreType.FILE,
             integration_name=VENDOR_NAME,
-            score=DBOT_SCORE[file_label]
+            score=DBOT_SCORE[file_label],
+            reliability=demisto.params().get('integrationReliability')
         )
         file_entry = Common.File(sha256=sha256, md5=file.get('md5'), sha1=file.get('sha1'), dbot_score=dbot_score)
         table_name = f'{VENDOR_NAME} File reputation for: {sha256}'
@@ -380,12 +382,13 @@ def main():
         PARSE AND VALIDATE INTEGRATION PARAMS
     """
     params = demisto.params()
-    client_id: str = params.get('client_id')
-    client_secret: str = params.get('client_secret')
+    client_id: str = params.get('credentials_client').get('identifier') or params.get('client_id')
+    client_secret: str = params.get('credentials_client').get('password') or params.get('client_secret')
     base_url: str = urljoin(params.get('base_url', '').rstrip('/'), '/malquery')
     verify_certificate: bool = not params.get('insecure', False)
     proxy: bool = params.get('proxy', False)
-
+    if not (client_id and client_secret):
+        raise DemistoException('Client ID and Client Secret must be provided.')
     commands = {
         'test-module': test_module,
         'cs-malquery-exact-search': exact_search_command,

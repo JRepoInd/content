@@ -1,0 +1,13 @@
+[file:Infoblox_1_3.yml]
+ignore=MR108
+
+[file:InfobloxParsingRules.yml]
+ignore=PR101
+
+[file:Infoblox.yml]
+ignore=MR108
+
+[known_words]
+DHCP
+DNS
+mappings

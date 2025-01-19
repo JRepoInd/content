@@ -13,33 +13,27 @@ def compare(object_a, object_b):
 
 def compare_list(list_a, list_b):
     try:
-        list_a = list(sorted(list_a))
-        list_b = list(sorted(list_b))
+        list_a = sorted(list_a)
+        list_b = sorted(list_b)
     except TypeError:
         pass
     if len(list_a) != len(list_b):
         return False
-    for a_obj, b_obj in zip(list_a, list_b):
-        if not compare(a_obj, b_obj):
-            return False
-    return True
+    return all(compare(a_obj, b_obj) for a_obj, b_obj in zip(list_a, list_b))
 
 
 def compare_dict(dict_a, dict_b):
     keys = dict_a.keys()
     if not compare_list(keys, dict_b.keys()):
         return False
-    for key in keys:
-        if not compare(dict_a[key], dict_b[key]):
-            return False
-    return True
+    return all(compare(dict_a[key], dict_b[key]) for key in keys)
 
 
 class TestTempFile:
     def test_create_file(self):
         data = 'test'
         temp_file = TempFile(data)
-        with open(temp_file.path, 'r') as _file:
+        with open(temp_file.path) as _file:
             assert _file.read() == data, 'temp file content failed'
 
     def test_removing_file(self):
@@ -60,7 +54,7 @@ class TestHelpers:
 
     @pytest.mark.parametrize('path, count', data_test_fix_rsa_data)
     def test_fix_rsa_data(self, path, count):
-        with open(path, 'r') as _file:
+        with open(path) as _file:
             data = _file.read()
         demisto_data = data.replace('\n', ' ')
         fixed_data = fix_rsa_data(demisto_data, count)
@@ -83,33 +77,24 @@ class TestHelpers:
 
     @pytest.mark.parametrize('input_key, input_public', data_test_ssl_files_checker)
     def test_ssl_files_checker(self, input_key, input_public):
-        with open(input_key, 'r') as input_key:
-            with open(input_public, 'r') as input_public:
-                ssl_files_checker(input_public.read(), input_key.read())
+        with open(input_key) as input_key, open(input_public) as input_public:
+            ssl_files_checker(input_public.read(), input_key.read())
 
     @pytest.mark.parametrize('input_key, input_public', data_test_ssl_files_checker)
     def test_ssl_files_checker_with_invalid_files(self, input_key, input_public):
-        with open(input_key, 'r') as input_key:
+        with open(input_key) as input_key:
             input_key = input_key.read()
-        with open(input_public, 'r') as input_public:
+        with open(input_public) as input_public:
             input_public = input_public.read()
-        try:
+        with pytest.raises(ValueError):
             temp_input_public = input_public.split('\n')[:-6]
             temp_input_public.extend(input_public.split('\n')[-7:])
             ssl_files_checker('\n'.join(temp_input_public), input_key)
-        except ValueError as error:
-            assert str(error).startswith('Unable to load certificate')
-        else:
-            raise Exception
 
-        try:
+        with pytest.raises(ValueError):
             temp_input_private = input_key.split('\n')[:-6]
             temp_input_private.extend(input_key.split('\n')[-7:])
             ssl_files_checker(input_public, '\n'.join(temp_input_private))
-        except ValueError as error:
-            assert str(error) == 'Could not deserialize key data. The data may be in an incorrect format or it may be encrypted with an unsupported algorithm.'     # noqa: E501
-        else:
-            raise Exception
 
 
 class TestSafeDataGet:
@@ -167,13 +152,13 @@ class TestSafeDataGet:
         output = safe_data_get(dict_data, path, prefix='TEST')
         assert output is None
 
-    data_test_get_none_existing_path_with_prefix = [
+    data_test_get_none_existing_path_with_prefix2 = [
         ({'standard_list': {'test': 'multi_level_get'}}, ['standard_list1', 'test']),
         ({'standard_list': {'test': 'multi_level_get'}}, ['standard_list', 'test1']),
         ({'without_list': 'one_level_get'}, 'without_list1'),
     ]
 
-    @pytest.mark.parametrize('dict_data, path', data_test_get_none_existing_path_with_prefix)
+    @pytest.mark.parametrize('dict_data, path', data_test_get_none_existing_path_with_prefix2)
     def test_get_none_existing_path_without_prefix(self, dict_data, path):
         output = safe_data_get(dict_data, path)
         assert output is None
@@ -196,7 +181,7 @@ class TestIndicators:
 
     @staticmethod
     def read_json(path):
-        with open(path, 'r') as json_file:
+        with open(path) as json_file:
             json_file = json_file.read()
         return json.loads(json_file)
 
@@ -231,7 +216,7 @@ class TestIndicators:
     @pytest.mark.parametrize('data_type', data_types)
     def test_indicators_to_indicator_data(self, data_type):
         indicators = self.read_json(f'test_data/indicators/indicators_from_{data_type}_data.json')
-        test_data_indicators = list(map(lambda x: Indicators._indicator_data(x, 'source', 'color', ['tag']), indicators))
+        test_data_indicators = [Indicators._indicator_data(x, 'source', 'color', ['tag']) for x in indicators]
         data_indicators = self.read_json(f'test_data/data_indicators/{data_type}_data_indicators.json')
         assert test_data_indicators == data_indicators
 
@@ -293,19 +278,13 @@ class TestCommandTestModule:
     def test_command_test_module_with_invalid_credential(self, mocker):
         self.mock_data(mocker)
         self.data = {'taxii_11:Status_Message': {'@status_type': 'UNAUTHORIZED'}}
-        try:
+
+        with pytest.raises(DemistoException, match='invalid credential.'):
             command_test_module(self.client, '', '', '')
-        except DemistoException as error:
-            assert str(error) == 'invalid credential.'
-        else:
-            raise Exception
 
     def test_command_test_module_with_unknown_error(self, mocker):
         self.mock_data(mocker)
         self.data = {}
-        try:
+
+        with pytest.raises(DemistoException, match='unknown error.'):
             command_test_module(self.client, '', '', '')
-        except DemistoException as error:
-            assert str(error) == 'unknown error.'
-        else:
-            raise Exception

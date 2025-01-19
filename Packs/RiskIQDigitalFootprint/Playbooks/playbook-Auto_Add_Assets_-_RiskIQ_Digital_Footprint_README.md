@@ -31,4 +31,4 @@ There are no outputs for this playbook.
 
 ## Playbook Image
 ---
-![Auto Add Assets - RiskIQ Digital Footprint](https://github.com/crestdatasystems/DemistoPrivateContent/raw/96a8e3e0b449d133d775ddce1d07d7096d593c1b/Packs/RiskIQDigitalFootprintPremium/doc_files/Auto_Add_Assets_-_RiskIQ_Digital_Footprint.png)
+![Auto Add Assets - RiskIQ Digital Footprint](../doc_files/Auto_Add_Assets_-_RiskIQ_Digital_Footprint.png)

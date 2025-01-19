@@ -7,7 +7,9 @@
     "url": "",
     "email": "",
     "created": "2021-02-22T09:20:53Z",
-    "categories": [],
+    "categories": [
+        "Utilities"
+    ],
     "tags": [],
     "useCases": [],
     "keywords": [],
@@ -43,5 +45,9 @@
             "mandatory": false,
             "display_name": "Rapid Breach Response"
         }
-    }
+    },
+    "marketplaces": [
+        "xsoar",
+        "marketplacev2"
+    ]
 }

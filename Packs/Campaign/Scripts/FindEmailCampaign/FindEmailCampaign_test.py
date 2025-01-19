@@ -1,4 +1,4 @@
-from CommonServerPython import *
+# from CommonServerPython import *
 from FindEmailCampaign import *
 import json
 from datetime import datetime
@@ -7,7 +7,7 @@ import tldextract
 from email.utils import parseaddr
 import pytest
 
-no_fetch_extract = tldextract.TLDExtract(suffix_list_urls=None)
+no_fetch_extract = tldextract.TLDExtract(suffix_list_urls=None, cache_dir=False)
 
 
 def extract_domain(address):
@@ -16,7 +16,7 @@ def extract_domain(address):
         return ''
     email_address = parseaddr(address)[1]
     ext = no_fetch_extract(email_address)
-    return '{}.{}'.format(ext.domain, ext.suffix)
+    return f'{ext.domain}.{ext.suffix}'
 
 
 EXISTING_INCIDENTS = []
@@ -71,6 +71,8 @@ def executeCommand(command, args=None):
         return [{'Contents': incidents_str, 'Type': 'not error'}]
     if command == 'CloseInvestigationAsDuplicate':
         EXISTING_INCIDENT_ID = args['duplicateId']
+        return None
+    return None
 
 
 def results(arg):
@@ -79,7 +81,7 @@ def results(arg):
 
 
 def mock_summarize_email_body(body, subject, nb_sentences=3, subject_weight=1.5, keywords_weight=1.5):
-    return '{}\n{}'.format(subject, body)
+    return f'{subject}\n{body}'
 
 
 def test_return_campaign_details_entry(mocker):
@@ -247,3 +249,74 @@ def test_context_not_populated_with_invalid_fields(mocker):
     for context_incident in context[INCIDENTS_CONTEXT_KEY]:
         for field in invalid_fields:
             assert field not in context_incident, f'the field "{field}" should not be stored in context'
+
+
+@pytest.mark.parametrize(
+    'include_self', [True, False])
+def test_include_self_flag_on(mocker, include_self):
+    """
+
+    Given:
+        - include_self flag either True or false
+
+    When:
+        - Get the campaign details entry
+
+    Then:
+        - Assert that the appearance of the current incident is in the context (INCIDENTS_CONTEXT_KEY) according to the
+          given flag
+
+    """
+    import FindEmailCampaign
+    global RESULTS
+    RESULTS = []
+    FindEmailCampaign.SELF_IN_CONTEXT = include_self
+    mocker.patch.object(demisto, 'results', side_effect=results)
+    mocker.patch('FindEmailCampaign.summarize_email_body', mock_summarize_email_body)
+    incident = create_incident(subject='subject', body='email body')
+    mocker.patch.object(demisto, 'incident', return_value=incident)
+    incidents_list = [incident]
+    data = pd.DataFrame(incidents_list)
+    return_campaign_details_entry(data, fields_to_display=[])
+    res = RESULTS[0]
+    context = res['EntryContext']
+    result = incident['id'] in [context_incident['id'] for context_incident in context[INCIDENTS_CONTEXT_KEY]]
+    # if include_self is true result should be true
+    # if include_self is false result should be false
+    assert (include_self and result) or (not include_self and not result)
+
+
+def test_return_indicator_entry(mocker):
+    import FindEmailCampaign
+
+    # create dataframe with one incident
+    incidents = pd.DataFrame([{"id": 2}, {"id": 1}])
+    mocker.patch.object(FindEmailCampaign.demisto, "searchIndicators", return_value={
+        "iocs":
+            [{"id": "1", "value": "1", "score": 1, "investigationIDs": [1, 2], "relatedIncCount": 1}], "total": 1},
+    )
+    mocker.patch.object(FindEmailCampaign.demisto, "executeCommand")
+    indicator = FindEmailCampaign.return_indicator_entry(incidents)
+    assert indicator["id"].values[0] == "1"
+    assert indicator["relatedIncCount"].values[0] == 1
+
+
+CONTENT_ENTRY = {'Contents': '[]', 'Type': 1}
+NON_CONTENT_ENTRY1 = {'Contents': '', 'Type': 16}
+NON_CONTENT_ENTRY2 = {'NotContents': '', 'Type': 16}
+
+
+def test_return_non_content_entries(mocker):
+    """
+    Given: a content entry and non-content entries as a response to the executeCommand.
+    When: Running the scipt (usually happens with debug-mode=true)
+    Then: assert the non-content entries are returned.
+    """
+    import FindEmailCampaign
+    mocker.patch.object(FindEmailCampaign.demisto, "args", return_value={})
+    mocker.patch.object(FindEmailCampaign.demisto, "executeCommand", return_value=[CONTENT_ENTRY, NON_CONTENT_ENTRY1,
+                                                                                   NON_CONTENT_ENTRY2])
+
+    return_results_mock = mocker.patch("FindEmailCampaign.return_results")
+    FindEmailCampaign.main()
+    return_results_mock.assert_called_with([NON_CONTENT_ENTRY1, NON_CONTENT_ENTRY2])

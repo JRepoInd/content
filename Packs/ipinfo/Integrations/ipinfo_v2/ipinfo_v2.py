@@ -1,12 +1,10 @@
 from CommonServerPython import *  # noqa # pylint: disable=unused-wildcard-import
 from CommonServerUserPython import *  # noqa
 
-import requests
 import traceback
-from typing import Dict, Any
+from typing import Any
 
-# Disable insecure warnings
-requests.packages.urllib3.disable_warnings()  # pylint: disable=no-member
+BRAND_NAME = "IPinfo"  # matches context output path for faster caching
 
 
 class Client(BaseClient):
@@ -15,18 +13,22 @@ class Client(BaseClient):
         Client to use in the IPinfo integration. Uses BaseClient
         """
         super().__init__(base_url=base_url, proxy=proxy, verify=verify_certificate)
+        time_sensitive = is_time_sensitive()
+        demisto.debug(f'{time_sensitive=}')
+
+        self.timeout = 2 if time_sensitive else 20
         self.api_key = api_key
         self.reliability = reliability
 
-    def ipinfo_ip(self, ip: str) -> Dict[str, Any]:
+    def ipinfo_ip(self, ip: str) -> dict[str, Any]:
         return self.http_request(ip)
 
-    def http_request(self, ip: str) -> Dict[str, Any]:
+    def http_request(self, ip: str) -> dict[str, Any]:
         """ constructs url with token (if existent), then returns request """
         return self._http_request(method='GET',
                                   url_suffix=f'{ip}/json',
                                   params=assign_params(token=self.api_key),
-                                  timeout=20)
+                                  timeout=self.timeout)
 
 
 def test_module(client: Client) -> str:
@@ -35,19 +37,24 @@ def test_module(client: Client) -> str:
     return 'ok'  # on any failure, an exception is raised
 
 
-def ipinfo_ip_command(client: Client, ip: str) -> List[CommandResults]:
-    response = client.ipinfo_ip(ip)
-    return parse_results(ip, response, client.reliability)
+def ipinfo_ip_command(client: Client, ip: str) -> List[List[CommandResults]]:
+    ip_lists = argToList(ip)
+    ip_results = []
+
+    for ip in ip_lists:
+        response = client.ipinfo_ip(ip)
+        ip_results.append(parse_results(ip, response, client.reliability))
+
+    return ip_results
 
 
-def parse_results(ip: str, raw_result: Dict[str, Any], reliability: str) -> List[CommandResults]:
+def parse_results(ip: str, raw_result: dict[str, Any], reliability: str) -> List[CommandResults]:
     command_results: List[CommandResults] = []
 
     # default values
     asn = as_owner = None
     feed_related_indicators: List[Common.FeedRelatedIndicators] = []
-    relationships = []
-
+    relationships: list[EntityRelationship] = []
     if not raw_result:
         return command_results
 
@@ -60,7 +67,7 @@ def parse_results(ip: str, raw_result: Dict[str, Any], reliability: str) -> List
                                             entity_a_type=FeedIndicatorType.IP,
                                             entity_b=hostname,
                                             entity_b_type=FeedIndicatorType.Domain,
-                                            brand='IPinfo',
+                                            brand=BRAND_NAME,
                                             source_reliability=reliability))
 
     if 'org' in raw_result:
@@ -140,8 +147,8 @@ def parse_results(ip: str, raw_result: Dict[str, Any], reliability: str) -> List
         ip=ip,
         dbot_score=Common.DBotScore(indicator=ip,
                                     indicator_type=DBotScoreType.IP,
-                                    integration_name='IPinfo_v2',
                                     reliability=dbot_reliability,
+                                    integration_name=BRAND_NAME,
                                     score=Common.DBotScore.NONE),
         asn=asn,
         hostname=hostname,
@@ -151,8 +158,20 @@ def parse_results(ip: str, raw_result: Dict[str, Any], reliability: str) -> List
         geo_description=description or None,
         geo_country=country,
         tags=','.join(tags),
+        organization_name=organization.get('Name') if organization else None,
+        organization_type=organization.get('Type') if organization else None,
         relationships=relationships)
 
+    if lat and lon:
+        raw_result.update({'lat': lat, 'lng': lon})
+        map_output = CommandResults(raw_response={'lat': lat, 'lng': lon},
+                                    entry_type=EntryType.MAP_ENTRY_TYPE,
+                                    outputs_key_field=outputs_key_field,
+                                    indicator=indicator)
+        command_results.append(map_output)
+
+    # do not change the order of the calls for CommandResults due to an issue where the ip command would not
+    # present all of the information returned from the API.
     command_results.append(
         CommandResults(readable_output=tableToMarkdown(f'IPinfo results for {ip}', raw_result),
                        raw_response=raw_result,
@@ -164,12 +183,6 @@ def parse_results(ip: str, raw_result: Dict[str, Any], reliability: str) -> List
                        )
     )
 
-    if lat and lon:
-        map_output = CommandResults(raw_response={'lat': lat, 'lng': lon},
-                                    entry_type=EntryType.MAP_ENTRY_TYPE,
-                                    outputs_key_field=outputs_key_field,
-                                    indicator=indicator)
-        command_results.append(map_output)
     return command_results
 
 

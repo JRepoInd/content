@@ -1,7 +1,7 @@
+import demistomock as demisto  # noqa: F401
+from CommonServerPython import *  # noqa: F401
 from typing import List, Optional, Tuple
-import demistomock as demisto  # noqa: E402 lgtm [py/polluting-import]
 import urllib3
-from CommonServerPython import *  # noqa: E402 lgtm [py/polluting-import]
 from pycti import OpenCTIApiClient
 # Disable insecure warnings
 urllib3.disable_warnings()
@@ -49,7 +49,7 @@ def reset_last_run():
 
 
 def get_indicators(client, indicator_type: List[str], limit: int, last_run_id: Optional[str] = None,
-                   tlp_color: Optional[str] = None) -> Tuple[str, list]:
+                   tlp_color: Optional[str] = None, tags: List[str] = None) -> Tuple[str, list]:
     """ Retrieving indicators from the API
 
     Args:
@@ -58,6 +58,7 @@ def get_indicators(client, indicator_type: List[str], limit: int, last_run_id: O
         last_run_id: The last id from the previous call to use pagination.
         limit: the max indicators to fetch
         tlp_color: traffic Light Protocol color
+        tags: user tags
 
     Returns:
         new_last_run: the id of the last indicator
@@ -65,27 +66,32 @@ def get_indicators(client, indicator_type: List[str], limit: int, last_run_id: O
     """
     indicator_type = build_indicator_list(indicator_type)
 
-    observables = client.stix_observable.list(types=indicator_type, first=limit, after=last_run_id, withPagination=True)
+    observables = client.stix_cyber_observable.list(types=indicator_type, first=limit, after=last_run_id, withPagination=True)
     new_last_run = observables.get('pagination').get('endCursor')
 
     indicators = []
     for item in observables.get('entities'):
+        indicator_tags = item.get('tags', [])
+        if indicator_tags:
+            indicator_tags = [tag.get('value') for tag in item.get('tags')]
         indicator = {
             "value": item['observable_value'],
             "type": XSOHR_TYPES.get(item['entity_type'], item['entity_type']),
             "rawJSON": item,
             "fields": {
-                "tags": [tag.get('value') for tag in item.get('tags')],
+                "tags": indicator_tags,
                 "description": item.get('description')
             }
         }
+        if tags:
+            indicator['fields']['tags'] += tags
         if tlp_color:
             indicator['fields']['trafficlightprotocol'] = tlp_color
         indicators.append(indicator)
     return new_last_run, indicators
 
 
-def fetch_indicators_command(client, indicator_type: list, max_fetch: int, tlp_color=None, is_test=False) -> list:
+def fetch_indicators_command(client, indicator_type: list, max_fetch: int, tlp_color=None, tags=None, is_test=False) -> list:
     """ fetch indicators from the OpenCTI
 
     Args:
@@ -93,6 +99,7 @@ def fetch_indicators_command(client, indicator_type: list, max_fetch: int, tlp_c
         indicator_type(list): List of indicators types to get.
         max_fetch: (int) max indicators to fetch.
         tlp_color: (str)
+        tags: (list)
         is_test: (bool) Indicates that it's a test and then does not save the last run.
     Returns:
         list of indicators(list)
@@ -100,7 +107,7 @@ def fetch_indicators_command(client, indicator_type: list, max_fetch: int, tlp_c
     last_run_id = demisto.getIntegrationContext().get('last_run_id')
 
     new_last_run, indicators_list = get_indicators(client, indicator_type, limit=max_fetch, last_run_id=last_run_id,
-                                                   tlp_color=tlp_color)
+                                                   tlp_color=tlp_color, tags=tags)
 
     if new_last_run and not is_test:
         demisto.setIntegrationContext({'last_run_id': new_last_run})
@@ -150,6 +157,7 @@ def main():
     indicator_types = params.get('indicator_types')
     max_fetch = params.get('max_indicator_to_fetch')
     tlp_color = params.get('tlp_color')
+    tags = argToList(params.get('feedTags'))
     if max_fetch:
         max_fetch = int(max_fetch)
     else:
@@ -162,7 +170,7 @@ def main():
 
         # Switch case
         if command == "fetch-indicators":
-            indicators = fetch_indicators_command(client, indicator_types, max_fetch, tlp_color=tlp_color)
+            indicators = fetch_indicators_command(client, indicator_types, max_fetch, tlp_color=tlp_color, tags=tags)
             # we submit the indicators in batches
             for b in batch(indicators, batch_size=2000):
                 demisto.createIndicators(b)

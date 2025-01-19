@@ -86,18 +86,21 @@ RESPONSE_TICKET_MIRROR = {'result': [{
     'approval': 'not requested', 'sla_due': '2019-09-26 00:41:01', 'comments_and_work_notes': '', 'due_date': '',
     'sys_mod_count': '8', 'reopen_count': '', 'sys_tags': '', 'escalation': '0', 'upon_approval': '',
     'correlation_id': '', 'location': {'link': 'demisto.com', 'value': 'test'}, 'category': 'network'
-    }]
+}]
 }
 
+USER_RESPONSE = {
+    'result': {'first_name': 'Oscar', 'email': 'oscar@example.com'}}
 
-RESPONSE_CLOSING_TICKET_MIRROR = {'result': [{
+
+RESPONSE_CLOSING_TICKET_MIRROR_CLOSED = {'result': [{
     'parent': '', 'made_sla': 'false', 'caused_by': '', 'watch_list': '', 'upon_reject': '',
     'sys_updated_on': '2020-04-02 14:03:31',
     'child_incidents': '', 'hold_reason': '', 'approval_history': '', 'number': 'INC0000039', 'resolved_by': '',
     'sys_updated_by': 'admin',
     'opened_by': {'link': 'demisto.com', 'value': 'test'},
     'user_input': '', 'sys_created_on': '2019-09-05 00:42:29',
-    'sys_domain': {'link': 'demisto.com', 'value': 'global'}, 'state': '1', 'sys_created_by': 'admin',
+    'sys_domain': {'link': 'demisto.com', 'value': 'global'}, 'state': '6', 'sys_created_by': 'admin',
     'knowledge': 'false', 'order': '', 'calendar_stc': '', 'closed_at': '2019-09-10 00:41:01',
     'cmdb_ci': {'link': 'demisto.com', 'value': 'test'}, 'delivery_plan': '', 'impact': '2', 'active': 'true',
     'work_notes_list': '', 'business_service': '', 'priority': '4', 'sys_domain_path': '/', 'rfc': '',
@@ -115,7 +118,63 @@ RESPONSE_CLOSING_TICKET_MIRROR = {'result': [{
     'approval': 'not requested', 'sla_due': '2019-09-26 00:41:01', 'comments_and_work_notes': '', 'due_date': '',
     'sys_mod_count': '8', 'reopen_count': '', 'sys_tags': '', 'escalation': '0', 'upon_approval': '',
     'correlation_id': '', 'location': {'link': 'demisto.com', 'value': 'test'}, 'category': 'network'
-    }]
+}]
+}
+
+RESPONSE_CLOSING_TICKET_MIRROR_RESOLVED = {'result': [{
+    'parent': '', 'made_sla': 'false', 'caused_by': '', 'watch_list': '', 'upon_reject': '',
+    'sys_updated_on': '2020-04-02 14:03:31',
+    'child_incidents': '', 'hold_reason': '', 'approval_history': '', 'number': 'INC0000039', 'resolved_by': '',
+    'sys_updated_by': 'admin',
+    'opened_by': {'link': 'demisto.com', 'value': 'test'},
+    'user_input': '', 'sys_created_on': '2019-09-05 00:42:29',
+    'sys_domain': {'link': 'demisto.com', 'value': 'global'}, 'state': '6', 'sys_created_by': 'admin',
+    'knowledge': 'false', 'order': '', 'calendar_stc': '', 'resolved_at': '2019-09-10 00:41:01',
+    'cmdb_ci': {'link': 'demisto.com', 'value': 'test'}, 'delivery_plan': '', 'impact': '2', 'active': 'true',
+    'work_notes_list': '', 'business_service': '', 'priority': '4', 'sys_domain_path': '/', 'rfc': '',
+    'time_worked': '', 'expected_start': '', 'opened_at': '2019-09-05 00:41:01', 'business_duration': '',
+    'group_list': '', 'work_end': '', 'caller_id': '',
+    'reopened_time': '', 'approval_set': '', 'subcategory': '', 'work_notes': '',
+    'short_description': 'Trouble getting to Oregon mail server', 'close_code': '', 'correlation_display': '',
+    'delivery_task': '', 'work_start': '', 'assignment_group': {},
+    'additional_assignee_list': '', 'business_stc': '',
+    'description': 'Unable to access Oregon mail server. Is it down?', 'calendar_duration': '', 'close_notes': 'Test',
+    'notify': '1', 'sys_class_name': 'incident', 'closed_by': '', 'follow_up': '', 'parent_incident': '',
+    'sys_id': 'sys_id', 'contact_type': 'phone', 'reopened_by': '', 'incident_state': '1', 'urgency': '3',
+    'problem_id': '', 'company': {'link': 'demisto.com', 'value': 'test'}, 'reassignment_count': '',
+    'u_custom_field_test': 'NYC', 'activity_due': '', 'assigned_to': '', 'severity': '3', 'comments': '',
+    'approval': 'not requested', 'sla_due': '2019-09-26 00:41:01', 'comments_and_work_notes': '', 'due_date': '',
+    'sys_mod_count': '8', 'reopen_count': '', 'sys_tags': '', 'escalation': '0', 'upon_approval': '',
+    'correlation_id': '', 'location': {'link': 'demisto.com', 'value': 'test'}, 'category': 'network'
+}]
+}
+
+RESPONSE_CLOSING_TICKET_MIRROR_CUSTOM = {'result': [{
+    'parent': '', 'made_sla': 'false', 'caused_by': '', 'watch_list': '', 'upon_reject': '',
+    'sys_updated_on': '2020-04-02 14:03:31',
+    'child_incidents': '', 'hold_reason': '', 'approval_history': '', 'number': 'INC0000039', 'resolved_by': '',
+    'sys_updated_by': 'admin',
+    'opened_by': {'link': 'demisto.com', 'value': 'test'},
+    'user_input': '', 'sys_created_on': '2019-09-05 00:42:29',
+    'sys_domain': {'link': 'demisto.com', 'value': 'global'}, 'state': '9', 'sys_created_by': 'admin',
+    'knowledge': 'false', 'order': '', 'calendar_stc': '',
+    'cmdb_ci': {'link': 'demisto.com', 'value': 'test'}, 'delivery_plan': '', 'impact': '2', 'active': 'true',
+    'work_notes_list': '', 'business_service': '', 'priority': '4', 'sys_domain_path': '/', 'rfc': '',
+    'time_worked': '', 'expected_start': '', 'opened_at': '2019-09-05 00:41:01', 'business_duration': '',
+    'group_list': '', 'work_end': '', 'caller_id': '',
+    'reopened_time': '', 'approval_set': '', 'subcategory': '', 'work_notes': '',
+    'short_description': 'Trouble getting to Oregon mail server', 'close_code': '', 'correlation_display': '',
+    'delivery_task': '', 'work_start': '', 'assignment_group': {},
+    'additional_assignee_list': '', 'business_stc': '',
+    'description': 'Unable to access Oregon mail server. Is it down?', 'calendar_duration': '', 'close_notes': 'Test',
+    'notify': '1', 'sys_class_name': 'incident', 'closed_by': '', 'follow_up': '', 'parent_incident': '',
+    'sys_id': 'sys_id', 'contact_type': 'phone', 'reopened_by': '', 'incident_state': '1', 'urgency': '3',
+    'problem_id': '', 'company': {'link': 'demisto.com', 'value': 'test'}, 'reassignment_count': '',
+    'u_custom_field_test': 'NYC', 'activity_due': '', 'assigned_to': '', 'severity': '3', 'comments': '',
+    'approval': 'not requested', 'sla_due': '2019-09-26 00:41:01', 'comments_and_work_notes': '', 'due_date': '',
+    'sys_mod_count': '8', 'reopen_count': '', 'sys_tags': '', 'escalation': '0', 'upon_approval': '',
+    'correlation_id': '', 'location': {'link': 'demisto.com', 'value': 'test'}, 'category': 'network'
+}]
 }
 
 RESPONSE_GET_ATTACHMENT = {'result': [{
@@ -2968,7 +3027,9 @@ RESPONSE_FETCH = {
                 'cmdb_ci': {'link': 'demisto.com', 'value': 'test'}, 'delivery_plan': '', 'impact': '2',
                 'active': 'true',
                 'work_notes_list': '', 'business_service': '', 'priority': '4', 'sys_domain_path': '/', 'rfc': '',
-                'time_worked': '', 'expected_start': '', 'opened_at': '2019-09-05 00:41:01', 'business_duration': '',
+                'time_worked': '', 'expected_start': '',
+                'opened_at': '',
+                'business_duration': '',
                 'group_list': '', 'work_end': '', 'caller_id': {'link': 'demisto.com', 'value': 'test'},
                 'reopened_time': '', 'resolved_at': '', 'approval_set': '', 'subcategory': '', 'work_notes': '',
                 'short_description': 'Trouble getting to Oregon mail server', 'close_code': '',
@@ -2978,7 +3039,7 @@ RESPONSE_FETCH = {
                 'description': 'Unable to access Oregon mail server. Is it down?', 'calendar_duration': '',
                 'close_notes': '',
                 'notify': '1', 'sys_class_name': 'incident', 'closed_by': '', 'follow_up': '', 'parent_incident': '',
-                'sys_id': 'sys_id', 'contact_type': 'phone', 'reopened_by': '', 'incident_state': '1', 'urgency': '3',
+                'sys_id': 'sys_id1', 'contact_type': 'phone', 'reopened_by': '', 'incident_state': '1', 'urgency': '3',
                 'problem_id': '', 'company': {'link': 'demisto.com', 'value': 'test'}, 'reassignment_count': '',
                 'u_custom_field_test': 'NYC', 'activity_due': '', 'assigned_to': '', 'severity': '3', 'comments': '',
                 'approval': 'not requested', 'sla_due': '2019-09-26 00:41:01', 'comments_and_work_notes': '',
@@ -2999,7 +3060,9 @@ RESPONSE_FETCH = {
                 'cmdb_ci': {'link': 'demisto.com', 'value': 'test'}, 'delivery_plan': '', 'impact': '2',
                 'active': 'true',
                 'work_notes_list': '', 'business_service': '', 'priority': '4', 'sys_domain_path': '/', 'rfc': '',
-                'time_worked': '', 'expected_start': '', 'opened_at': '2019-09-05 00:41:01', 'business_duration': '',
+                'time_worked': '', 'expected_start': '',
+                'opened_at': '',
+                'business_duration': '',
                 'group_list': '', 'work_end': '', 'caller_id': {'link': 'demisto.com', 'value': 'test'},
                 'reopened_time': '', 'resolved_at': '', 'approval_set': '', 'subcategory': '', 'work_notes': '',
                 'short_description': 'Trouble getting to Oregon mail server', 'close_code': '',
@@ -3009,7 +3072,7 @@ RESPONSE_FETCH = {
                 'description': 'Unable to access Oregon mail server. Is it down?', 'calendar_duration': '',
                 'close_notes': '',
                 'notify': '1', 'sys_class_name': 'incident', 'closed_by': '', 'follow_up': '', 'parent_incident': '',
-                'sys_id': 'sys_id', 'contact_type': 'phone', 'reopened_by': '', 'incident_state': '1', 'urgency': '3',
+                'sys_id': 'sys_id2', 'contact_type': 'phone', 'reopened_by': '', 'incident_state': '1', 'urgency': '3',
                 'problem_id': '', 'company': {'link': 'demisto.com', 'value': 'test'}, 'reassignment_count': '',
                 'u_custom_field_test': 'NYC', 'activity_due': '', 'assigned_to': '', 'severity': '3', 'comments': '',
                 'approval': 'not requested', 'sla_due': '2019-09-26 00:41:01', 'comments_and_work_notes': '',
@@ -3088,7 +3151,7 @@ RESPONSE_FETCH_ATTACHMENTS_TICKET = {
             "made_sla": "true",
             "notify": "1",
             "number": "INC0000060",
-            "opened_at": "2016-12-12 15:19:57",
+            "opened_at": '',
             "opened_by": {
                 "link": "https://dev61466.service-now.com/api/now/table/sys_user/681ccaf9c0a8016400b98a06818d57c7",
                 "value": "681ccaf9c0a8016400b98a06818d57c7"
@@ -3144,25 +3207,304 @@ RESPONSE_FETCH_ATTACHMENTS_TICKET = {
 RESPONSE_FETCH_ATTACHMENTS_FILE = [
     {'Contents': '', 'ContentsFormat': 'text', 'Type': 3, 'File': 'wireframe', 'FileID': 'file_id'}
 ]
+RESPONSE_FETCH_USE_DISPLAY_VALUE = {
+    "result": [
+        {
+            "upon_reject": {
+                "display_value": "Cancel all future Tasks",
+                "value": "cancel"
+            },
+            "sys_updated_on": {
+                "display_value": "29.02.2024 15:09:46",
+                "value": "2024-02-29 13:09:46"
+            },
+            "number": {
+                "display_value": "INC0011111",
+                "value": "INC0011111"
+            },
+            "state": {
+                "display_value": "New",
+                "value": "1"
+            },
+            "sys_created_by": {
+                "display_value": "test_xsoar",
+                "value": "test_xsoar"
+            },
+            "knowledge": {
+                "display_value": "false",
+                "value": "false"
+            },
+            "impact": {
+                "display_value": "3 - Low",
+                "value": "3"
+            },
+            "active": {
+                "display_value": "true",
+                "value": "true"
+            },
+            "priority": {
+                "display_value": "5 - Planning",
+                "value": "5"
+            },
+            "assignment_group": {
+                "display_value": "Test_group",
+                "link": "https://test.service-now.com/api/now/table/sys_user_group/3434343434343434343434",
+                "value": "3434343434343434343434"
+            },
+            "short_description": {
+                "display_value": "Test for use_display_value 1",
+                "value": "Test for use_display_value 1"
+            },
+            "notify": {
+                "display_value": "Do Not Notify",
+                "value": "1"
+            },
+            "comments_and_work_notes": {
+                "display_value": "29.02.2024 15:34:56 - Caller ID test (Work notes)\nTest work notes\n\n",
+                "value": ""
+            },
+            "sys_class_name": {
+                "display_value": "Incident",
+                "value": "incident"
+            },
+            "reassignment_count": {
+                "display_value": "0",
+                "value": "0"
+            },
+            "sla_due": {
+                "display_value": "UNKNOWN",
+                "value": ""
+            },
+            "u_src_ip": {
+                "display_value": "",
+                "value": ""
+            },
+            "task_effective_number": {
+                "display_value": "INC0011111",
+                "value": "INC0011111"
+            },
+            "sys_updated_by": {
+                "display_value": "test_xsoar",
+                "value": "test_xsoar"
+            },
+            "opened_by": {
+                "display_value": "Test admin",
+                "link": "https://test.service-now.com/api/now/table/sys_user/00001111000011110000111100001111",
+                "value": "00001111000011110000111100001111"
+            },
+            "sys_created_on": {
+                "display_value": "29.02.2024 15:09:46",
+                "value": "2024-02-29 13:09:46"
+            },
+            "sys_domain": {
+                "display_value": "global",
+                "link": "https://test.service-now.com/api/now/table/sys_user_group/global",
+                "value": "global"
+            },
+            "opened_at": {
+                "display_value": "29.02.2024 15:08:46",
+                "value": "2024-02-29 13:08:46"
+            },
+            "caller_id": {
+                "display_value": "Caller ID test",
+                "link": "https://test.service-now.com/api/now/table/sys_user/11111111111111111111111111111",
+                "value": "11111111111111111111111111111"
+            },
+            "subcategory": {
+                "display_value": None,
+                "value": ""
+            },
+            "work_notes": {
+                "display_value": "29.02.2024 15:34:56 - Caller ID test (Work notes)\nTest work notes\n\n",
+                "value": ""
+            },
+            "sys_id": {
+                "display_value": "12121212121212121212121212",
+                "value": "12121212121212121212121212"
+            },
+            "incident_state": {
+                "display_value": "New",
+                "value": "1"
+            },
+            "approval": {
+                "display_value": "Not Yet Requested",
+                "value": "not requested"
+            },
+        },
+        {
+            "upon_reject": {
+                "display_value": "Cancel all future Tasks",
+                "value": "cancel"
+            },
+            "sys_updated_on": {
+                "display_value": "29.02.2024 13:08:44",
+                "value": "2024-02-29 11:08:44"
+            },
+            "number": {
+                "display_value": "INC0022222",
+                "value": "INC0022222"
+            },
+            "state": {
+                "display_value": "New",
+                "value": "1"
+            },
+            "sys_created_by": {
+                "display_value": "test_xsoar",
+                "value": "test_xsoar"
+            },
+            "knowledge": {
+                "display_value": "false",
+                "value": "false"
+            },
+            "impact": {
+                "display_value": "3 - Low",
+                "value": "3"
+            },
+            "active": {
+                "display_value": "true",
+                "value": "true"
+            },
+            "priority": {
+                "display_value": "5 - Planning",
+                "value": "5"
+            },
+            "assignment_group": {
+                "display_value": "",
+                "value": ""
+            },
+            "short_description": {
+                "display_value": "Test for use_display_value 2",
+                "value": "Test for use_display_value 2"
+            },
+            "notify": {
+                "display_value": "Do Not Notify",
+                "value": "1"
+            },
+            "comments_and_work_notes": {
+                "display_value": "",
+                "value": ""
+            },
+            "sys_class_name": {
+                "display_value": "Incident",
+                "value": "incident"
+            },
+            "reassignment_count": {
+                "display_value": "0",
+                "value": "0"
+            },
+            "sla_due": {
+                "display_value": "UNKNOWN",
+                "value": ""
+            },
+            "u_src_ip": {
+                "display_value": "",
+                "value": ""
+            },
+            "task_effective_number": {
+                "display_value": "INC0022222",
+                "value": "INC0022222"
+            },
+            "sys_updated_by": {
+                "display_value": "test_xsoar",
+                "value": "test_xsoar"
+            },
+            "opened_by": {
+                "display_value": "Test admin",
+                "link": "https://test.service-now.com/api/now/table/sys_user/00001111000011110000111100001111",
+                "value": "00001111000011110000111100001111"
+            },
+            "sys_created_on": {
+                "display_value": "29.02.2024 13:08:44",
+                "value": "2024-02-29 11:08:44"
+            },
+            "sys_domain": {
+                "display_value": "global",
+                "link": "https://test.service-now.com/api/now/table/sys_user_group/global",
+                "value": "global"
+            },
+            "opened_at": {
+                "display_value": "29.02.2024 13:07:48",
+                "value": "2024-02-29 11:07:48"
+            },
+            "caller_id": {
+                "display_value": "Caller ID test",
+                "link": "https://test.service-now.com/api/now/table/sys_user/11111111111111111111111111111",
+                "value": "11111111111111111111111111111"
+            },
+            "subcategory": {
+                "display_value": None,
+                "value": ""
+            },
+            "work_notes": {
+                "display_value": "",
+                "value": ""
+            },
+            "sys_id": {
+                "display_value": "2121212121212121212121",
+                "value": "2121212121212121212121"
+            },
+            "incident_state": {
+                "display_value": "New",
+                "value": "1"
+            },
+            "approval": {
+                "display_value": "Not Yet Requested",
+                "value": "not requested"
+            },
+        }
+    ]
+}
+
 
 MIRROR_COMMENTS_RESPONSE = {'result': [{
     'sys_id': '549fc0bfdbaa101053482fb748961941', 'sys_created_on': '2020-08-17 06:31:49', 'name': 'incident',
     'element_id': '9bf0f1afdbe6101053482fb748961908', 'sys_tags': '', 'value': 'This is a comment',
     'sys_created_by': 'admin', 'element': 'comments'}]}
 
+RESPONSE_COMMENTS_DISPLAY_VALUE_AFTER_FORMAT = {
+    'sys_created_on': '2022-11-21 19:59:49',
+    'sys_created_by': 'admin',
+    'sys_id': '123456789',
+    'urgency': '3 - Low',
+    'severity': '3 - Low',
+    'comments': '2022-11-21 22:50:34 - System Administrator (Additional comments)\nSecond comment'
+                '\n\n Mirrored from Cortex XSOAR\n\n'
+                '2022-11-21 21:45:37 - Test User (Additional comments)\nFirst comment\n\n'
+}
+
+RESPONSE_COMMENTS_DISPLAY_VALUE = {
+    'result': {'sys_created_on': {'display_value': '2022-11-21 20:59:49', 'value': '2022-11-21 19:59:49'},
+               'sys_created_by': {'display_value': 'admin', 'value': 'admin'},
+               'sys_id': {'display_value': '123456789', 'value': '123456789'},
+               'urgency': {'display_value': '3 - Low', 'value': '3'},
+               'severity': {'display_value': '3 - Low', 'value': '3'},
+               'comments': {'display_value':
+                            '2022-11-21 22:50:34 - System Administrator (Additional comments)\nSecond comment'
+                            '\n\n Mirrored from Cortex XSOAR\n\n'
+                            '2022-11-21 21:45:37 - Test User (Additional comments)\nFirst comment\n\n',
+                            'value': ''}}}
+
+RESPONSE_COMMENTS_DISPLAY_VALUE_NO_COMMENTS = {
+    'result': {'sys_created_on': {'display_value': '2022-11-21 09:59:49', 'value': '2022-11-21 08:59:49'},
+               'sys_created_by': {'display_value': 'admin', 'value': 'admin'},
+               'sys_id': {'display_value': '123456789', 'value': '123456789'},
+               'urgency': {'display_value': '3 - Low', 'value': '3'},
+               'severity': {'display_value': '3 - Low', 'value': '3'},
+               'comments': {'display_value': '', 'value': ''}}}
+
 RESPONSE_MIRROR_FILE_ENTRY = [
     {'Contents': '', 'ContentsFormat': 'text', 'Type': 3, 'File': 'test.txt',
      'FileID': '20eb1079-d6c3-47cf-81bf-95968f93f6d3'}]
 
 RESPONSE_ASSIGNMENT_GROUP = {'result': {'parent': '', 'manager':
-    {'link': 'https://dev59633.service-now.com/api/now/table/sys_user/b6b364e253131300e321ddeeff7b121b',
-     'value': 'b6b364e253131300e321ddeeff7b121b'}, 'roles': '', 'sys_mod_count': '0', 'active': 'true',
-                                       'description': '', 'source': '', 'sys_updated_on': '2020-07-11 09:50:32',
-                                       'sys_tags': '', 'type': '', 'sys_id': '679434f053231300e321ddeeff7b12d8',
-                                       'sys_updated_by': 'admin', 'cost_center': '', 'default_assignee': '',
-                                       'sys_created_on': '2020-07-11 09:50:32', 'name': 'Help Desk',
-                                       'exclude_manager': 'false', 'email': '', 'include_members': 'false',
-                                       'sys_created_by': 'admin'}}
+                                        {'link': 'https://dev59633.service-now.com/api/now/table/sys_user/b6b364e253131300e321ddeeff7b121b',
+                                         'value': 'b6b364e253131300e321ddeeff7b121b'}, 'roles': '', 'sys_mod_count': '0', 'active': 'true',
+                                        'description': '', 'source': '', 'sys_updated_on': '2020-07-11 09:50:32',
+                                        'sys_tags': '', 'type': '', 'sys_id': '679434f053231300e321ddeeff7b12d8',
+                                        'sys_updated_by': 'admin', 'cost_center': '', 'default_assignee': '',
+                                        'sys_created_on': '2020-07-11 09:50:32', 'name': 'Help Desk',
+                                        'exclude_manager': 'false', 'email': '', 'include_members': 'false',
+                                        'sys_created_by': 'admin'}}
 
 
 RESPONSE_MIRROR_FILE_ENTRY_FROM_XSOAR = [{'Contents': '', 'ContentsFormat': 'text', 'Type': 3,
@@ -3176,9 +3518,15 @@ MIRROR_COMMENTS_RESPONSE_FROM_XSOAR = {'result': [{
 
 MIRROR_ENTRIES = [
     {'Contents': '', 'ContentsFormat': 'text', 'type': 3, 'File': 'test.txt',
-     'FileID': '20eb1079-d6c3-47cf-81bf-95968f93f6d3'},
+     'FileID': '20eb1079-d6c3-47cf-81bf-95968f93f6d3', 'id': 'entry-id'},
     {'type': None, 'category': None, 'contents': 'This is a comment', 'contentsFormat': None,
      'tags': ['comments', 'work_notes'], 'note': True}]
+
+MIRROR_ENTRIES_WITH_EMPTY_USERNAME = [
+    {'Contents': '', 'ContentsFormat': 'text', 'type': 3, 'File': 'test.txt',
+     'FileID': '20eb1079-d6c3-47cf-81bf-95968f93f6d3', 'user': ''},
+    {'type': None, 'category': None, 'contents': 'This is a comment', 'contentsFormat': None,
+     'tags': ['comments', 'work_notes'], 'note': True, 'user': ''}]
 
 OAUTH_PARAMS = {
     'insecure': False,
@@ -3190,4 +3538,9 @@ OAUTH_PARAMS = {
     'client_id': 'client_id',
     'client_secret': 'client_secret',
     'use_oauth': True
+}
+
+RESPONSE_GENERIC_TICKET = {
+    'sys_created_by': 'svc.SecOps_SplunkPhantom',
+    'sys_class_name': 'sn_si_incident'
 }

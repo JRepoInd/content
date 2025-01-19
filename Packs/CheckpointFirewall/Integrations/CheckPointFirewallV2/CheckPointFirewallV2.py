@@ -1,11 +1,10 @@
-from typing import Optional
-
 import demistomock as demisto  # noqa: F401
-import requests
 from CommonServerPython import *  # noqa: F401
+import urllib3
+
 
 # Disable insecure warnings
-requests.packages.urllib3.disable_warnings()
+urllib3.disable_warnings()
 
 DEFAULT_LIST_FIELD = ['name', 'uid', 'type', 'ipv4-address', 'ipv6-address', 'domain-name', 'domain-uid', 'groups',
                       'read-only', 'creator', 'last-modifier']
@@ -16,23 +15,87 @@ class Client(BaseClient):
     Client for CheckPoint RESTful API.
     Args:
           base_url (str): the URL of CheckPoint.
-          sid (str): CheckPoint session ID of the current user session.
+          sid (str): CheckPoint session ID of the current user session. [Optional]
           use_ssl (bool): specifies whether to verify the SSL certificate or not.
           use_proxy (bool): specifies if to use Demisto proxy settings.
     """
 
-    def __init__(self, base_url: str, sid: str, use_ssl: bool, use_proxy: bool, **kwargs):
+    def __init__(self, base_url: str, use_ssl: bool, use_proxy: bool, sid: Optional[str] = None, **kwargs):
         super().__init__(base_url, verify=use_ssl, proxy=use_proxy, **kwargs)
-        self.headers = {'Content-Type': 'application/json',
-                        'X-chkp-sid': sid}
         self.verify = use_ssl
+        self.sid = sid if sid != "None" else None
+        self.has_performed_login = False  # set to True once username and password are used to login.
+        """ Note that Client is "disposable", and will not be the same object on the next command,
+        has_performed_login is used to decide whether to logout after running the command."""
 
-    def checkpoint_logout(self):
-        """logout from current session"""
-        response = self._http_request(method='POST', url_suffix='logout', headers=self.headers,
-                                      json_data={})
+    @property
+    def headers(self):
+        if self.sid is None:  # for logging in, before self.sid is set
+            return {'Content-Type': 'application/json'}
+        return {'Content-Type': 'application/json', 'X-chkp-sid': self.sid}
+
+    def login(self, username: str, password: str, session_timeout: int, domain_arg: str = None) -> CommandResults:
+        """login to a checkpoint admin account using username and password."""
+
+        json_body = {'user': username, 'password': password, 'session-timeout': session_timeout}
+        if domain_arg:
+            json_body['domain'] = domain_arg
+
+        response = self._http_request(method='POST', url_suffix='login', json_data=json_body, headers=self.headers)
+        sid = response.get('sid', '')
+
+        if sid:
+            self.sid = sid
+            self.has_performed_login = True
+            demisto.debug(f"login: success, saving sid={sid} to integrationContext")
+            demisto.setIntegrationContext({'cp_sid': sid})
+        else:
+            demisto.debug("login: failed, clearing integrationContext")
+            demisto.setIntegrationContext({})
+
+        printable_result = {'session-id': sid}
+        readable_output = tableToMarkdown('CheckPoint session data:', printable_result)
+
+        return CommandResults(outputs_prefix='CheckPoint.Login',
+                              outputs_key_field='uid',
+                              readable_output=readable_output,
+                              outputs=printable_result,
+                              raw_response=response)
+
+    def restore_sid_from_context_or_login(self, username: str, password: str, session_timeout: int,
+                                          domain_arg: str = None):
+        if sid_from_context := demisto.getIntegrationContext().get('cp_sid'):
+            demisto.debug(f"restore sid: success, setting restored sid on Client (sid={sid_from_context})")
+            self.sid = sid_from_context
+        else:
+            demisto.debug("restore sid: failed to restore, logging in")
+            self.login(username, password, session_timeout, domain_arg)
+
+    def test_connection(self):
+        """
+        Returns ok on a successful connection to the CheckPoint Firewall API.
+        Otherwise, an exception should be raised by self._http_request()
+        """
+        response = self._http_request(method='POST', url_suffix='show-api-versions', headers=self.headers,
+                                      ok_codes=(200, 500), resp_type='response', json_data={})
+        if response.status_code == 500:
+            return 'Server Error: make sure Server URL and Server Port are correctly set'
+
+        if response.json() and response.json().get('message') == "Missing header: [X-chkp-sid]":
+            return '\nWrong credentials! Please check the username and password you entered and try again.'
+
+        return 'ok'
+
+    def logout(self) -> str:
+        """logout from current session, returning the response message"""
+        response = self._http_request(method='POST', url_suffix='logout', headers=self.headers, json_data={})
+        self.sid = None
         demisto.setIntegrationContext({})
-        return response
+        self.has_performed_login = False
+
+        message = response.get('message')
+        demisto.debug(f"logout: sid={self.sid}, message={message}")
+        return message
 
     def list_hosts(self, limit: int, offset: int):
         return self._http_request(method='POST', url_suffix='show-hosts',
@@ -81,14 +144,17 @@ class Client(BaseClient):
         return self._http_request(method='POST', url_suffix='add-group', headers=self.headers,
                                   json_data={"name": name})
 
-    def update_group(self, identifier: str, ignore_warnings: bool, ignore_errors: bool, members,
+    def update_group(self, identifier: str, ignore_warnings: bool, ignore_errors: bool, action: str, members,
                      new_name: Optional[str], comments: Optional[str]):
+        # If the desired action is to add or remove members, they should be specified differently.
+        members_value = {action: members} if action in ['add', 'remove'] else members
         body = {'name': identifier,
                 'new-name': new_name,
-                'members': members,
+                'members': members_value,
                 'comments': comments,
                 'ignore-warnings': ignore_warnings,
                 'ignore-errors': ignore_errors}
+
         response = self._http_request(method='POST', url_suffix='set-group', headers=self.headers,
                                       json_data=body)
         return response
@@ -227,6 +293,14 @@ class Client(BaseClient):
         return self._http_request(method='POST', url_suffix='set-application-site',
                                   headers=self.headers, json_data=body)
 
+    def add_objects_batch(self, object_type, add_list):
+        body = {'objects': [{'type': object_type, 'list': add_list}]}
+        return self._http_request(method='POST', url_suffix='add-objects-batch', headers=self.headers, json_data=body)
+
+    def delete_objects_batch(self, object_type, delete_list):
+        body = {'objects': [{'type': object_type, 'list': delete_list}]}
+        return self._http_request(method='POST', url_suffix='delete-objects-batch', headers=self.headers, json_data=body)
+
     def delete_application_site(self, identifier: str):
         return self._http_request(method='POST', url_suffix='delete-application-site',
                                   headers=self.headers, json_data={'name': identifier})
@@ -239,7 +313,7 @@ class Client(BaseClient):
                      ip_only: bool, object_type: str):
         body = {'limit': limit, 'offset': offset, 'filter': filter_search,
                 "ip-only": ip_only, 'type': object_type}
-        return self._http_request(method='POST', url_suffix='v1.5/show-objects',
+        return self._http_request(method='POST', url_suffix='show-objects',
                                   headers=self.headers, json_data=body)
 
     def list_application_site_categories(self, limit: int, offset: int):
@@ -291,6 +365,35 @@ class Client(BaseClient):
         body = {'policy-package': policy_package, }
         return self._http_request(method='POST', url_suffix='verify-policy',
                                   headers=self.headers, json_data=body)
+
+    def show_threat_protection(self, uid: str, name: str, properties: bool, profiles: bool):
+        body = {
+            'show-ips-additional-properties': properties,
+            'show-profiles': profiles
+        }
+        if uid:
+            body['uid'] = uid  # type: ignore
+
+        elif name:
+            body['name'] = name  # type: ignore
+        return self._http_request(method='POST', url_suffix='show-threat-protection',
+                                  headers=self.headers, json_data=body)
+
+    def show_threat_protections(self, args):
+        return self._http_request(method='POST', url_suffix='show-threat-protections',
+                                  headers=self.headers, json_data=args)
+
+    def add_threat_profile(self, args):
+        return self._http_request(method='POST', url_suffix='add-threat-profile',
+                                  headers=self.headers, json_data=args)
+
+    def delete_threat_protections(self, args):
+        return self._http_request(method='POST', url_suffix='delete-threat-protections',
+                                  headers=self.headers, json_data=args)
+
+    def set_threat_protection(self, args):
+        return self._http_request(method='POST', url_suffix='set-threat-protection',
+                                  headers=self.headers, json_data=args)
 
 
 def checkpoint_list_hosts_command(client: Client, limit: int, offset: int) -> CommandResults:
@@ -355,8 +458,8 @@ def checkpoint_get_host_command(client: Client, identifier: str) -> CommandResul
     return command_results
 
 
-def checkpoint_add_host_command(client: Client, name, ip_address, ignore_warnings: str, ignore_errors: str,
-                                groups: str = None) -> CommandResults:
+def checkpoint_add_host_command(client: Client, name, ip_address, ignore_warnings: Union[bool, str],
+                                ignore_errors: Union[bool, str], groups: str = None) -> CommandResults:
     """
     Add new host object.
 
@@ -569,7 +672,7 @@ def checkpoint_add_group_command(client: Client, name) -> CommandResults:
 
 
 def checkpoint_update_group_command(client: Client, identifier: str, ignore_warnings: bool,
-                                    ignore_errors: bool, members=None, new_name: str = None,
+                                    ignore_errors: bool, action: str = '', members=None, new_name: str = None,
                                     comments: str = None) -> CommandResults:
     """
     Edit existing group using object name or uid.
@@ -578,6 +681,7 @@ def checkpoint_update_group_command(client: Client, identifier: str, ignore_warn
         client (Client): CheckPoint client.
         identifier(str): uid or name.
         ignore_warnings(bool):Apply changes ignoring warnings.
+        action(str): The action to take towards the modified objects.
         ignore_errors(bool): Apply changes ignoring errors. You won't be able to publish such
                              a changes. If ignore-warnings flag was omitted- warnings will also
                              be ignored
@@ -586,9 +690,9 @@ def checkpoint_update_group_command(client: Client, identifier: str, ignore_warn
         comments(str): Comments string.
     """
     if members:
+        # noinspection PyTypeChecker
         members = argToList(members)
-    result = client.update_group(identifier, ignore_warnings, ignore_errors,
-                                 members, new_name, comments)
+    result = client.update_group(identifier, ignore_warnings, ignore_errors, action, members, new_name, comments)
     headers = ['name', 'uid', 'type', 'domain-name', 'domain-type', 'domain-uid', 'creator',
                'last-modifier', 'read-only']
     printable_result = build_printable_result(headers, result)
@@ -1225,7 +1329,7 @@ def checkpoint_update_application_site_command(client: Client, identifier: str,
 
     elif url_list_to_remove:
         url_list_to_remove = argToList(url_list_to_remove)
-        url_list_object = {'add': url_list_to_remove}
+        url_list_object = {'remove': url_list_to_remove}
 
     if groups:
         groups = argToList(groups)
@@ -1579,6 +1683,214 @@ def checkpoint_show_task_command(client: Client, task_id: str) -> CommandResults
     return command_results
 
 
+def checkpoint_add_objects_batch_command(client: Client, object_type: str, ipaddress, name):
+    context_data = {}
+    readable_output = ''
+
+    ip_addresses = argToList(ipaddress, ',')
+    ip_object_names = argToList(name, ',')
+    add_list = []
+    for ip, name in zip(ip_addresses, ip_object_names):
+        tmp_dict = {'name': name, 'ip-address': ip}
+        add_list.append(tmp_dict)
+
+    result = client.add_objects_batch(object_type, add_list)
+
+    if result:
+        context_data = {'task-id': result.get('task-id')}
+        readable_output = tableToMarkdown('CheckPoint data for add-objects-batch command:',
+                                          context_data)
+
+    command_results = CommandResults(
+        outputs_prefix='CheckPoint.AddObjectBatch',
+        outputs_key_field='task-id',
+        readable_output=readable_output,
+        outputs=context_data,
+        raw_response=result
+    )
+    return command_results
+
+
+def checkpoint_delete_objects_batch_command(client: Client, object_type: str, name):
+    context_data = {}
+    readable_output = ''
+
+    object_names = argToList(name)
+    objects_to_delete = [{'name': object_name} for object_name in object_names]
+
+    result = client.delete_objects_batch(object_type, objects_to_delete)
+
+    if result:
+        context_data = {'task-id': result.get('task-id')}
+        readable_output = tableToMarkdown('CheckPoint data for delete-objects-batch command:',
+                                          context_data)
+    command_results = CommandResults(
+        outputs_prefix='CheckPoint.DeleteObjectsBatch',
+        outputs_key_field='task-id',
+        readable_output=readable_output,
+        outputs=context_data,
+        raw_response=result
+    )
+    return command_results
+
+
+def checkpoint_show_threat_protection_command(client: Client, args):
+    context_data = {}
+    readable_output = ''
+    uid = args.get('uid', '')
+    name = args.get('name')
+    properties = args.get('properties') != 'false'
+    profiles = args.get('profiles') != 'false'
+    result = client.show_threat_protection(uid, name, properties, profiles)
+
+    if result:
+        context_data = {'uid': result}
+        readable_output = tableToMarkdown('CheckPoint data for show threat protection command:',
+                                          result)
+    command_results = CommandResults(
+        outputs_prefix='CheckPoint.ShowThreatProtection',
+        outputs_key_field='uid',
+        readable_output=readable_output,
+        outputs=context_data,
+        raw_response=result
+    )
+    return command_results
+
+
+def checkpoint_show_threat_protections_command(client: Client, args):
+    context_data = {}
+    readable_output = ''
+    result = client.show_threat_protections(args)
+
+    if result:
+        context_data = result.get('protections', [])
+        readable_output = tableToMarkdown('CheckPoint data for show threat protections command:',
+                                          result.get('protections', []))
+    command_results = CommandResults(
+        outputs_prefix='CheckPoint.ShowThreatProtections',
+        outputs_key_field='uid',
+        readable_output=readable_output,
+        outputs=context_data,
+        raw_response=result
+    )
+    return command_results
+
+
+def ip_settings(args):
+    keys = args.keys()
+    args['ips-settings'] = {}
+    if 'exclude-protection-with-performance-impact' in keys:
+        args['ips-settings']['exclude-protection-with-performance-impact'] = args['exclude-protection-with-performance-impact']
+        args.pop('exclude-protection-with-performance-impact')
+
+    if 'exclude-protection-with-performance-impact-mode' in keys:
+        args['ips-settings']['exclude-protection-with-performance-impact-mode'] = \
+            args['exclude-protection-with-performance-impact-mode']
+        args.pop('exclude-protection-with-performance-impact-mode')
+
+    if 'exclude-protection-with-severity' in keys:
+        args['ips-settings']['exclude-protection-with-severity'] = args['exclude-protection-with-severity']
+        args.pop('exclude-protection-with-severity')
+
+    if 'exclude-protection-with-severity-mode' in keys:
+        args['ips-settings']['exclude-protection-with-severity-mode'] = args['exclude-protection-with-severity-mode']
+        args.pop('exclude-protection-with-severity-mode')
+
+    if 'newly-updated-protections' in keys:
+        args['ips-settings']['newly-updated-protections'] = args['newly-updated-protections']
+        args.pop('newly-updated-protections')
+
+    return args
+
+
+def checkpoint_add_threat_profile_command(client: Client, args):
+    body = {f'{k.replace("_", "-")}': v for k, v in args.items()}
+
+    body = ip_settings(body)
+    readable_output = ''
+
+    result = client.add_threat_profile(body)
+
+    if result:
+
+        readable_output = tableToMarkdown('CheckPoint data for add threat profile command:',
+                                          result)
+    command_results = CommandResults(
+        outputs_prefix='CheckPoint.AddedThreatProfiles',
+        outputs_key_field='task-id',
+        readable_output=readable_output,
+        outputs=result,
+        raw_response=result
+    )
+    return command_results
+
+
+def checkpoint_delete_threat_protections_command(client: Client, args):
+    body = {}
+    body["package-format"] = args.get('packageFormat')
+    result = client.delete_threat_protections(body)
+
+    if result:
+
+        readable_output = tableToMarkdown('CheckPoint data for delete threat protections command:',
+                                          result)
+    else:
+        readable_output = 'No result was found.'
+    command_results = CommandResults(
+        outputs_prefix='CheckPoint.DeletedThreatProtections',
+        outputs_key_field='task-id',
+        readable_output=readable_output,
+        outputs=result,
+        raw_response=result
+    )
+    return command_results
+
+
+def create_override_data(args):
+    profiles = args.get('profiles').split(',')
+    profiles = [x.rstrip() for x in profiles]
+
+    if args.get('track'):
+        args['track'] = args['track'].replace('-', ' ')
+    obj = []
+
+    for profile in profiles:
+        obj.append({
+            'profile': profile,
+            'action': args.get('action'),
+            'track': args.get('track'),
+            'capture-packets': args.get('caputurePackets')
+        })
+    args['overrides'] = obj
+    args.pop('profiles', None)
+    args.pop('action', None)
+    args.pop('track', None)
+    args.pop('capturePackets', None)
+    return args
+
+
+def checkpoint_set_threat_protections_command(client: Client, args):
+    readable_output = ''
+
+    if args.get('profiles'):
+        args = create_override_data(args)
+
+    body = {f'{k.replace("_", "-")}': v for k, v in args.items()}
+    result = client.set_threat_protection(body)
+
+    if result:
+        readable_output = tableToMarkdown('CheckPoint data for set threat protection command:',
+                                          result)
+    command_results = CommandResults(
+        outputs_prefix='CheckPoint.SetThreatProtections',
+        outputs_key_field='uid',
+        readable_output=readable_output,
+        outputs=result,
+        raw_response=result
+    )
+    return command_results
+
+
 def checkpoint_install_policy_command(client: Client, policy_package: str, targets,
                                       access: bool) -> CommandResults:
     """
@@ -1635,35 +1947,6 @@ def checkpoint_verify_policy_command(client: Client, policy_package: str) -> Com
         outputs=printable_result,
         raw_response=result
     )
-    return command_results
-
-
-def checkpoint_login_and_get_sid_command(base_url: str, username: str, password: str,
-                                         verify_certificate: bool,
-                                         session_timeout: int, domain_arg: str = None) -> CommandResults:
-    """login to checkpoint admin account using username and password."""
-    jsonbody = {
-        'user': username,
-        'password': password,
-        'session-timeout': session_timeout
-    }
-
-    if domain_arg:
-        jsonbody['domain'] = domain_arg
-
-    response = requests.post(base_url + 'login', verify=verify_certificate, json=jsonbody,
-                             headers={'Content-Type': 'application/json'}).json()
-    printable_result = {'session-id': response.get('sid')}
-    readable_output = tableToMarkdown('CheckPoint session data:', printable_result)
-
-    command_results = CommandResults(
-        outputs_prefix='CheckPoint.Login',
-        outputs_key_field='uid',
-        readable_output=readable_output,
-        outputs=printable_result,
-        raw_response=response
-    )
-
     return command_results
 
 
@@ -1751,242 +2034,244 @@ def build_group_data(result: dict, readable_output: str, printable_result: dict)
     return readable_output, printable_result
 
 
-def login(base_url: str, username: str, password: str, verify_certificate: bool):
-    """login to checkpoint admin account using username and password."""
-    response = requests.post(base_url + 'login', verify=verify_certificate,
-                             headers={'Content-Type': 'application/json'},
-                             json={'user': username, 'password': password}).json()
-
-    sid = response.get('sid')
-    if sid:
-        demisto.setIntegrationContext({'cp_sid': sid})
-        return
-    demisto.setIntegrationContext({})
-
-
-def checkpoint_logout_command(base_url: str, sid: str, verify_certificate: bool) -> str:
+def checkpoint_logout_command(client: Client, sid: str = None) -> str:
     """logout from given session """
-    return requests.post(url=f'{base_url}/logout', json={}, verify=verify_certificate,
-                         headers={'Content-Type': 'application/json',
-                                  'X-chkp-sid': sid}).json().get('message')
+    if sid is not None:
+        client.sid = sid
+
+    return client.logout()
 
 
-def test_module(base_url: str, sid: str, verify_certificate) -> str:
-    """
-    Returning 'ok' indicates that the integration works like it is supposed to.
-    Connection to the service is successful.
-    """
-    response = requests.post(base_url + 'show-api-versions',
-                             headers={'Content-Type': 'application/json', 'X-chkp-sid': sid},
-                             verify=verify_certificate, json={})
-    reason = ''
-    if response.json().get('message') == "Missing header: [X-chkp-sid]":
-        reason = '\nWrong credentials! Please check the username and password you entered and try' \
-                 ' again.\n'
-    return 'ok' if response else f'Connection failed.{reason}\nFull response: {response.json()}'
-
-
-def main():
+def main():  # pragma: no cover
     """
         Client is created with a session id. if a session id was given as argument
         use it, else use the session id from the integration context.
     """
     params = demisto.params()
-    username = params.get('username', {}).get('identifier')
-    password = params.get('username', {}).get('password')
+    args = demisto.args()
 
-    server = params['server']
-    port = params['port']
-    base_url = f'https://{server}:{port}/web_api/'
-
-    verify_certificate = not params.get('insecure', False)
-    proxy = params.get('proxy', False)
-
-    is_sid_provided = True
+    username = demisto.get(params, 'username.identifier')
+    password = demisto.get(params, 'username.password')
     domain_arg = params.get('domain', '')
+    sid_arg = args.pop('session_id', None)
+
+    login_args = {'username': username,
+                  'password': password,
+                  'session_timeout': args.get('session_timeout', 600),
+                  'domain_arg': domain_arg}
+
+    server = params.get('server')
+    port = params.get('port')
+    proxy = params.get('proxy', False)
+    verify_certificate = not params.get('insecure', False)
+
+    if server.startswith("https://"):
+        server = server[len("https://"):]
+
+    if server.endswith("/"):
+        server = server[:-1]
+
+    client = Client(base_url=f'https://{server}:{port}/web_api/',
+                    use_ssl=verify_certificate,
+                    use_proxy=proxy,
+                    sid=sid_arg)
 
     try:
+        # commands that perform login
         command = demisto.command()
         if demisto.command() == 'test-module':
-            response = checkpoint_login_and_get_sid_command(base_url, username, password,
-                                                            verify_certificate, 600, domain_arg).outputs
-            if response:
-                sid = response.get('session-id')  # type: ignore
-                return_results(test_module(base_url, sid, verify_certificate))
-                checkpoint_logout_command(base_url, sid, verify_certificate)
-                return
-        elif command == 'checkpoint-login-and-get-session-id':
-            session_timeout = demisto.args().get('session_timeout')
+            client.login(**login_args)
+            return_results(client.test_connection())
+            client.logout()
+            return
 
-            return_results(checkpoint_login_and_get_sid_command(base_url, username, password,
-                                                                verify_certificate, session_timeout, domain_arg))
+        elif command == 'checkpoint-login-and-get-session-id':
+            return_results(client.login(**login_args))
+            # note that the "if client.has_logged in: client.logout()" mechanism is NOT used here, to allow sid reuse
             return
 
         elif command == 'checkpoint-logout':
-            sid = demisto.args().get('session_id', {})
-            return_results(checkpoint_logout_command(base_url, sid, verify_certificate))
+            return_results(checkpoint_logout_command(client, sid_arg))
             return
 
-        sid = ''
-        sid_arg = demisto.args().get('session_id', None)
-        demisto.args().pop('session_id')
-        if sid_arg is not None and sid_arg != "None":
-            sid = sid_arg
-
         else:
-            is_sid_provided = False
-            login(base_url, username, password, verify_certificate)
-            sid = demisto.getIntegrationContext().get('cp_sid')
+            if not client.sid:  # client.sid is None if `sid_arg in {None, "None"}`
+                client.restore_sid_from_context_or_login(**login_args)
 
         demisto.info(f'Command being called is {demisto.command()}')
 
-        client = Client(
-            base_url=base_url,
-            sid=sid,
-            use_ssl=verify_certificate,
-            use_proxy=proxy)
-
         if command == 'checkpoint-host-list':
-            return_results(checkpoint_list_hosts_command(client, **demisto.args()))
+            return_results(checkpoint_list_hosts_command(client, **args))
 
         elif command == 'checkpoint-host-get':
-            return_results(checkpoint_get_host_command(client, **demisto.args()))
+            return_results(checkpoint_get_host_command(client, **args))
 
         elif command == 'checkpoint-host-add':
-            return_results(checkpoint_add_host_command(client, **demisto.args()))
+            return_results(checkpoint_add_host_command(client, **args))
 
         elif command == 'checkpoint-host-update':
-            return_results(checkpoint_update_host_command(client, **demisto.args()))
+            return_results(checkpoint_update_host_command(client, **args))
 
         elif command == 'checkpoint-host-delete':
-            return_results(checkpoint_delete_host_command(client, **demisto.args()))
+            return_results(checkpoint_delete_host_command(client, **args))
 
         elif command == 'checkpoint-group-list':
-            return_results(checkpoint_list_groups_command(client, **demisto.args()))
+            return_results(checkpoint_list_groups_command(client, **args))
 
         elif command == 'checkpoint-group-get':
-            return_results(checkpoint_get_group_command(client, **demisto.args()))
+            return_results(checkpoint_get_group_command(client, **args))
 
         elif command == 'checkpoint-group-add':
-            return_results(checkpoint_add_group_command(client, **demisto.args()))
+            return_results(checkpoint_add_group_command(client, **args))
 
         elif command == 'checkpoint-group-update':
-            return_results(checkpoint_update_group_command(client, **demisto.args()))
+            return_results(checkpoint_update_group_command(client, **args))
 
         elif command == 'checkpoint-group-delete':
-            return_results(checkpoint_delete_group_command(client, **demisto.args()))
+            return_results(checkpoint_delete_group_command(client, **args))
 
         elif command == 'checkpoint-address-range-list':
-            return_results(checkpoint_list_address_range_command(client, **demisto.args()))
+            return_results(checkpoint_list_address_range_command(client, **args))
 
         elif command == 'checkpoint-address-range-get':
-            return_results(checkpoint_get_address_range_command(client, **demisto.args()))
+            return_results(checkpoint_get_address_range_command(client, **args))
 
         elif command == 'checkpoint-address-range-add':
-            return_results(checkpoint_add_address_range_command(client, **demisto.args()))
+            return_results(checkpoint_add_address_range_command(client, **args))
 
         elif command == 'checkpoint-address-range-update':
-            return_results(checkpoint_update_address_range_command(client, **demisto.args()))
+            return_results(checkpoint_update_address_range_command(client, **args))
 
         elif command == 'checkpoint-address-range-delete':
-            return_results(checkpoint_delete_address_range_command(client, **demisto.args()))
+            return_results(checkpoint_delete_address_range_command(client, **args))
 
         elif command == 'checkpoint-threat-indicator-list':
-            return_results(checkpoint_list_threat_indicator_command(client, **demisto.args()))
+            return_results(checkpoint_list_threat_indicator_command(client, **args))
 
         elif command == 'checkpoint-threat-indicator-get':
-            return_results(checkpoint_get_threat_indicator_command(client, **demisto.args()))
+            return_results(checkpoint_get_threat_indicator_command(client, **args))
 
         elif command == 'checkpoint-threat-indicator-add':
-            return_results(checkpoint_add_threat_indicator_command(client, **demisto.args()))
+            return_results(checkpoint_add_threat_indicator_command(client, **args))
 
         elif command == 'checkpoint-threat-indicator-update':
-            return_results(checkpoint_update_threat_indicator_command(client, **demisto.args()))
+            return_results(checkpoint_update_threat_indicator_command(client, **args))
 
         elif command == 'checkpoint-threat-indicator-delete':
-            return_results(checkpoint_delete_threat_indicator_command(client, **demisto.args()))
+            return_results(checkpoint_delete_threat_indicator_command(client, **args))
 
         elif command == 'checkpoint-access-rule-list':
-            return_results(checkpoint_list_access_rule_command(client, **demisto.args()))
+            return_results(checkpoint_list_access_rule_command(client, **args))
 
         elif command == 'checkpoint-access-rule-add':
-            return_results(checkpoint_add_access_rule_command(client, **demisto.args()))
+            return_results(checkpoint_add_access_rule_command(client, **args))
 
         elif command == 'checkpoint-access-rule-update':
-            return_results(checkpoint_update_access_rule_command(client, **demisto.args()))
+            return_results(checkpoint_update_access_rule_command(client, **args))
 
         elif command == 'checkpoint-access-rule-delete':
-            return_results(checkpoint_delete_access_rule_command(client, **demisto.args()))
+            return_results(checkpoint_delete_access_rule_command(client, **args))
 
         elif command == 'checkpoint-application-site-list':
-            return_results(checkpoint_list_application_site_command(client, **demisto.args()))
+            return_results(checkpoint_list_application_site_command(client, **args))
 
         elif command == 'checkpoint-application-site-add':
-            return_results(checkpoint_add_application_site_command(client, **demisto.args()))
+            return_results(checkpoint_add_application_site_command(client, **args))
 
         elif command == 'checkpoint-application-site-update':
-            return_results(checkpoint_update_application_site_command(client, **demisto.args()))
+            return_results(checkpoint_update_application_site_command(client, **args))
 
         elif command == 'checkpoint-application-site-delete':
-            return_results(checkpoint_delete_application_site_command(client, **demisto.args()))
+            return_results(checkpoint_delete_application_site_command(client, **args))
 
         elif command == 'checkpoint-application-site-category-list':
             return_results(checkpoint_list_application_site_categories_command(client,
-                                                                               **demisto.args()))
+                                                                               **args))
 
         elif command == 'checkpoint-application-site-category-get':
             return_results(checkpoint_get_application_site_category_command(client,
-                                                                            **demisto.args()))
+                                                                            **args))
 
         elif command == 'checkpoint-application-site-category-add':
             return_results(checkpoint_add_application_site_category_command(client,
-                                                                            **demisto.args()))
+                                                                            **args))
 
         elif command == 'checkpoint-packages-list':
-            return_results(checkpoint_list_packages_command(client, **demisto.args()))
+            return_results(checkpoint_list_packages_command(client, **args))
 
         elif command == 'checkpoint-gateways-list':
-            return_results(checkpoint_list_gateways_command(client, **demisto.args()))
+            return_results(checkpoint_list_gateways_command(client, **args))
 
         elif command == 'checkpoint-show-objects':
-            return_results(checkpoint_list_objects_command(client, **demisto.args()))
+            return_results(checkpoint_list_objects_command(client, **args))
 
         elif command == 'checkpoint-show-task':
-            return_results(checkpoint_show_task_command(client, **demisto.args()))
+            return_results(checkpoint_show_task_command(client, **args))
 
         elif command == 'checkpoint-publish':
             return_results(checkpoint_publish_command(client))
 
         elif command == 'checkpoint-install-policy':
-            return_results(checkpoint_install_policy_command(client, **demisto.args()))
+            return_results(checkpoint_install_policy_command(client, **args))
 
         elif command == 'checkpoint-verify-policy':
-            return_results(checkpoint_verify_policy_command(client, **demisto.args()))
+            return_results(checkpoint_verify_policy_command(client, **args))
 
         elif command == 'checkpoint-package-list':
-            return_results(checkpoint_list_package_command(client, **demisto.args()))
-        if not is_sid_provided:
-            client.checkpoint_logout()
+            return_results(checkpoint_list_package_command(client, **args))
+
+        elif command == 'checkpoint-add-objects-batch':
+            return_results(checkpoint_add_objects_batch_command(client, **args))
+
+        elif command == 'checkpoint-delete-objects-batch':
+            return_results(checkpoint_delete_objects_batch_command(client, **args))
+
+        elif command == 'checkpoint-show-threat-protection':
+            return_results(checkpoint_show_threat_protection_command(client, args))
+
+        elif command == 'checkpoint-show-threat-protections':
+            return_results(checkpoint_show_threat_protections_command(client, args))
+
+        elif command == 'checkpoint-add-threat-profile':
+            return_results(checkpoint_add_threat_profile_command(client, args))
+
+        elif command == 'checkpoint-delete-threat-protections':
+            return_results(checkpoint_delete_threat_protections_command(client, args))
+
+        elif command == 'checkpoint-set-threat-protection':
+            return_results(checkpoint_set_threat_protections_command(client, args))
+        else:
+            raise NotImplementedError(f"Unknown command {command}.")
+
+        if client.has_performed_login:
+            # this part is not reached when login() is explicitly called
+            demisto.debug("main: client.has_performed_login==True, logging out.")
+            client.logout()
 
     except DemistoException as e:
+        error_text_parts = [f'Failed to execute {demisto.command()} command.']
+        e_message = e.args[0]
 
-        if "[401] - Unauthorized" in e.args[0]:
+        if e.res:
+            status = e.res.http_status
+            if status == 401:
+                error_text_parts.extend(
+                    ('The current session is unreachable.  All changes done after last publish are saved.',
+                     'Please contact IT for more information.'))
+                demisto.setIntegrationContext({})
+
+            elif status == 500:
+                error_text_parts.append('Server Error: make sure Server URL and Server Port are correctly set')
+                demisto.setIntegrationContext({})
+
+        elif 'Missing header: [X-chkp-sid]' in e_message \
+                or 'Authentication to server failed' in e_message:
+            error_text_parts.append('Wrong credentials! '
+                                    'Please check the username and password you entered and try again.')
             demisto.setIntegrationContext({})
-            return_error(f'Failed to execute {demisto.command()} command.\n'
-                         f'The current session is unreachable. All changes done after last publish'
-                         f' are saved.\nPlease contact IT for more information.'
-                         f'\n\nError: {str(e)}')  # pylint: disable=too-many-return-error
 
-        elif 'Missing header: [X-chkp-sid]' in e.args[0] or \
-                'Authentication to server failed' in e.args[0]:
-            demisto.setIntegrationContext({})
-            return_error(f'Failed to execute {demisto.command()} command.\n'
-                         f'Wrong credentials! Please check the username and password you entered '
-                         f'and try again.\n{str(e)}')  # pylint: disable=too-many-return-error
-
-        else:
-            return_error(f'Failed to execute {demisto.command()} command. '
-                         f'Error: {str(e)}')  # pylint: disable=too-many-return-error
+        error_text_parts.append(f'\nError: {str(e)}')
+        return_error("\n".join(error_text_parts))
 
     except Exception as e:
         return_error(f'Failed to execute {demisto.command()} command. Error: {str(e)}')

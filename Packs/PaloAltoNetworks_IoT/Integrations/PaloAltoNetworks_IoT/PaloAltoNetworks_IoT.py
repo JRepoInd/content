@@ -1,19 +1,19 @@
+import demistomock as demisto  # noqa: F401
+from CommonServerPython import *  # noqa: F401
 import dateparser
-from datetime import datetime, timezone
+from datetime import datetime, UTC
 import json
 import time
-from typing import Any, Optional
+from typing import Any
 
-import demistomock as demisto
-import requests
-from CommonServerPython import *  # noqa: E402 lgtm [py/polluting-import]
+import urllib3
 from CommonServerUserPython import *  # noqa: E402 lgtm [py/polluting-import]
 
 # IMPORTS
 
 
 # Disable insecure warnings
-requests.packages.urllib3.disable_warnings()
+urllib3.disable_warnings()
 
 # CONSTANTS
 # api list size limit
@@ -25,15 +25,16 @@ class Client(BaseClient):
     Client will implement the service API, and should not contain any Demisto logic.
     Should only do requests and return data.
     """
+
     def __init__(self, base_url, tenant_id, first_fetch='-1', max_fetch=10, api_timeout=60, verify=True, proxy=False,
-                 ok_codes=tuple(), headers=None):
+                 ok_codes=(), headers=None):
         super().__init__(base_url, verify=verify, proxy=proxy, ok_codes=ok_codes, headers=headers)
         self.tenant_id = tenant_id
         self.api_timeout = api_timeout
         self.first_fetch = first_fetch
         self.max_fetch = min(max_fetch, PAGELENGTH)
 
-    def _http_request(self, **kwargs):
+    def _http_request(self, **kwargs):  # type: ignore[override]
         try:
             return super()._http_request(**kwargs)
         except DemistoException as error:
@@ -59,6 +60,20 @@ class Client(BaseClient):
             params={
                 'customerid': self.tenant_id,
                 'deviceid': id
+            },
+            timeout=self.api_timeout
+        )
+
+    def get_device_by_ip(self, ip):
+        """
+        Get a device from IoT security portal by ip
+        """
+        return self._http_request(
+            method='GET',
+            url_suffix='/device/ip',
+            params={
+                'customerid': self.tenant_id,
+                'ip': ip
             },
             timeout=self.api_timeout
         )
@@ -164,7 +179,7 @@ class Client(BaseClient):
         )
 
 
-def arg_to_timestamp(arg: Any, arg_name: str, required: bool = False) -> Optional[int]:
+def arg_to_timestamp(arg: Any, arg_name: str, required: bool = False) -> int | None:
     """Converts an XSOAR argument to a timestamp (seconds from epoch)
 
     This function is used to quickly validate an argument provided to XSOAR
@@ -206,8 +221,8 @@ def arg_to_timestamp(arg: Any, arg_name: str, required: bool = False) -> Optiona
             # if d is None it means dateparser failed to parse it
             raise ValueError(f'Invalid date: {arg}')
 
-        return int(date.replace(tzinfo=timezone.utc).timestamp())
-    if isinstance(arg, (int, float)):
+        return int(date.replace(tzinfo=UTC).timestamp())
+    if isinstance(arg, int | float):
         # Convert to int if the input is a float
         return int(arg)
     raise ValueError(f'Invalid date: "{arg}"')
@@ -251,6 +266,30 @@ def iot_get_device(client, args):
         outputs_prefix='PaloAltoNetworksIoT.Device',
         outputs_key_field='deviceid',
         outputs=result
+    )
+
+
+def iot_get_device_by_ip(client, args):
+    """
+    Returns an IoT device
+
+    Args:
+        client (Client): IoT client.
+        args (dict): all command arguments.
+
+    Returns:
+        device
+
+        CommandResults
+    """
+    device_ip = args.get('ip')
+
+    result = client.get_device_by_ip(device_ip)
+
+    return CommandResults(
+        outputs_prefix='PaloAltoNetworksIoT.Device',
+        outputs_key_field='devices',
+        outputs=result['devices']
     )
 
 
@@ -399,6 +438,8 @@ def fetch_incidents(client, last_run, is_test=False):
         next_run: This will be last_run in the next fetch-incidents
         incidents: Incidents that will be created in Demisto
     """
+    demisto.debug("PaloAltoNetworks_IoT - Start fetching")
+    demisto.debug(f"PaloAltoNetworks_IoT - Last run: {json.dumps(last_run)}")
     # Get the last fetch time, if exists
     last_alerts_fetch = last_run.get('last_alerts_fetch')
     last_vulns_fetch = last_run.get('last_vulns_fetch')
@@ -413,6 +454,7 @@ def fetch_incidents(client, last_run, is_test=False):
             stime = datetime.utcfromtimestamp(last_alerts_fetch + 0.001).isoformat() + "Z"
 
         alerts = client.list_alerts(stime, pagelength=max_fetch)
+        demisto.debug(f"PaloAltoNetworks_IoT - Number of incidents- alerts before filtering: {len(alerts)}")
 
         # special handling for the case of having more than the pagelength
         if len(alerts) == max_fetch:
@@ -434,7 +476,7 @@ def fetch_incidents(client, last_run, is_test=False):
 
         for alert in alerts:
             alert_date_epoch = datetime.strptime(
-                alert['date'], "%Y-%m-%dT%H:%M:%S.%fZ").replace(tzinfo=timezone.utc).timestamp()
+                alert['date'], "%Y-%m-%dT%H:%M:%S.%fZ").replace(tzinfo=UTC).timestamp()
             alert_id = alert["zb_ticketid"].replace("alert-", "")
             incident = {
                 'name': alert['name'],
@@ -464,28 +506,39 @@ def fetch_incidents(client, last_run, is_test=False):
         if len(vulns) == max_fetch:
             # get the last date
             last_date = vulns[-1]['detected_date']
+            if last_date and isinstance(last_date, list):
+                last_date = last_date[0]
+
             offset = 0
             done = False
             while not done:
                 offset += max_fetch
                 others = client.list_vulns(stime, offset, pagelength=max_fetch)
                 for vuln in others:
-                    if vuln['detected_date'] == last_date:
+                    detected_date = vuln['detected_date']
+                    if detected_date and isinstance(detected_date, list):
+                        detected_date = detected_date[0]
+
+                    if detected_date == last_date:
                         vulns.append(vuln)
                     else:
                         done = True
                         break
                 if len(others) != max_fetch:
                     break
-
+        demisto.debug(f"PaloAltoNetworks_IoT - Number of incidents- vulnerability before filtering: {len(vulns)}")
         for vuln in vulns:
+            detected_date = vuln['detected_date']
+            if detected_date and isinstance(detected_date, list):
+                detected_date = detected_date[0]
+
             vuln_date_epoch = datetime.strptime(
-                vuln['detected_date'], "%Y-%m-%dT%H:%M:%S.%fZ").replace(tzinfo=timezone.utc).timestamp()
+                detected_date, "%Y-%m-%dT%H:%M:%S.%fZ").replace(tzinfo=UTC).timestamp()
             vuln_name_encoded = vuln['vulnerability_name'].replace(' ', '+')
             incident = {
                 'name': vuln['name'],
                 "type": "IoT Vulnerability",
-                'occurred': vuln['detected_date'],
+                'occurred': detected_date,
                 'rawJSON': json.dumps(vuln),
                 'details': f'Device {vuln["name"]} at IP {vuln["ip"]}: {vuln["vulnerability_name"]}',
                 'CustomFields': {
@@ -502,6 +555,8 @@ def fetch_incidents(client, last_run, is_test=False):
         'last_alerts_fetch': last_alerts_fetch,
         'last_vulns_fetch': last_vulns_fetch
     }
+    demisto.debug(f"PaloAltoNetworks_IoT - Number of incidents (alerts and vulnerability) after filtering : {len(incidents)}")
+    demisto.debug(f'PaloAltoNetworks_IoT - Next run after incidents fetching: {json.dumps(next_run)}')
 
     if is_test:
         return None, None
@@ -514,8 +569,8 @@ def main():
         PARSE AND VALIDATE INTEGRATION PARAMS
     """
     tenant_id = demisto.params()['tenant_id']
-    access_key_id = demisto.params()['access_key_id']
-    secret_access_key = demisto.params()['secret_access_key']
+    access_key_id = demisto.params().get('credentials', {}).get('identifier') or demisto.params().get('access_key_id')
+    secret_access_key = demisto.params().get('credentials', {}).get('password') or demisto.params().get('secret_access_key')
 
     api_timeout = 60
     try:
@@ -531,7 +586,7 @@ def main():
             required=False
         )
         if ff:
-            first_fetch = datetime.fromtimestamp(ff).astimezone(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
+            first_fetch = datetime.fromtimestamp(ff).astimezone(UTC).strftime('%Y-%m-%dT%H:%M:%SZ')
     except ValueError as e:
         return_error(f'First fetch time is in a wrong format. Error: {str(e)}')
 
@@ -583,6 +638,9 @@ def main():
 
         elif demisto.command() == 'iot-security-get-device':
             return_results(iot_get_device(client, demisto.args()))
+
+        elif demisto.command() == 'iot-security-get-device-by-ip':
+            return_results(iot_get_device_by_ip(client, demisto.args()))
 
         elif demisto.command() == 'iot-security-list-devices':
             return_results(iot_list_devices(client, demisto.args()))

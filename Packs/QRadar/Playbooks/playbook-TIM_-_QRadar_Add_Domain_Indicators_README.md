@@ -22,10 +22,10 @@ This playbook does not use any scripts.
 
 | **Name** | **Description** | **Default Value** | **Required** |
 | --- | --- | --- | --- |
-| QRadarBlackListDomainReferenceSetName | The name of the QRadar black list Domain reference set to insert the data to. |  | Optional |
+| QRadarBlackListDomainReferenceSetName | The name of the QRadar block list Domain reference set to insert the data to. |  | Optional |
 | Indicator Query | Indicators matching the indicator query will be used as playbook input |  | Optional |
-| QRadarWhiteListDomainReferenceSetName | The name of the QRadar white list Domain reference set to insert the data in to. |  | Optional |
-| QRadarWatchListDomainReferenceSetName | The name of the QRadar watch list Domain reference set to insert the data in to. |  | Optional |
+| QRadarWhiteListDomainReferenceSetName | The name of the QRadar allow list Domain reference set to insert the data in to. |  | Optional |
+| QRadarWatchListDomainReferenceSetName | The name of the QRadar allow list Domain reference set to insert the data in to. |  | Optional |
 
 ## Playbook Outputs
 ---
@@ -33,4 +33,4 @@ There are no outputs for this playbook.
 
 ## Playbook Image
 ---
-![Playbook Image](https://raw.githubusercontent.com/demisto/content/0ce0007e6dcec27648d6dd4d30a432de945681f1/Packs/QRadar/doc_files/TIM_-_QRadar_Add_Domain_Indicators.png)
+![Playbook Image](../doc_files/TIM_-_QRadar_Add_Domain_Indicators.png)

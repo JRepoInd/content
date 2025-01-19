@@ -1,14 +1,17 @@
 {
     "name": "Slack",
-    "description": "Send messages and notifications to your Slack team.",
+    "description": "Interact with Slack API - collect logs, send messages and notifications to your Slack team.",
     "support": "xsoar",
-    "currentVersion": "1.3.19",
+    "currentVersion": "3.5.5",
     "author": "Cortex XSOAR",
     "url": "https://www.paloaltonetworks.com/cortex",
     "email": "",
     "created": "2020-03-15T17:02:40Z",
+    "videos": [
+        "https://www.youtube.com/watch?v=rt3lvsI_0-4"
+    ],
     "categories": [
-        "Messaging"
+        "Messaging and Conferencing"
     ],
     "tags": [],
     "useCases": [],
@@ -32,5 +35,11 @@
             "mandatory": false,
             "display_name": "Active Directory Query"
         }
-    }
+    },
+    "marketplaces": [
+        "xsoar",
+        "marketplacev2",
+        "xpanse"
+    ],
+    "defaultDataSource": "Slack Event Collector"
 }

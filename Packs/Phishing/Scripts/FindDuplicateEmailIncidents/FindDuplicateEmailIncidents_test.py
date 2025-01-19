@@ -51,6 +51,8 @@ def executeCommand(command, args=None):
         return [{'Contents': incidents_str, 'Type': 'not error'}]
     if command == 'CloseInvestigationAsDuplicate':
         EXISTING_INCIDENT_ID = args['duplicateId']
+        return None
+    return None
 
 
 def results(arg):
@@ -206,7 +208,7 @@ def test_html_text(mocker):
             </body>\
             </html>\
             '.format(text, text2)
-    clean_text = '{}\n{}'.format(text, text2)
+    clean_text = f'{text}\n{text2}'
     existing_incident = create_incident(body=clean_text, emailfrom='mt.kb.user@gmail.com')
     set_existing_incidents_list([existing_incident])
     mocker.patch.object(demisto, 'args', return_value={'fromPolicy': 'Domain'})
@@ -219,11 +221,11 @@ def test_html_text(mocker):
 
 
 def test_eliminate_urls_extensions():
-    url = 'https://urldefense.proofpoint.com/v2/url?u=http-3A__fridmancpa.com_&d=DwIGaQ&c=XRWvQHnpdBDRh-yzrHjqLpXuH' \
+    url = 'https://urldefense.proofpoint.com/v2/url?u=http-3A__hellothere.com_&d=DwIGaQ&c=XRWvQHnpdBDRh-yzrHjqLpXuH' \
           'NC_9nanQc6pPG_SpT0&r=sUpl2dZrOIls7oQLXwn74C7qVYSZVCdsK9UIY1nPz30&m=qD-Bndy5WGvuZizr-Jz7YQ5-8xXgRcK3w8NnNzX' \
           'lOsk&s=_NEaEUMVW0JU5b--ODhZKY9csky777X1jtFywaQyN2o&e='
     url_shortened = eliminate_urls_extensions(url)
-    assert url_shortened == 'https://urldefense.proofpoint.com/'
+    assert url_shortened == 'http://hellothere.com/'
     template = 'hello world {} goodbye'
     assert template.format(url_shortened) == eliminate_urls_extensions(template.format(url))
 
@@ -395,3 +397,21 @@ def test_multiple_incidents_word_difference(mocker):
     assert duplicated_incidents_found(existing_incidents_list[0])
     duplicate_ids_found = [res['id'] for res in RESULTS['EntryContext']['allDuplicateIncidents']]
     assert all(inc['id'] in duplicate_ids_found for inc in existing_incidents_list)
+
+
+def test_empty_query(mocker):
+    """
+
+    Given:
+        - Query argument as empty string
+
+    When:
+        - Parsing the query
+
+    Then:
+        - Assert that parsing the final query ignores the empty string
+    """
+    mocker.patch.object(demisto, 'executeCommand',
+                        side_effect=lambda function_name, args: [{'Contents': json.dumps(args), 'Type': -1}])
+    res = get_existing_incidents({'query': ''}, "Phishing")
+    assert '()' not in res['query']

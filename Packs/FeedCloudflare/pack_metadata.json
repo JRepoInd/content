@@ -2,7 +2,7 @@
     "name": "Cloudflare Feed",
     "description": "Indicators feed from Cloudflare",
     "support": "xsoar",
-    "currentVersion": "1.1.2",
+    "currentVersion": "1.1.29",
     "author": "Cortex XSOAR",
     "url": "https://www.paloaltonetworks.com/cortex",
     "email": "",
@@ -10,10 +10,14 @@
     "categories": [
         "Data Enrichment & Threat Intelligence"
     ],
-    "tags": [],
+    "tags": [
+        "Threat Intelligence Management",
+        "Allow List"
+    ],
     "useCases": [],
-    "keywords": [
-        "Cloudflare",
-        "Feed"
+    "keywords": [],
+    "marketplaces": [
+        "xsoar",
+        "marketplacev2"
     ]
 }

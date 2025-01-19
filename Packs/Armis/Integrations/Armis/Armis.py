@@ -3,20 +3,14 @@
 from typing import List
 
 import pytz
-import demistomock as demisto
-from CommonServerPython import *
-from CommonServerUserPython import *
-
-import json
-
-import dateparser
 import urllib3
+
+from CommonServerPython import *
 
 # Disable insecure warnings
 urllib3.disable_warnings()
 
 ''' CONSTANTS '''
-DATE_FORMAT = '%Y-%m-%dT%H:%M:%SZ'
 
 
 class AccessToken:
@@ -47,10 +41,13 @@ class Client(BaseClient):
             AccessToken: A valid Access Token to authorize requests
         """
         if self._token is None or force_new or self._token.expired:
-            response = self._http_request('POST', '/access_token/', params={'secret_key': self._secret})
+            response = self._http_request('POST', '/access_token/', data={'secret_key': self._secret})
             token = response.get('data', {}).get('access_token')
             expiration = response.get('data', {}).get('expiration_utc')
-            self._token = AccessToken(token, dateparser.parse(expiration))
+            expiration_date = dateparser.parse(expiration)
+            assert expiration_date is not None, f'failed parsing {expiration}'
+
+            self._token = AccessToken(token, expiration_date)
         return self._token
 
     def search_by_aql_string(self,
@@ -132,8 +129,9 @@ class Client(BaseClient):
         if alert_id:
             aql_string.append(f'alertId:({alert_id})')
 
-        aql_string = ' '.join(aql_string)
-        return self.search_by_aql_string(aql_string, order_by=order_by, max_results=max_results, page_from=page_from)
+        aql_string = ' '.join(aql_string)  # type: ignore
+        return self.search_by_aql_string(aql_string, order_by=order_by, max_results=max_results,
+                                         page_from=page_from)  # type: ignore
 
     def free_string_search_alerts(self, aql_string: str,
                                   order_by: str = None,
@@ -236,8 +234,8 @@ class Client(BaseClient):
             risk_level_string = ','.join([risk_level_option for risk_level_option in risk_level])
             aql_string.append(f'riskLevel:{risk_level_string}')
 
-        aql_string = ' '.join(aql_string)
-        return self.search_by_aql_string(aql_string, order_by=order_by, max_results=max_results)
+        aql_string = ' '.join(aql_string)  # type: ignore
+        return self.search_by_aql_string(aql_string, order_by=order_by, max_results=max_results)  # type: ignore
 
     def free_string_search_devices(self, aql_string: str, order_by: str = None, max_results: int = None):
         """
@@ -324,13 +322,24 @@ def fetch_incidents(client: Client,
     """
     # Get the last fetch time, if exists
     last_fetch = last_run.get('last_fetch')
+    latest_alert_fetch = last_run.get('latest_alert_fetch')
+    if latest_alert_fetch:
+        latest_alert_fetch_date = dateparser.parse(latest_alert_fetch)
+        assert latest_alert_fetch_date is not None
+        latest_alert_fetch = _ensure_timezone(latest_alert_fetch_date)
     incomplete_fetches = last_run.get('incomplete_fetches', 0)
 
     # Handle first time fetch
     if last_fetch:
-        last_fetch = _ensure_timezone(dateparser.parse(last_fetch))
+        last_fetch_date = dateparser.parse(last_fetch)
+        assert last_fetch_date is not None, f'failed parsing {last_fetch}'
+
+        last_fetch = _ensure_timezone(last_fetch_date)
     else:
-        last_fetch = _ensure_timezone(dateparser.parse(first_fetch_time))
+        last_fetch_time_date = dateparser.parse(first_fetch_time)
+        assert last_fetch_time_date is not None
+        last_fetch = _ensure_timezone(last_fetch_time_date)
+
     # use the last fetch time to build a time frame in which to search for alerts.
     time_frame = _create_time_frame_string(last_fetch)
 
@@ -364,7 +373,14 @@ def fetch_incidents(client: Client,
         )
 
     for alert in data.get('results', []):
-        incident_created_time = dateparser.parse(alert.get('time'))
+        time_date = dateparser.parse(alert.get('time'))
+        assert time_date is not None
+        incident_created_time = _ensure_timezone(time_date)
+
+        # Alert was already fetched. Skipping
+        if latest_alert_fetch and latest_alert_fetch >= incident_created_time:
+            continue
+
         incident = {
             'name': alert.get('description'),
             'occurred': incident_created_time.strftime('%Y-%m-%dT%H:%M:%SZ'),
@@ -374,17 +390,19 @@ def fetch_incidents(client: Client,
         incidents.append(incident)
 
         # Update last run and add incident if the incident is newer than last fetch
-        incident_created_time = _ensure_timezone(incident_created_time)
 
         if incident_created_time > latest_created_time:
             latest_created_time = incident_created_time
 
+    latest_alert_fetch_iso_format = latest_created_time.isoformat()
     if data.get('next'):
         # if more than max_results alerts were returned, this fetch is incomplete and the extra results must be fetched
         # next time
-        next_run = {'last_fetch': last_fetch.strftime(DATE_FORMAT), 'incomplete_fetches': incomplete_fetches + 1}
+        next_run = {'last_fetch': last_fetch.isoformat(), 'incomplete_fetches': incomplete_fetches + 1,
+                    'latest_alert_fetch': latest_alert_fetch_iso_format}
     else:
-        next_run = {'last_fetch': latest_created_time.strftime(DATE_FORMAT), 'incomplete_fetches': 0}
+        next_run = {'last_fetch': latest_alert_fetch_iso_format, 'incomplete_fetches': 0,
+                    'latest_alert_fetch': latest_alert_fetch_iso_format}
     return next_run, incidents
 
 
@@ -517,12 +535,18 @@ def search_devices_command(client: Client, args: dict):
     if results:
         headers = [
             'riskLevel',
+            'id',
             'name',
             'type',
             'ipAddress',
+            'ipv6',
+            'macAddress',
+            'operatingSystem',
+            'operatingSystemVersion',
+            'manufacturer',
+            'model',
             'tags',
-            'user',
-            'id',
+            'user'
         ]
         return CommandResults(
             outputs_prefix='Armis.Device',
@@ -620,6 +644,8 @@ def main():
 
     # get the service API url
     base_url = params.get('url')
+    if 'api/v1' not in base_url:
+        base_url = urljoin(base_url, '/api/v1/')
     verify = not params.get('insecure', False)
 
     # How much time before the first fetch to retrieve incidents
@@ -680,7 +706,6 @@ def main():
 
     # Log exceptions
     except Exception as e:
-        demisto.error(traceback.format_exc())
         return_error(f'Failed to execute {command} command. Error: {str(e)}')
 
 

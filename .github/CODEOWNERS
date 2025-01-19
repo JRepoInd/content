@@ -1,42 +1,97 @@
-# Marketplace Related
-/Tests/Marketplace/approved_tags.json @demisto/content-leaders @michalgold
-/Tests/Marketplace/approved_usecases.json @demisto/content-leaders @michalgold
-/Tests/Marketplace/landingPage_sections.json @demisto/content-leaders @michalgold
+# Marketplace Related - Marketplace PMs only
+/Config/approved_tags.json @yaakovpraisler @bakatzir @GuyLibermanPA @demisto/content-leaders
+/Config/approved_usecases.json @yaakovpraisler @bakatzir @GuyLibermanPA @demisto/content-leaders
+/Tests/Marketplace/landingPage_sections.json @yaakovpraisler @bakatzir @GuyLibermanPA @demisto/content-leaders
+/Config/approved_categories.json @yaakovpraisler @bakatzir @GuyLibermanPA @demisto/content-leaders
+/Config/core_packs_list.json @yaakovpraisler @bakatzir @GuyLibermanPA @demisto/content-leaders
+/Config/core_packs_mpv2_list.json @yaakovpraisler @bakatzir @GuyLibermanPA @demisto/content-leaders
+/Config/corepacks_override.json @yaakovpraisler
 
-# Marketplace & Upload-Flow
-/Tests/Marketplace/upload_git_snapshot.py @guyfreund
-/Tests/Marketplace/install_packs.sh @guyfreund
-/Tests/Marketplace/configure_and_install_packs.py @guyfreund
-/Tests/Marketplace/copy_and_upload_packs.py @guyfreund
-/Tests/Marketplace/marketplace_services.py @guyfreund
-/Tests/Marketplace/marketplace_statistics.py @guyfreund
-/Tests/Marketplace/marketplace_constants.py @guyfreund
-/Tests/Marketplace/zip_packs.py @guyfreund
-/Tests/Marketplace/upload_packs.py @guyfreund
-/Tests/Marketplace/packs_dependencies.py @guyfreund
-/Tests/Marketplace/search_and_install_packs.py @guyfreund
-/Tests/scripts/prepare_content_packs_for_testing.sh @guyfreund
-/Utils/trigger_test_upload_flow.sh @guyfreund
-/Utils/trigger_upload_packs_to_production.sh @guyfreund
+# Docker native image
+/Tests/docker_native_image_config.json @JudahSchwartz @shmuel44
+
+# Test Collection
+/Tests/conf.json @sapirshuker
+
+# PANW Products
+/Packs/Palo_Alto_Networks_Enterprise_DLP/ @DeanArbel
+/Packs/PAN-OS/Integrations/ @jlevypaloalto
 
 # Important Integrations
-/Packs/Jira/Integrations/JiraV2/* @demisto/content-leaders
-/Packs/ServiceNow/Integrations/ServiceNowv2/* @demisto/content-leaders
-/Packs/EWS/Integrations/EWSv2/* @demisto/content-leaders
-/Packs/ArcSightESM/Integrations/ArcSightESMv2/* @demisto/content-leaders
-/Packs/QRadar/Integrations/QRadar_v2/* @demisto/content-leaders
-/Packs/Slack/Integrations/Slack/* @demisto/content-leaders
-/Packs/SplunkPy/Integrations/SplunkPy/* @demisto/content-leaders
-/Packs/Active_Directory_Query/Integrations/Active_Directory_Query/* @demisto/content-leaders
-/Packs/VirusTotal/Integrations/integration-VirusTotal_5.5.yml @demisto/content-leaders
-/Packs/VirusTotal/* @jochman
+/Packs/QRadar/Integrations/QRadar_v3/* @jbabazadeh
+/Packs/Slack/Integrations/* @amshamah419 @rshunim
+/Packs/SplunkPy/Integrations/SplunkPy/* @ilappe
+/Packs/MicrosoftExchangeOnPremise/Integrations @amshamah419
+/Packs/MicrosoftExchangeOnline/Integrations @amshamah419 @thefrieddan1
+/Packs/ContentManagement/* @adi88d
+/Packs/TAXIIServer/Integrations/TAXII2Server/* @Ni-Knight
+/Packs/FeedTAXII/Integrations/FeedTAXII2/* @Ni-Knight
+/Packs/rasterize/Integrations/rasterize/* @ilaredo
 
 # Important Scripts
-/Packs/CommonScripts/Scripts/SetGridField/* @yaakovi
-/Packs/CommonScripts/Scripts/SearchIncidentsV2/* @demisto/content-leaders
+/Packs/CommonScripts/Scripts/SetGridField/* @altmannyarden
+/Packs/CommonScripts/Scripts/ParseEmailFiles/* @moishce
+/Packs/ApiModules/Scripts/MicrosoftApiModule @michal-dagan
+/Packs/ApiModules/Scripts/MicrosoftGraphMailApiModule @michal-dagan
+/Packs/ApiModules/Scripts/TAXII2ApiModule/* @Ni-Knight
+/Packs/CommonScripts/Scripts/StixCreator/* @Ni-Knight
 
-# Build related
-.circleci/config.yml @avidan-H @DinaMeylakh
-.gitlab/ci/* @avidan-H @DinaMeylakh
-.gitlab/* @avidan-H @DinaMeylakh
-.gitlab-ci.yml @avidan-H @DinaMeylakh
+# Common Packs
+/Packs/CommonTypes/ @altmannyarden @idovandijk
+/Packs/CommonPlaybooks/ @altmannyarden @idovandijk
+/Packs/CommonDashboards/ @altmannyarden @idovandijk
+/Packs/ContentManagement/ @mmhw
+/Packs/CommonTypes/IndicatorTypes/* @Ni-Knight
+/Packs/CommonTypes/Layouts/* @Ni-Knight
+
+# Indicators Formatters
+/Packs/CommonScripts/Scripts/ExtractDomainAndFQDNFromUrlAndEmail/* @Ni-Knight
+/Packs/CommonScripts/Scripts/FormatURL/* @Ni-Knight
+/Packs/CommonScripts/Scripts/ExtractAttackPattern/* @Ni-Knight
+/Packs/CommonScripts/Scripts/VerifyCIDR/* @Ni-Knight
+/Packs/CommonScripts/Scripts/VerifyIPv6Indicator/* @Ni-Knight
+/Packs/CommonScripts/Scripts/ExtractEmailV2/* @Ni-Knight
+/Packs/CommonScripts/Scripts/UnEscapeIPs/* @Ni-Knight
+
+# SDK Related
+.pre-commit-config_template.yaml @SamuelFain @YuvHayun
+validation_config.toml @YuvHayun
+
+# XDR Related
+/Packs/CortexXDR/Integrations/ @tcarmeli1
+/Packs/Core/Integrations/ @tcarmeli1
+/Packs/ApiModules/Scripts/CoreIRApiModule/* @tcarmeli1
+
+# Demisto Class
+Packs/ApiModules/Scripts/DemistoClassApiModule/DemistoClassApiModule.py @dantavori
+
+# TIM Related
+/Packs/TAXIIServer/Integrations/* @MLainer1
+/Packs/FeedTAXII/Integrations/* @MLainer1
+/Packs/EDL/Integrations/* @MLainer1
+/Packs/FeedJSON/Integrations/* @MLainer1
+/Packs/FeedMitreAttackv2/* @MLainer1
+/Packs/ApiModules/Scripts/TAXII2ApiModule/* @MLainer1
+/Packs/ApiModules/Scripts/NGINXApiModule/* @MLainer1
+
+# ML scripts
+/Packs/ML/ @jlevypaloalto
+/Packs/PhishingURL/ @jlevypaloalto
+/Packs/Phishing/Scripts/PhishingDedupPreprocessingRule @jlevypaloalto
+/Packs/Phishing/Scripts/FindDuplicateEmailIncidents @jlevypaloalto
+/Packs/Base/Scripts/DrawRelatedIncidentsCanvas@jlevypaloalto
+/Packs/Campaign/Scripts/FindEmailCampaign/ @jlevypaloalto
+/Packs/CortexXDR/Scripts/DBotGroupXDRIncidents/ @jlevypaloalto
+/Packs/CommonScripts/Scripts/DBotUpdateLogoURLPhishing/ @jlevypaloalto
+/Packs/Base/Scripts/FindSimilarIncidentsByText/ @jlevypaloalto
+/Packs/Base/Scripts/DBotTrainTextClassifierV2/ @jlevypaloalto
+/Packs/Base/Scripts/DBotShowClusteringModelInfo/ @jlevypaloalto
+/Packs/Base/Scripts/DBotPredictPhishingWords/ @jlevypaloalto
+/Packs/Base/Scripts/DBotFindSimilarIncidents/ @jlevypaloalto
+/Packs/Base/Scripts/DBotTrainClustering/ @jlevypaloalto
+/Packs/Base/Scripts/DBotBuildPhishingClassifier/ @jlevypaloalto
+/Packs/Base/Scripts/DBotPreprocessTextData/ @jlevypaloalto
+/Packs/Base/Scripts/DBotFindSimilarIncidentsByIndicators/ @jlevypaloalto
+/Packs/Base/Scripts/DBotSuggestClassifierMapping/ @jlevypaloalto
+/Packs/Base/Scripts/GetMLModelEvaluation/ @jlevypaloalto
+/Packs/Base/Scripts/DBotMLFetchData/ @jlevypaloalto

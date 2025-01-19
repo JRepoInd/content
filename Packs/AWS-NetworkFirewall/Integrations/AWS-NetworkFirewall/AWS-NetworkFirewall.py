@@ -16,14 +16,19 @@ urllib3.disable_warnings()
 
 
 """PARAMETERS"""
-AWS_DEFAULT_REGION = demisto.params().get('defaultRegion')
-AWS_ROLE_ARN = demisto.params().get('roleArn')
-AWS_ROLE_SESSION_NAME = demisto.params().get('roleSessionName')
-AWS_ROLE_SESSION_DURATION = demisto.params().get('sessionDuration')
+PARAMS = demisto.params()
+AWS_DEFAULT_REGION = PARAMS.get('defaultRegion')
+AWS_ROLE_ARN = PARAMS.get('roleArn')
+AWS_ROLE_SESSION_NAME = PARAMS.get('roleSessionName')
+AWS_ROLE_SESSION_DURATION = PARAMS.get('sessionDuration')
 AWS_ROLE_POLICY = None
-AWS_ACCESS_KEY_ID = demisto.params().get('access_key')
-AWS_SECRET_ACCESS_KEY = demisto.params().get('secret_key')
-VERIFY_CERTIFICATE = not demisto.params().get('insecure', True)
+AWS_ACCESS_KEY_ID = PARAMS.get('credentials', {}).get('identifier') or PARAMS.get('access_key')
+AWS_SECRET_ACCESS_KEY = PARAMS.get('credentials', {}).get('password') or PARAMS.get('secret_key')
+VERIFY_CERTIFICATE = not PARAMS.get('insecure', True)
+AWS_STS_REGIONAL_ENDPOINTS = PARAMS.get('sts_regional_endpoint') or None
+if AWS_STS_REGIONAL_ENDPOINTS:
+    demisto.debug(f"Sets the environment variable AWS_STS_REGIONAL_ENDPOINTS={AWS_STS_REGIONAL_ENDPOINTS}")
+    os.environ["AWS_STS_REGIONAL_ENDPOINTS"] = AWS_STS_REGIONAL_ENDPOINTS.lower()
 proxies = handle_proxy(proxy_param_name='proxy', checkbox_default_value=False)
 config = Config(
     connect_timeout=1,
@@ -67,7 +72,7 @@ def parse_tag_field(tags_str):
             for f in tags_str.split(';'):
                 match = regex.match(f)
                 if match is None:
-                    demisto.log('could not parse field: %s' % (f,))
+                    demisto.debug('could not parse field: %s' % (f,))
                     continue
 
                 tags.append({
@@ -80,6 +85,7 @@ def parse_tag_field(tags_str):
 
 def aws_session(service='network-firewall', region=None, roleArn=None, roleSessionName=None,
                 roleSessionDuration=None, rolePolicy=None):
+    client = None
     kwargs = {}
     if roleArn and roleSessionName is not None:
         kwargs.update({
@@ -287,7 +293,7 @@ def create_firewall_policy_command(args):
     )
     kwargs = {
         "FirewallPolicyName": args.get("firewall_policy_name", None),
-        "FirewallPolicy": safe_load_json(args.get("firewall_policy_json",None)),
+        "FirewallPolicy": safe_load_json(args.get("firewall_policy_json", None)),
         "Description": args.get("description", None),
         "Tags": parse_tag_field(args.get("tags")),
 
@@ -692,7 +698,7 @@ def list_rule_groups_command(args):
     )
     kwargs = {
         "NextToken": args.get("next_token", None),
-        "MaxResults": args.get("max_results",None)
+        "MaxResults": args.get("max_results", None)
     }
     kwargs = remove_empty_elements(kwargs)
     if args.get('raw_json') is not None and not kwargs:
@@ -1042,15 +1048,14 @@ def main():  # pragma: no cover
     args = demisto.args()
     human_readable = None
     outputs = None
+    response = None
     try:
         LOG('Command being called is {command}'.format(
             command=demisto.command()))
         if demisto.command() == 'test-module':
             # This is the call made when pressing the integration test button.
-            client = aws_session()
-            response = client.REPLACE_WITH_TEST_FUNCTION()
-            if response['ResponseMetadata']['HTTPStatusCode'] == 200:
-                demisto.results('ok')
+            response = list_firewalls_command(args)
+            demisto.results('ok')
 
         elif demisto.command() == 'aws-network-firewall-associate-firewall-policy':
             human_readable, outputs, response = associate_firewall_policy_command(

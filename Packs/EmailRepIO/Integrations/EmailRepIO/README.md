@@ -1,10 +1,7 @@
 EmailRep.io provides the reputation and reports for email addresses.
 This integration was integrated and tested with version EmailRep Alpha API v0.1 of EmailRep.io
-## Configure EmailRepIO on Cortex XSOAR
+## Configure EmailRepIO in Cortex
 
-1. Navigate to **Settings** > **Integrations** > **Servers & Services**.
-2. Search for EmailRepIO.
-3. Click **Add instance** to create and configure a new integration instance.
 
 | **Parameter** | **Description** | **Required** |
 | --- | --- | --- |
@@ -12,10 +9,10 @@ This integration was integrated and tested with version EmailRep Alpha API v0.1 
 | apikey | API Key | False |
 | insecure | Trust any certificate \(not secure\) | False |
 | proxy | Use system proxy settings | False |
+| Source Reliability | Reliability of the source providing the intelligence data. | False |
 
-4. Click **Test** to validate the URLs, token, and connection.
 ## Commands
-You can execute these commands from the Cortex XSOAR CLI, as part of an automation, or in a playbook.
+You can execute these commands from the CLI, as part of an automation, or in a playbook.
 After you successfully execute a command, a DBot message appears in the War Room with the command details.
 ### emailrepio-email-reputation-get
 ***
@@ -93,6 +90,7 @@ Gets the DBot score for the given email address using the EmailRepIO reputation.
 | DBotScore.Score | Number | The actual DBot score. | 
 | DBotScore.Type | String | The indicator type. | 
 | DBotScore.Vendor | String | The vendor used to calculate the score. | 
+| DBotScore.Reliability | String | Reliability of the source providing the intelligence data. | 
 | EmailRepIO.Email.email | String | email address that was queried | 
 | EmailRepIO.Email.reputation | String | The reputation of the email. Possible values are: "high", "medium", "low", and "none". | 
 | EmailRepIO.Email.suspicious | Boolean | Whether the email address should be treated as suspicious or risky. | 
@@ -151,5 +149,4 @@ There is no context output for this command.
 
 #### Command Example
 ```!emailrepio-email-address-report email_address="test@example.com" tags="spam"```
-
 

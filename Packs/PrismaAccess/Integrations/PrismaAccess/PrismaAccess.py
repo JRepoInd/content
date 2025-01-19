@@ -1,12 +1,12 @@
+import demistomock as demisto  # noqa: F401
+from CommonServerPython import *  # noqa: F401
 import json
 import sys
 from base64 import b64encode
-from typing import Any, Dict
+from typing import Any
 
 import requests
 
-import demistomock as demisto
-from CommonServerPython import *
 from netmiko import Netmiko
 
 ''' Common setup '''
@@ -49,6 +49,7 @@ def panos_connect(net_connect: Netmiko = None):
 
 
 def panos_ssh(cmd: str, net_connect: Netmiko = None):
+    result_cmd = ''
     if sshConfigured:
         """
         Run any command
@@ -58,11 +59,16 @@ def panos_ssh(cmd: str, net_connect: Netmiko = None):
         try:
             if not net_connect:
                 net_connect = Netmiko(**panos)
-            result_cmd = net_connect.send_command_timing(cmd)
+                # Sometimes returns "debug", and will not wait for results
+                result_cmd = net_connect.send_command_timing(cmd)
+
+                # This command ensures the first has finished
+                result_cmd += net_connect.send_command_timing("\n")
         finally:
             if net_connect:
                 net_connect.disconnect()
-        return result_cmd
+                # Remove newlines and carriage returns
+        return result_cmd.replace('\n', ' ').replace('\r', '')
     else:
         raise Exception('You must configure the SSH integration parameters to use this command.')
 
@@ -87,7 +93,7 @@ def prisma_access_cli_command():
 
 def prisma_access_query():
     query = demisto.args().get('query')
-    cmd = 'debug plugins cloud_services gpcs query {}'.format(query)
+    cmd = f'debug plugins cloud_services gpcs query {query}'
     sshRes = panos_ssh(cmd)
     jsonStartPos = sshRes.find('{"@status')
     if jsonStartPos < 0:
@@ -107,7 +113,7 @@ def prisma_access_query():
 
 def prisma_access_active_users():
     limit = demisto.args().get('limit', 20)
-    cmd = 'debug plugins cloud_services gpcs query querystring limit={} action getGPaaSActiveUsers'.format(limit)
+    cmd = f'debug plugins cloud_services gpcs query querystring limit={limit} action getGPaaSActiveUsers'
     sshRes = panos_ssh(cmd)
     jsonStartPos = sshRes.find('{"@status')
     if jsonStartPos < 0:
@@ -129,13 +135,13 @@ def prisma_access_active_users():
 
 
 # disable insecure warnings
-requests.packages.urllib3.disable_warnings()
+requests.packages.urllib3.disable_warnings()  # type: ignore[attr-defined]  # pylint: disable=no-member
 
 ''' GLOBALS '''
 apiConfigured = False
 
 # Others are not mandatory as user may choose to only use XML API commands and not SSH
-KEY = demisto.params().get('key', {})
+KEY = secret_key = demisto.params().get('credentials_key', {}).get('password') or demisto.params().get('key', {})
 PORT = demisto.params().get('port')
 
 # Does user intend to leverage SSH commands
@@ -212,11 +218,10 @@ PAN_OS_ERROR_DICT = {
 
 class PAN_OS_Not_Found(Exception):
     """ PAN-OS Error. """
-    pass
 
 
-def http_request(uri: str, method: str, headers: Dict = {},
-                 body: Dict = {}, params: Dict = {}, files=None) -> Any:
+def http_request(uri: str, method: str, headers: dict = {},
+                 body: dict = {}, params: dict = {}, files=None) -> Any:
     """
     Makes an API call with the given arguments
     """
@@ -225,7 +230,7 @@ def http_request(uri: str, method: str, headers: Dict = {},
         uri,
         headers=headers,
         data=body,
-        verify=USE_SSL,
+        verify=USE_SSL,  # pylint: disable=E0606
         params=params,
         files=files
     )
@@ -322,11 +327,11 @@ def prisma_access_test():
             params = {
                 'type': 'op',
                 'cmd': '<show><system><info></info></system></show>',
-                'key': API_KEY
+                'key': API_KEY  # pylint: disable=E0606
             }
 
             http_request(
-                URL,
+                URL,  # pylint: disable=E0606
                 'GET',
                 params=params
             )
@@ -387,16 +392,28 @@ def device_group_test():
 
 
 @logger
-def prisma_access_logout_user(computer: str, domain: str, user: str) -> Dict[str, str]:
+def prisma_access_logout_user(computer: str, domain: str, user: str, tenant: str) -> dict[str, str]:
     if apiConfigured:
         xmlComputer = '<computer>%s</computer>' % b64encode(computer.encode('utf8')).decode('utf8') if computer else ''
         b64User = (b64encode(user.encode('utf8'))).decode('utf8')
+        cmd = ''
+        if domain:
+            cmd = '''<request><plugins><cloud_services><gpcs>
+                  <logout_mobile_user><gateway>{}<domain>{}</domain><user>{}</user></gateway></logout_mobile_user>
+                  </gpcs></cloud_services></plugins></request>'''.format(xmlComputer, domain, b64User)
+        else:
+            cmd = '''<request><plugins><cloud_services><gpcs>
+                  <logout_mobile_user><gateway>{}<user>{}</user></gateway></logout_mobile_user>
+                  </gpcs></cloud_services></plugins></request>'''.format(xmlComputer, b64User)
+
+        if tenant:
+            tenant_entry = f"<multi-tenant><tenant-name><entry name='{tenant}'></entry></tenant-name>"
+            cmd = cmd.replace('<gpcs>', f'<gpcs>{tenant_entry}').replace('</logout_mobile_user>',
+                                                                         '</logout_mobile_user></multi-tenant>')
         params = {
             'type': 'op',
             'key': API_KEY,
-            'cmd': '''<request><plugins><cloud_services><gpcs>
-                    <logout_mobile_user><gateway>%s<domain>%s</domain><user>%s</user></gateway></logout_mobile_user>
-                    </gpcs></cloud_services></plugins></request>''' % (xmlComputer, domain, b64User)
+            'cmd': cmd
         }
         result = http_request(URL, 'GET', params=params)
         return result
@@ -408,8 +425,9 @@ def prisma_access_logout_user_command():
     computer = demisto.args().get('computer', '')
     domain = demisto.args().get('domain', '')
     user = demisto.args().get('user', '')
+    tenant = demisto.args().get('tenant_name', '')
 
-    result = prisma_access_logout_user(computer, domain, user)
+    result = prisma_access_logout_user(computer, domain, user, tenant)
 
     if 'result' in result['response'] and result['response']['@status'] == 'success':
         res = result['response'].get('result', '')

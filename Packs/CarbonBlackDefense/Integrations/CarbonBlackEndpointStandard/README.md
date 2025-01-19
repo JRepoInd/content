@@ -1,40 +1,79 @@
 VMware Carbon Black Endpoint Standard (formerly known as Carbon Black Defense) is a next-generation antivirus + EDR in one cloud-delivered platform that stops commodity malware, advanced malware, non-malware attacks, and ransomware.
 This integration was integrated and tested with version 1.1.2 of Carbon Black Endpoint Standard
 
-## The changes v1
-The old integration is deprecated because Carbon Black have released a new version of their API.
-The new integration supports new commands, Also added a Mapper and a Layout.
+## New Features in Carbon Black Endpoint Standard v2
+The Carbon Black Endpoint Standard v1 integration is deprecated because Carbon Black released a new version of their API. Use the Carbon Black Endpoint Standard v2 integration instead. The following are the new features in V2.
 
-## Configure Carbon Black Endpoint Standard on Cortex XSOAR
+### New Commands
 
-1. Navigate to **Settings** > **Integrations** > **Servers & Services**.
-2. Search for Carbon Black Endpoint Standard.
-3. Click **Add instance** to create and configure a new integration instance.
+The Carbon Black Endpoint Standard v2 integration supports the following new commands:
+* Operations on devices:
+    * [cbd-device-background-scan](#cbd-device-background-scan) Starts a background scan on a device by ID.
+    * [cbd-device-background-scan-stop](#cbd-device-background-scan-stop) Stops a background scan on a device by ID.
+    * [cbd-device-bypass](#cbd-device-bypass) Bypasses a device.
+    * [cbd-device-unbypass](#cbd-device-unbypass) Unbypasses a device.
+    * [cbd-device-policy-update](#cbd-device-policy-update) Updates the devices to the specified policy ID.
+    * [cbd-device-update-sensor-version](#cbd-device-update-sensor-version) Updates the version of a sensor.
+    * [cbd-device-quarantine](#cbd-device-quarantine) Quarantines the device.
+    * [cbd-device-unquarantine](#cbd-device-unquarantine) Unquarantines the device.
+* [cbd-alerts-search](#cbd-alerts-search) Retrieves all alerts using some arguments (query, ID, type, category) to filter the results.
+* [cbd-find-events-details](#cbd-find-events-details) Retrieves details for enriched events.
+* [cbd-find-events-details-results](#cbd-find-events-details-results) Retrieves the status for an enriched events detail request for a given job ID.
+* [cbd-find-events-results](#cbd-find-events-results) Retrieves the result for an enriched events search request for a given job ID.
+* [cbd-find-processes-results](#cbd-find-processes-results) Retrieves the results of a process search identified by the job ID.
 
-    | **Parameter** | **Description** | **Required** |
-    | --- | --- | --- |
-    | URL |  | True |
-    | Custom API Key | This Custom API key is required for all use cases except the policy use cases. | False |
-    | Custom API Secret Key | This Custom API secret key is required for all use cases except the policy use cases. | False |
-    | Live Response API Key | This Live Response API key is required only for the policy use cases. | False |
-    | Live Response API Secret Key | This Live Response API secret key is required only for the policy use cases. | False |
-    | Organization Key | The organization unique key. This is required for all use cases \(and for fetching incidents\) except the policy use cases. | False |
-    | Incident type |  | False |
-    | Fetch incidents |  | False |
-    | Trust any certificate (not secure) |  | False |
-    | Use system proxy settings |  | False |
-    | The type of the alert | Type of alert to be fetched. | False |
-    | The category of the alert. | Category of alert to be fetched \(THREAT, MONITORED\). If nothing is selected he is fetching from all categories. | False |
-    | Device id | The alerts related to a specific device, represented by its ID. | False |
-    | Policy id | The alerts related to a specific policy, represented by its ID. | False |
-    | Device username | The alerts related to a specific device, represented by its username. | False |
-    | Query | Query in Lucene syntax and/or value searches. | False |
-    | First fetch timestamp (&lt;number&gt; &lt;time unit&gt;, e.g., 12 hours, 7 days). |  | False |
-    | Maximum number of incidents per fetch |  | False |
+#### Deprecated Commands in Carbon Black Endpoint Standard v1
+The following commands from the Carbon Black Endpoint Standard v1 integration have been deprecated and replaced with the v2 commands as shown.
 
-4. Click **Test** to validate the URLs, token, and connection.
+| Deprecated Command | Replaced with v2 Commands | 
+| --- | --- |
+| cbd-get-device-status | [cbd-device-search](#cbd-device-search) |
+| cbd-get-devices-status | [cbd-device-search](#cbd-device-search) |
+| cbd-change-device-status | - [cbd-device-quarantine](#cbd-device-quarantine)<br/>- [cbd-device-unquarantine](#cbd-device-unquarantine)<br/>- [cbd-device-background-scan](#cbd-device-background-scan)<br/>- [cbd-device-background-scan-stop](#cbd-device-background-scan-stop)<br/>- [cbd-device-bypass](#cbd-device-bypass)<br/>- [cbd-device-unbypass](#cbd-device-unbypass)<br/>- [cbd-device-policy-update](#cbd-device-policy-update)<br/>- [cbd-device-update-sensor-version](#cbd-device-update-sensor-version) |
+| cbd-find-events | [cbd-find-events](#cbd-find-events) returns a *job_id* to use in the [cbd-find-events-results](#cbd-find-events-results) command as an argument. |
+| cbd-find-processes | [cbd-find-processes](#cbd-find-processes) returns a *job_id* to use in the [cbd-find-processes-results](#cbd-find-processes-results) command as an argument. |
+
+### Playbooks
+There are 3 new playbooks:
+* **Carbon Black Endpoint Standard Find Events** - Finds events using a search query (or device_id, etc.).
+* **Carbon Black Endpoint Standard Find Event Details** - Receives event IDs and returns details about the event.
+* **Carbon Black Endpoint Standard Find Processes** - Finds processes using a search query (or device_id, etc.).
+
+### Mapper
+**Carbon Black Endpoint Standard Mapper**.
+
+### Layout
+**Carbon Black Endpoint Standard Incoming Layout**.
+
+### Classifier
+**Carbon Black Endpoint Standard**
+
+## Configure Carbon Black Endpoint Standard in Cortex
+
+
+| **Parameter** | **Description** | **Required** |
+| --- | --- | --- |
+| URL |  | True |
+| Custom API Key | This Custom API key is required for all use cases except the policy use cases. | False |
+| Custom API Secret Key | This Custom API secret key is required for all use cases except the policy use cases. | False |
+| Live Response API Key | This Live Response API key is required only for the policy use cases. | False |
+| Live Response API Secret Key | This Live Response API secret key is required only for the policy use cases. | False |
+| Organization Key | The organization unique key. This is required for all use cases \(and for fetching incidents\) except the policy use cases. | False |
+| Incident type |  | False |
+| Fetch incidents |  | False |
+| Trust any certificate (not secure) |  | False |
+| Use system proxy settings |  | False |
+| The type of the alert | Type of alert to be fetched. | False |
+| The category of the alert. | Category of alert to be fetched \(THREAT, MONITORED\). If nothing is selected he is fetching from all categories. | False |
+| Device id | The alerts related to a specific device, represented by its ID. | False |
+| Policy id | The alerts related to a specific policy, represented by its ID. | False |
+| Device username | The alerts related to a specific device, represented by its username. | False |
+| Query | Query in Lucene syntax and/or value searches. | False |
+| First fetch timestamp (&lt;number&gt; &lt;time unit&gt;, e.g., 12 hours, 7 days). |  | False |
+| Maximum number of incidents per fetch |  | False |
+
 ## Commands
-You can execute these commands from the Cortex XSOAR CLI, as part of an automation, or in a playbook.
+You can execute these commands from the CLI, as part of an automation, or in a playbook.
 After you successfully execute a command, a DBot message appears in the War Room with the command details.
 ### cbd-get-alert-details
 ***
@@ -4371,4 +4410,3 @@ RBAC Permissions Required - org.alerts: READ
 >| 1234 | THREAT | 1234 | QA\win2k16-vg6-11 | jon@example.com | 2021-04-04T13:28:21.393Z |  | default | setup.exe | CB_ANALYTICS | 2 |
 >| 5678 | THREAT | 5678 | cb-komand-w12 | jon@example.com | 2021-04-04T13:28:06.812Z | ((netconn_port:5355 device_os:WINDOWS)) -enriched:true | default | svchost.exe | WATCHLIST | 1 |
 >| 9101 | THREAT | 9101 | BITGLASS-INC\Win10 | office@net.com | 2021-04-04T13:28:05.399Z | ((netconn_port:5355 device_os:WINDOWS)) -enriched:true | default | svchost.exe | WATCHLIST | 1 |
-

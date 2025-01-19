@@ -2,7 +2,7 @@ Proofpoint email security appliance.
 
 This integration was integrated and tested with the following versions of Proofpoint Protection Server:
 - Cloud 8.16.2
-- On-promise 8.14.2
+- On-premise 8.14.2
 
 ## Authentication
 An administrator must have a role that includes access to a specific REST API. 
@@ -21,22 +21,18 @@ The following are the required managed modules for this integration:
 
 The operations are accessed through port 10000.
 
-## Configure Proofpoint Protection Server v2 on Cortex XSOAR
+## Configure Proofpoint Protection Server v2 in Cortex
 
-1. Navigate to **Settings** > **Integrations** > **Servers & Services**.
-2. Search for Proofpoint Protection Server v2.
-3. Click **Add instance** to create and configure a new integration instance.
 
-    | **Parameter** | **Description** | **Required** |
-    | --- | --- | --- |
-    | url | Server URL (e.g., `https://xxxxxxxx.pphosted.com:10000`) | True |
-    | credentials | Username | True |
-    | unsecure | Trust any certificate \(not secure\) | False |
-    | proxy | Use system proxy settings | False |
+| **Parameter** | **Description** | **Required** |
+| --- | --- | --- |
+| url | Server URL (e.g., `https://xxxxxxxx.pphosted.com:10000`) | True |
+| credentials | Username | True |
+| unsecure | Trust any certificate \(not secure\) | False |
+| proxy | Use system proxy settings | False |
 
-4. Click **Test** to validate the URLs, token, and connection.
 ## Commands
-You can execute these commands from the Cortex XSOAR CLI, as part of an automation, or in a playbook.
+You can execute these commands from the CLI, as part of an automation, or in a playbook.
 After you successfully execute a command, a DBot message appears in the War Room with the command details.
 ### proofpoint-pps-smart-search
 ***
@@ -490,3 +486,133 @@ There is no context output for this command.
 
 
 
+### proofpoint-pps-get-user
+***
+Gets the end user resource with the specified email address or UID.
+
+
+#### Base Command
+
+`proofpoint-pps-get-user`
+#### Input
+
+| **Argument Name** | **Description** | **Required** |
+| --- | --- | --- |
+| email | Email address of the user. | Optional | 
+| uid | UID of the user. | Optional | 
+
+
+#### Context Output
+
+| **Path** | **Type** | **Description** |
+| --- | --- | --- |
+| Proofpoint.User.alias | unknown | List of aliases for the enduser. | 
+| Proofpoint.User.attributes | unknown | All attributes for this user profile. The value of these attributes is calculated based on the Organization, Sub-Org/Group membership and Profile settings. For a description of these attributes, see the table at the end of this document. | 
+| Proofpoint.User.blocklist | unknown | List of all block list entries for the enduser. | 
+| Proofpoint.User.created | unknown | Timestamp when profile was created \(in UTC\). | 
+| Proofpoint.User.creationsource | unknown | Source for the profile creation \(see the table below\). | 
+| Proofpoint.User.email | unknown | Primary email address of the enduser. | 
+| Proofpoint.User.firstname | unknown | First name of enduser. | 
+| Proofpoint.User.groups | unknown | List of all the groups to which the user belongs. | 
+| Proofpoint.User.lastmodified | unknown | Timestamp when profile changes were made \(in UTC\). | 
+| Proofpoint.User.lastname | unknown | Last name of enduser. | 
+| Proofpoint.User.lastpasswordchange | unknown | Timestamp for the last password change. | 
+| Proofpoint.User.lastsignon | unknown | Timestamp for the last login by the end user. | 
+| Proofpoint.User.safelist | unknown | List of all safe list entries for the enduser. | 
+| Proofpoint.User.suborg | unknown | Defines the sub-organization to which this user profile belongs. | 
+| Proofpoint.User.type | unknown | 0=User 1=Mailing List | 
+| Proofpoint.User.uid | unknown | uid of the user. | 
+### proofpoint-pps-create-user
+***
+Creates a new end user resource with the specified email address.
+
+
+#### Base Command
+
+`proofpoint-pps-create-user`
+#### Input
+
+| **Argument Name** | **Description** | **Required** |
+| --- | --- | --- |
+| email | Email address of the user. | Required | 
+| fields | Request fields in JSON string format (e.g., firstname, lastname, addgroup). | Optional | 
+| attributes | Attributes in JSON string format. | Optional | 
+
+
+#### Context Output
+
+| **Path** | **Type** | **Description** |
+| --- | --- | --- |
+| Proofpoint.User.alias | unknown | List of aliases for the enduser. | 
+| Proofpoint.User.attributes | unknown | All attributes for this user profile. The value of these attributes is calculated based on the Organization, Sub-Org/Group membership and Profile settings. For a description of these attributes, see the table at the end of this document. | 
+| Proofpoint.User.blocklist | unknown | List of all block list entries for the enduser. | 
+| Proofpoint.User.created | unknown | Timestamp when profile was created \(in UTC\). | 
+| Proofpoint.User.creationsource | unknown | Source for the profile creation \(see the table below\). | 
+| Proofpoint.User.email | unknown | Primary email address of the enduser. | 
+| Proofpoint.User.firstname | unknown | First name of enduser. | 
+| Proofpoint.User.groups | unknown | List of all the groups to which the user belongs. | 
+| Proofpoint.User.lastmodified | unknown | Timestamp when profile changes were made \(in UTC\). | 
+| Proofpoint.User.lastname | unknown | Last name of enduser. | 
+| Proofpoint.User.lastpasswordchange | unknown | Timestamp for the last password change. | 
+| Proofpoint.User.lastsignon | unknown | Timestamp for the last login by the end user. | 
+| Proofpoint.User.safelist | unknown | List of all safe list entries for the enduser. | 
+| Proofpoint.User.suborg | unknown | Defines the sub-organization to which this user profile belongs. | 
+| Proofpoint.User.type | unknown | 0=User 1=Mailing List | 
+| Proofpoint.User.uid | unknown | uid of the user. | 
+### proofpoint-pps-modify-user
+***
+Modifies a user profile.
+
+
+#### Base Command
+
+`proofpoint-pps-modify-user`
+#### Input
+
+| **Argument Name** | **Description** | **Required** |
+| --- | --- | --- |
+| email | Email address of the user. | Optional | 
+| UID | UID of the user. | Optional | 
+| fields | Request fields in JSON string format (e.g., firstname, lastname, addgroup). | Optional | 
+| attributes | Attributes in JSON string format. | Optional | 
+
+
+#### Context Output
+
+| **Path** | **Type** | **Description** |
+| --- | --- | --- |
+| Proofpoint.User.alias | unknown | List of aliases for the enduser. | 
+| Proofpoint.User.attributes | unknown | All attributes for this user profile. The value of these attributes is calculated based on the Organization, Sub-Org/Group membership and Profile settings. For a description of these attributes, see the table at the end of this document. | 
+| Proofpoint.User.blocklist | unknown | List of all block list entries for the enduser. | 
+| Proofpoint.User.created | unknown | Timestamp when profile was created \(in UTC\). | 
+| Proofpoint.User.creationsource | unknown | Source for the profile creation \(see the table below\). | 
+| Proofpoint.User.email | unknown | Primary email address of the enduser. | 
+| Proofpoint.User.firstname | unknown | First name of enduser. | 
+| Proofpoint.User.groups | unknown | List of all the groups to which the user belongs. | 
+| Proofpoint.User.lastmodified | unknown | Timestamp when profile changes were made \(in UTC\). | 
+| Proofpoint.User.lastname | unknown | Last name of enduser. | 
+| Proofpoint.User.lastpasswordchange | unknown | Timestamp for the last password change. | 
+| Proofpoint.User.lastsignon | unknown | Timestamp for the last login by the end user. | 
+| Proofpoint.User.safelist | unknown | List of all safe list entries for the enduser. | 
+| Proofpoint.User.suborg | unknown | Defines the sub-organization to which this user profile belongs. | 
+| Proofpoint.User.type | unknown | 0=User 1=Mailing List | 
+| Proofpoint.User.uid | unknown | uid of the user. | 
+### proofpoint-pps-delete-user
+***
+Delete a user profile.
+
+
+#### Base Command
+
+`proofpoint-pps-delete-user`
+#### Input
+
+| **Argument Name** | **Description** | **Required** |
+| --- | --- | --- |
+| email | Email address of the user. | Optional | 
+| uid | UID of the user. | Optional | 
+
+
+#### Context Output
+
+There is no context output for this command.

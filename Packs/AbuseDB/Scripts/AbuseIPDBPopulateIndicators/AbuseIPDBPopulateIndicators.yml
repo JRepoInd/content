@@ -4,10 +4,9 @@ commonfields:
 name: AbuseIPDBPopulateIndicators
 script: ''
 type: python
-subtype: python2
+subtype: python3
 tags: []
-comment: Extracts blacklisted IP addresses from AbuseIPDB, and Populates Indicators
-  accordingly.
+comment: Extracts IP addresses on block lists from AbuseIPDB, and Populates Indicators accordingly.
 enabled: true
 args:
 - name: days
@@ -25,8 +24,8 @@ dependson:
   - '|||abuseipdb-get-blacklist'
   - Builtin|||createNewIndicator
 timeout: 900ns
-runonce: false
 runas: DBotWeakRole
 tests:
 - AbuseIPDB PopulateIndicators Test
 fromversion: 5.0.0
+dockerimage: demisto/python3:3.11.10.115186

@@ -1,9 +1,10 @@
+deprecated: true
 id: Dedup - Generic v3
 version: -1
 contentitemexportablefields:
   contentitemfields: {}
 name: Dedup - Generic v3
-description: "This playbook identifies duplicate incidents using one of the supported\
+description: "Deprecated. Use the `Dedup - Generic v4` playbook instead. This playbook identifies duplicate incidents using one of the supported\
   \ methods.\nSelect one of the following methods to identify duplicate incidents\
   \ in Cortex XSOAR.\n- ml: Machine learning model, which is trained mostly on phishing\
   \ incidents.\n-rules: Rules help identify duplicate incidents when the logic is\
@@ -494,8 +495,8 @@ tasks:
     task:
       id: 04d3848d-57da-47ab-827d-8950c9063c32
       version: -1
-      name: Is Demisto REST API enabled?
-      description: Checks whether the Demisto REST API integration is enabled.
+      name: Is Core REST API enabled?
+      description: Checks whether the Core REST API integration is enabled.
       type: condition
       iscommand: false
       brand: ""
@@ -521,7 +522,7 @@ tasks:
                       iscontext: true
                     right:
                       value:
-                        simple: Demisto REST API
+                        simple: Core REST API
                 - - operator: isEqualString
                     left:
                       value:
@@ -595,7 +596,7 @@ tasks:
     note: false
     timertriggers: []
     ignoreworker: false
-    skipunavailable: false
+    skipunavailable: true
     quietmode: 0
   "17":
     id: "17"

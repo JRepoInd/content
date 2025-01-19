@@ -1,5 +1,5 @@
 Analyze suspicious hashes, URLs, domains and IP addresses
-This integration was integrated and tested with version 1.0.0-oas3 of Maltiverse
+This integration was integrated and tested with version 1.1 of Maltiverse
 
 ## Use Cases
 ---
@@ -50,10 +50,10 @@ Checks the reputation of an IP address
 | --- | --- | --- |
 | IP.Address | String | The checked IP address | 
 | IP.Geo.Country | String | The country code of the IP address | 
-| IP.Malicious.Description | Unknown | Describes the reason for the IP to  be in the blacklist | 
-| IP.PositiveDetections | Number | The number of sources that positively reported the indicator as blacklist |
+| IP.Malicious.Description | Unknown | Describes the reason for the IP to  be in the block list | 
+| IP.PositiveDetections | Number | The number of sources that positively reported the indicator as block list |
 | IP.Tags | String | The type of indicator |  
-| IP.ThreatTypes | Unknown | A list with the description of the elements in the blacklist |  
+| IP.ThreatTypes | Unknown | A list with the description of the elements in the block list |  
 | DBotScore.Score | Number | The DBot score | 
 | DBotScore.Type | String | The type of indicator | 
 | DBotScore.Vendor | String | The vendor used to calculate the score | 
@@ -62,7 +62,7 @@ Checks the reputation of an IP address
 | Maltiverse.IP.Classification | Unknown | Qualitative maliciousness classification for an IoC. Possible values are malicious, suspicious, neutral and whitelisted | 
 | Maltiverse.IP.Blacklist.FirstSeen | Date | First time that the IoC has been seen | 
 | Maltiverse.IP.Blacklist.LastSeen | Date | Last time that the IoC has been seen | 
-| Maltiverse.IP.Blacklist.Description | String | Describes the reason for the IP to be in the blacklist | 
+| Maltiverse.IP.Blacklist.Description | String | Describes the reason for the IP to be in the block list | 
 | Maltiverse.IP.Blacklist.Source | String | The name of sources that reported the indicator | 
 | Maltiverse.IP.Tags | String | The type of indicator | 
 
@@ -71,11 +71,13 @@ Checks the reputation of an IP address
 ```!ip ip=8.8.8.8```
 
 ##### Human Readable Output
-![image](https://user-images.githubusercontent.com/61732335/79124252-98ce8000-7da4-11ea-9fdb-2534acebeeae.png)
+![image](../../doc_files/79124252-98ce8000-7da4-11ea-9fdb-2534acebeeae.png)
 
 ### 2. domain
 ---
 Checks the reputation of a Domain
+
+Notice: Submitting indicators using this command might make the indicator data publicly available. See the vendor’s documentation for more details.
 ##### Base Command
 
 `domain`
@@ -98,7 +100,7 @@ Checks the reputation of a Domain
 | Domain.TLD | Number | Top Level Domain of the hostname | 
 | Domain.ASName | String | Autonumous system name of the domain |
 | Domain.Tags | String | Attribute to label an IoC |  
-| Domain.ThreatTypes | Unknown | A list with the description of the elements in the blacklist |   
+| Domain.ThreatTypes | Unknown | A list with the description of the elements in the block list |   
 | DBotScore.Score | Number | The DBot score | 
 | DBotScore.Type | String | The type of indicator | 
 | DBotScore.Vendor | String | The vendor used to calculate the score | 
@@ -107,27 +109,26 @@ Checks the reputation of a Domain
 | Maltiverse.Domain.Classification | String | Qualitative maliciousness classification for an IoC. Possible value are malicious, suspicious, neutral and whitlist | 
 | Maltiverse.Domain.Blacklist.Firstseen | Date | First time that the IoC was seen | 
 | Maltiverse.Domain.Blacklist.LastSeen | Date | Last time that the IoC was seen | 
-| Maltiverse.Domain.Blacklist.Description | Unknown | Describes the reason for the domain to be in the blacklist | 
+| Maltiverse.Domain.Blacklist.Description | Unknown | Describes the reason for the domain to be in the block list | 
 | Maltiverse.Domain.Blacklist.Source | String | The name of sources that reported the indicator | 
 | Maltiverse.Domain.Tags | String | Attribute to label an IoC | 
 | Maltiverse.Domain.ModificationTime | Date | Date when the IoC was updated for the last time | 
 | Maltiverse.Domain.CreationTime | Date | Date when a IoC was inserted for the first time | 
-| Maltiverse.Domain.TLD | String | Top level domain of the hostname | 
-| Maltiverse.Domain.ResolvedIP.IP | String | Stores an IP that was resolved by the domain | 
-| Maltiverse.Domain.ResolvedIP.Timestamp | Date | Stores an timestamp when an IP address has been resolved by the domain | 
-
+| Maltiverse.Domain.TLD | String | Top level domain of the hostname |
 
 ##### Command Example
 ```!domain domain=google.com```
 
 ##### Human Readable Output
-![image](https://user-images.githubusercontent.com/61732335/79124344-ca474b80-7da4-11ea-8beb-cfeb362749c9.png)
+![image](../../doc_files/79124344-ca474b80-7da4-11ea-8beb-cfeb362749c9.png)
 
 
 
 ### 3. url
 ---
 Checks the reputation of an URL
+
+Notice: Submitting indicators using this command might make the indicator data publicly available. See the vendor’s documentation for more details.
 ##### Base Command
 
 `url`
@@ -145,11 +146,11 @@ Checks the reputation of an URL
 | **Path** | **Type** | **Description** |
 | --- | --- | --- |
 | URL.Data | String | The URL | 
-| URL.Malicious.Description | String | Describes the reason for the URL to be in the blacklist | 
+| URL.Malicious.Description | String | Describes the reason for the URL to be in the block list | 
 | URL.Malicious.Vendor | String | The vendor that sends the indicator for reputation check. | 
-| URL.PositiveDetections | Number | The number of sources that positively reported the indicator as blacklist | 
+| URL.PositiveDetections | Number | The number of sources that positively reported the indicator as block list | 
 | URL.Tags | String | Attribute to label an IoC |  
-| URL.ThreatTypes | Unknown | A list with the description of the elements in the blacklist |
+| URL.ThreatTypes | Unknown | A list with the description of the elements in the block list |
 | DBotScore.Score | Number | The DBot score | 
 | DBotScore.Type | String | The type of indicato | 
 | DBotScore.Vendor | String | The vendor used to calculate the score | 
@@ -158,7 +159,7 @@ Checks the reputation of an URL
 | Maltiverse.URL.Classification | String | Qualitative maliciousness classification for an IoC. Possible values are malicious, suspicious, neutral and whitelist | 
 | Maltiverse.URL.Blacklist.FirstSeen | Date | First time that the IoC has been seen | 
 | Maltiverse.URL.Blacklist.LastSeen | Date | Last time that the IoC was seen | 
-| Maltiverse.URL.Blacklist.Description | Date | Describes the reason for the URL to be in the blacklist | 
+| Maltiverse.URL.Blacklist.Description | Date | Describes the reason for the URL to be in the block list | 
 | Maltiverse.URL.Blacklist.Source | String | The name of sources that reported the indicator. | 
 | Maltiverse.URL.Tags | String | Attribute to label an IoC | 
 | Maltiverse.URL.ModificationTime | Date | Date when the IOC has been updated for the last time. | 
@@ -172,7 +173,7 @@ Checks the reputation of an URL
 ```!url url=https://dv-expert.org```
 
 ##### Human Readable Output
-![image](https://user-images.githubusercontent.com/61732335/79124473-0d092380-7da5-11ea-9db6-145daec1dae1.png)
+![image](../../doc_files/79124473-0d092380-7da5-11ea-9db6-145daec1dae1.png)
 
 
 
@@ -204,7 +205,7 @@ Check the reputation of a file
 | File.Type | String | Description of the file type based on its magic numbers | 
 | File.Path | String | The path of the file |
 | File.Tags | String | Attribute to label an IoC |  
-| File.ThreatTypes | Unknown | A list with the description of the elements in the blacklist |    
+| File.ThreatTypes | Unknown | A list with the description of the elements in the block list |    
 | DBotScore.Score | Number | The DBot score | 
 | DBotScore.Type | String | The type of indicator | 
 | DBotScore.Vendor | String | The vendor used to calculate the score | 
@@ -213,12 +214,12 @@ Check the reputation of a file
 | Maltiverse.File.Tags | String | Attribute to label an IOC | 
 | Maltiverse.File.Malicious.Vendor | String | For malicious files, the vendor that made the decision | 
 | Maltiverse.File.Malicious.Description | String | For malicious files, describes the reason for the file to be malicious | 
-| Maltiverse.File.PositiveDetections | Number | The number of sources that positively reported the indicator as blacklist. | 
+| Maltiverse.File.PositiveDetections | Number | The number of sources that positively reported the indicator as block list. | 
 | Maltiverse.File.Name | String | The file name | 
 | Maltiverse.File.Classification | String | Qualitative maliciousness classification for an IoC. Possible values are malicious, suspicious, neutral and whitelist | 
 | Maltiverse.File.Blacklist.FirstSeen | Date | First time that the IoC has been seen. | 
 | Maltiverse.File.Blacklist.LastSeen | Date | Last time that the IoC was seen | 
-| Maltiverse.File.Blacklist.Description | String | Describes the reason for the URL to be in the blacklist | 
+| Maltiverse.File.Blacklist.Description | String | Describes the reason for the URL to be in the block list | 
 | Maltiverse.File.Blacklist.Source | String | The name of sources that reported the indicator | 
 | Maltiverse.File.ModificationTime | Date | Date when the IOC has been updated for the last time | 
 | Maltiverse.File.CreationTime | Date | Date when a IOC has been inserted for the first time | 
@@ -232,7 +233,7 @@ Check the reputation of a file
 ```!file file=edb2f88c29844117cd74acf8bb357edf92487a1b142fe6f60b6ac5e15d2d718f```
 
 ##### Human Readable Output
-![image](https://user-images.githubusercontent.com/61732335/79423383-30abb400-7fc7-11ea-8fd5-4b8d3574d953.png)
+![image](../../doc_files/79423383-30abb400-7fc7-11ea-8fd5-4b8d3574d953.png)
 
 
 ## Additional Information

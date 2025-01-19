@@ -1,7 +1,7 @@
 
 
 URL_RES_JSON = {
-    'results': [{'confidence': 50, 'display_text': 'http://www.malware.com',
+    'results': [{'confidence': 50, 'display_text': 'http://www.malware.com/path',
                  'files': [{'confidence': 50, 'display_text': '934a72f37d861097c85dc3c2e16bca3c',
                             'key': '934a72f37d861097c85dc3c2e16bca3c', 'last_seen': '2020-10-07T20:26:30.000Z',
                             'relationship': 'contactsC2At', 'relationship_created_on': '2020-10-07T20:04:51.000Z',
@@ -28,7 +28,7 @@ URL_RES_JSON = {
                             'sha256': 'bc75daf4592c8aace308f72a6393927e2ae174784cbdaba1b6b641b60aa2c84d',
                             'href': '/rest/fundamental/v0/b96a5814-bf98-4ad9-9980-7632f5c6a20f'}],
                  'index_timestamp': '2020-10-26T09:29:54.600Z',
-                 'key': 'http://www.malware.com',
+                 'key': 'http://www.malware.com/path',
                  'last_modified': '2020-10-18T15:25:00.000Z',
                  'last_published': '2020-10-05T23:51:53.000Z', 'last_seen': '2020-10-06T00:59:33.000Z',
                  'last_seen_as': ['MALWARE_C2'], 'malware_family': ['JavaScript Downloader'],
@@ -45,6 +45,26 @@ URL_RES_JSON = {
                  'type': 'url',
                  'uuid': '60a2ef03-8650-490b-9542-0f8cc21e5c6d',
                  'arguments': [], 'path': ['nuklyuql']}], 'total_size': 1, 'page': 1, 'page_size': 25, 'more': False}
+
+URL_INTEL_JSON = {'results': [
+    {
+        'key': 'http://www.malware.com/path',
+        'title': 'my intelligence alert',
+        'type': 'intelligence_alert',
+        'uuid': '60a2ef03-8650-490b-9542-0f8cc21e5c6d'
+    },
+    {
+        'key': 'http://www.malware.com/path',
+        'title': 'my intelligence report',
+        'type': 'intelligence_report',
+        'uuid': '70a2ef03-8650-490b-9542-0f8cc21e5c6d'
+    }
+],
+    'total_size': 2,
+    'page': 1,
+    'page_size': 25,
+    'more': False
+}
 
 IP_RES_JSON = {
     'results':
@@ -65,6 +85,7 @@ IP_RES_JSON = {
           'key': '0.0.0.0',
           'last_modified': '2020-10-08T20:55:58.000Z',
           'last_published': '2018-01-04T15:22:25.000Z',
+          'last_seen': '2020-10-06T00:59:33.000Z',
           'last_seen_as': ['MALWARE_DOWNLOAD', 'MALWARE_C2'],
           'malware_family': [], 'replication_id': 1602190558122000000,
           'severity': 4,
@@ -76,3 +97,95 @@ IP_RES_JSON = {
     'page': 1,
     'page_size': 25,
     'more': False}
+
+IP_INTEL_JSON = {'results': [
+    {
+        'key': '0.0.0.0',
+        'title': 'my intelligence alert',
+        'type': 'intelligence_alert',
+        'uuid': 'e5d40481-bea4-4d33-95d2-e029cff28084'
+    },
+    {
+        'key': '0.0.0.0',
+        'title': 'my intelligence report',
+        'type': 'intelligence_report',
+        'uuid': 'f5d40481-bea4-4d33-95d2-e029cff28084'
+    }
+],
+    'total_size': 2,
+    'page': 1,
+    'page_size': 25,
+    'more': False
+}
+
+DOMAIN_RES_JSON = {
+    'results': [
+        {
+            'confidence': 100,
+            'display_text': 'mydomain.com',
+            'key': 'mydomain.com',
+            'last_published': '2021-08-12T19:12:58.000Z',
+            'last_seen': '2020-10-06T00:59:33.000Z',
+            'last_seen_as': [
+                'MALWARE_C2'
+            ],
+            'malware_family': [
+                'CobaltStrike'
+            ],
+            'severity': 3,
+            'threat_types': [
+                'Cyber Espionage',
+                'Cyber Crime'
+            ],
+            'type': 'domain',
+            'uuid': '461b5ba2-d4fe-4b5c-ac68-35b6636c6edf'
+        }
+    ],
+    'total_size': 1,
+    'page': 1,
+    'page_size': 25,
+    'more': False
+}
+
+DOMAIN_INTEL_JSON = {'results': [
+    {
+        'key': 'mydomain.com',
+        'title': 'my intelligence alert',
+        'type': 'intelligence_alert',
+        'uuid': '461b5ba2-d4fe-4b5c-ac68-35b6636c6edf'
+    },
+    {
+        'key': 'mydomain.com',
+        'title': 'my intelligence report',
+        'type': 'intelligence_report',
+        'uuid': '561b5ba2-d4fe-4b5c-ac68-35b6636c6edf'
+    }
+],
+    'total_size': 2,
+    'page': 1,
+    'page_size': 25,
+    'more': False
+}
+
+
+
+UUID_RES_JSON={
+            'confidence': 100,
+            'display_text': 'mydomain.com',
+            'key': 'mydomain.com',
+            'last_published': '2021-08-12T19:12:58.000Z',
+            'last_seen': '2020-10-06T00:59:33.000Z',
+            'last_seen_as': [
+                'MALWARE_C2'
+            ],
+            'malware_family': [
+                'CobaltStrike'
+            ],
+            'severity': 3,
+            'threat_types': [
+                'Cyber Espionage',
+                'Cyber Crime'
+            ],
+            'type': 'domain',
+            'uuid': '461b5ba2-d4fe-4b5c-ac68-35b6636c6edf'
+        }

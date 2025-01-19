@@ -1,17 +1,19 @@
+import demistomock as demisto  # noqa: F401
+from CommonServerPython import *  # noqa: F401
+import re
 import ssl
+import email
 from datetime import timezone
-from typing import Any, Dict, Tuple, List, Optional
-
+from typing import Any
+from email.message import Message
 from dateparser import parse
-from mailparser import parse_from_bytes
+from mailparser import parse_from_bytes, parse_from_string
 from imap_tools import OR
 from imapclient import IMAPClient
-
-import demistomock as demisto
-from CommonServerPython import *
+from tempfile import NamedTemporaryFile
 
 
-class Email(object):
+class Email:
     def __init__(self, message_bytes: bytes, include_raw_body: bool, save_file: bool, id_: int) -> None:
         """
         Initialize Email class with all relevant data
@@ -27,13 +29,21 @@ class Email(object):
         except UnicodeDecodeError as e:
             demisto.info(f'Failed parsing mail from bytes: [{e}]\n{traceback.format_exc()}.'
                          '\nWill replace backslash and try to parse again')
-            message_bytes = message_bytes.replace(b'\\U', b'\\\\U').replace(b'\\u', b'\\\\u')
+            message_bytes = self.handle_message_slashes(message_bytes)
             email_object = parse_from_bytes(message_bytes)
+        except TypeError as e:
+            demisto.info(f'Failed parsing mail from bytes: [{e}]\n{traceback.format_exc()}.'
+                         '\nWill try to parse from string')
+            message_string = message_bytes.decode('ISO-8859-1')
+            email_object = parse_from_string(message_string)
+
+        eml_attachments = self.get_eml_attachments(message_bytes)
         self.id = id_
         self.to = [mail_addresses for _, mail_addresses in email_object.to]
         self.cc = [mail_addresses for _, mail_addresses in email_object.cc]
         self.bcc = [mail_addresses for _, mail_addresses in email_object.bcc]
         self.attachments = email_object.attachments
+        self.attachments.extend(eml_attachments)
         self.from_ = [mail_addresses for _, mail_addresses in email_object.from_][0]
         self.format = email_object.message.get_content_type()
         self.html = email_object.text_html[0] if email_object.text_html else ''
@@ -42,12 +52,80 @@ class Email(object):
         self.headers = email_object.headers
         self.raw_body = email_object.body if include_raw_body else None
         # According to the mailparser documentation the datetime object is in utc
-        self.date = email_object.date.replace(tzinfo=timezone.utc)
+        self.date = email_object.date.replace(tzinfo=timezone.utc) if email_object.date else None  # noqa: UP017
         self.raw_json = self.generate_raw_json()
         self.save_eml_file = save_file
         self.labels = self._generate_labels()
+        self.message_id = email_object.message_id
 
-    def _generate_labels(self) -> List[Dict[str, str]]:
+    @staticmethod
+    def get_eml_attachments(message_bytes: bytes) -> list:
+
+        def get_attachment_payload(part: Message) -> bytes:
+            """Returns the payload of the email attachment as bytes object"""
+            payload = part.get_payload(decode=False)
+            if isinstance(payload, list) and isinstance(payload[0], Message):
+                payload = payload[0].as_bytes()
+            elif isinstance(payload, str):
+                payload = payload.encode('utf-8')
+            else:
+                raise DemistoException(f'Could not parse the email attachment: {part.get_filename()}')
+
+            return payload
+
+        eml_attachments = []
+        msg = email.message_from_bytes(message_bytes)
+
+        if msg:
+            for part in msg.walk():
+                if part.get_content_maintype() == "multipart" or part.get("Content-Disposition") is None:
+                    continue
+
+                filename = part.get_filename()
+                if filename and filename.endswith('.eml'):
+                    eml_attachments.append({
+                        "filename": filename,
+                        "payload": get_attachment_payload(part),
+                        "binary": False,
+                        "mail_content_type": part.get_content_subtype(),
+                        "content-id": part.get('content-id'),
+                        "content-disposition": part.get('content-disposition'),
+                        "charset": part.get_content_charset(),
+                        "content_transfer_encoding": part.get_content_charset()})
+
+        return eml_attachments
+
+    @staticmethod
+    def handle_message_slashes(message_bytes: bytes) -> bytes:
+        """
+        Handles the case where message bytes containing backslashes  which needs escaping
+        Returns:
+            The message bytes after escaping
+        """
+
+        #   Input example # 1:
+        #       message_bytes = b'\\U'
+        #   Output example # 1 (added escaping for the slash):
+        #       b'\\\\U'
+        #
+        #   Input example # 2:
+        #       message_bytes = b'\\\\U'
+        #   Output example # 2 (no need to add escaping since the number of slashes is even):
+        #       b'\\\\U'
+
+        regex = re.compile(rb'\\+U', flags=re.IGNORECASE)
+
+        def escape_message_bytes(m):
+            s = m.group(0)
+            if len(s) % 2 == 0:
+                # The number of slashes prior to 'u' is odd - need to add one backslash
+                s = b'\\' + s
+            return s
+
+        message_bytes = regex.sub(escape_message_bytes, message_bytes)
+        return message_bytes
+
+    def _generate_labels(self) -> list[dict[str, str]]:
         """
         Generates the labels needed for the incident
         Returns:
@@ -73,7 +151,7 @@ class Email(object):
                            'value': ','.join([attachment['filename'] for attachment in self.attachments])})
         return labels
 
-    def parse_attachments(self) -> list:
+    def parse_attachments(self, output_to_warroom: bool = False) -> list:
         """
         Writes the attachments of the files and returns a list of file entry details.
         If self.save_eml_file is set, will also save the email itself as file
@@ -84,10 +162,16 @@ class Email(object):
         for attachment in self.attachments:
             payload = attachment.get('payload')
 
-            file_data = base64.b64decode(payload) if attachment.get('binary') else payload
+            try:
+                file_data = base64.b64decode(payload) if attachment.get('binary') else payload
+            except Exception as e:
+                file_data = payload
+                demisto.error(f'parse_attachments: Failed to decode the attachment data - {str(e)}')
 
             # save the attachment
-            file_result = fileResult(attachment.get('filename'), file_data, attachment.get('mail_content_type'))
+            file_result = fileResult(attachment.get('filename'), file_data)
+            if output_to_warroom:
+                demisto.results(file_result)
 
             # check for error
             if file_result['Type'] == entryTypes['error']:
@@ -105,23 +189,29 @@ class Email(object):
             })
         return files
 
-    def convert_to_incident(self) -> Dict[str, Any]:
+    def convert_to_incident(self) -> dict[str, Any]:
         """
         Convert an Email class instance to a demisto incident
         Returns:
             A dict with all relevant fields for an incident
         """
+        date = self.date
+        if not date:
+            demisto.info(f'Could not identify date for mail with ID {self.id}. Setting its date to be now.')
+            date = datetime.now(timezone.utc).isoformat()  # noqa: UP017
+        else:
+            date = self.date.isoformat()  # type: ignore[union-attr]
         return {
             'labels': self._generate_labels(),
-            'occurred': self.date.isoformat(),
-            'created': datetime.now(timezone.utc).isoformat(),
+            'occurred': date,
+            'created': datetime.now(timezone.utc).isoformat(),  # noqa: UP017
             'details': self.text or self.html,
             'name': self.subject,
             'attachment': self.parse_attachments(),
             'rawJSON': json.dumps(self.raw_json)
         }
 
-    def generate_raw_json(self, parse_attachments: bool = False) -> dict:
+    def generate_raw_json(self, parse_attachments: bool = False, output_to_warroom: bool = False) -> dict:
         """
 
         Args:
@@ -136,7 +226,7 @@ class Email(object):
             'format': self.format,
             'text': self.text,
             'subject': self.subject,
-            'attachments': self.parse_attachments() if parse_attachments else ','.join(
+            'attachments': self.parse_attachments(output_to_warroom) if parse_attachments else ','.join(
                 [attachment['filename'] for attachment in self.attachments]),
             'rawHeaders': self.parse_raw_headers(),
             'headers': remove_empty_elements(self.headers)
@@ -162,12 +252,13 @@ def fetch_incidents(client: IMAPClient,
                     last_run: dict,
                     first_fetch_time: str,
                     include_raw_body: bool,
+                    with_headers: bool,
                     permitted_from_addresses: str,
                     permitted_from_domains: str,
                     delete_processed: bool,
                     limit: int,
                     save_file: bool
-                    ) -> Tuple[dict, list]:
+                    ) -> tuple[dict | None, list]:
     """
     This function will execute each interval (default is 1 minute).
     The search is based on the criteria of the SINCE time and the UID.
@@ -187,6 +278,7 @@ def fetch_incidents(client: IMAPClient,
         last_run: The greatest incident created_time we fetched from last fetch
         first_fetch_time: If last_run is None then fetch all incidents since first_fetch_time
         include_raw_body: Whether to include the raw body of the mail in the incident's body
+        with_headers: Whether to add headers to the search query
         permitted_from_addresses: A string representation of list of mail addresses to fetch from
         permitted_from_domains: A string representation list of domains to fetch from
         delete_processed: Whether to delete processed mails
@@ -197,37 +289,49 @@ def fetch_incidents(client: IMAPClient,
         next_run: This will be last_run in the next fetch-incidents
         incidents: Incidents that will be created in Demisto
     """
-    uid_to_fetch_from = last_run.get('last_uid', 1)
-    time_to_fetch_from = parse(last_run.get('last_fetch', f'{first_fetch_time} UTC'), settings={'TIMEZONE': 'UTC'})
+    logger(fetch_incidents)
+    time_to_fetch_from = None
+    # First fetch - using the first_fetch_time
+    demisto.debug(f"{last_run=}")
+    if not last_run:
+        time_to_fetch_from = parse(f'{first_fetch_time} UTC', settings={'TIMEZONE': 'UTC'})
+        demisto.debug(f"no last_run, using {time_to_fetch_from=}")
+
+    # Otherwise use the mail UID
+    uid_to_fetch_from = arg_to_number(last_run.get('last_uid', 0))
     mails_fetched, messages, uid_to_fetch_from = fetch_mails(
         client=client,
         include_raw_body=include_raw_body,
         time_to_fetch_from=time_to_fetch_from,
         limit=limit,
+        with_headers=with_headers,
         permitted_from_addresses=permitted_from_addresses,
         permitted_from_domains=permitted_from_domains,
         save_file=save_file,
-        uid_to_fetch_from=uid_to_fetch_from
+        uid_to_fetch_from=uid_to_fetch_from     # type: ignore[arg-type]
     )
-    incidents = []
+    incidents: list = []
+    demisto.debug(f'fetched {len(incidents)} incidents')
     for mail in mails_fetched:
         incidents.append(mail.convert_to_incident())
         uid_to_fetch_from = max(uid_to_fetch_from, mail.id)
-    next_run = {'last_uid': uid_to_fetch_from}
+    next_run = {'last_uid': str(uid_to_fetch_from)} if uid_to_fetch_from != 0 else None
+    demisto.debug(f"{next_run=}")
     if delete_processed:
         client.delete_messages(messages)
     return next_run, incidents
 
 
 def fetch_mails(client: IMAPClient,
-                time_to_fetch_from: datetime = None,
+                time_to_fetch_from: datetime | None = None,
+                with_headers: bool = False,
                 permitted_from_addresses: str = '',
                 permitted_from_domains: str = '',
                 include_raw_body: bool = False,
                 limit: int = 200,
                 save_file: bool = False,
-                message_id: int = None,
-                uid_to_fetch_from: int = 1) -> Tuple[list, list, int]:
+                message_id: int | None = None,
+                uid_to_fetch_from: int = 0) -> tuple[list, list, int]:
     """
     This function will fetch the mails from the IMAP server.
 
@@ -235,6 +339,7 @@ def fetch_mails(client: IMAPClient,
         client: IMAP client
         time_to_fetch_from: Fetch all incidents since first_fetch_time
         include_raw_body: Whether to include the raw body of the mail in the incident's body
+        with_headers: Whether to add headers to the search query
         permitted_from_addresses: A string representation of list of mail addresses to fetch from
         permitted_from_domains: A string representation list of domains to fetch from
         limit: The maximum number of incidents to fetch each time, if the value is -1 all
@@ -248,64 +353,119 @@ def fetch_mails(client: IMAPClient,
         messages_fetched: A list of the ids of the messages fetched
         last_message_in_current_batch: The UID of the last message fetchedd
     """
+
+    if uid_to_fetch_from:
+        uid_to_fetch_from = int(uid_to_fetch_from)
+
     if message_id:
         messages_uids = [message_id]
+        demisto.debug("message_id provided, using it for message_uids")
     else:
         messages_query = generate_search_query(time_to_fetch_from,
+                                               with_headers,
                                                permitted_from_addresses,
                                                permitted_from_domains,
                                                uid_to_fetch_from)
-        demisto.debug(f'Searching for email messages with criteria: {messages_query}')
-        messages_uids = client.search(messages_query)[:limit]
-    mails_fetched = []
-    messages_fetched = []
+        demisto.debug(f'message_id not provided, using generated query {messages_query}')
+        messages_uids = client.search(messages_query)
+        # convert the uids to int in case one of them is str
+        messages_uids = [int(x) for x in messages_uids]
+
+        demisto.debug(f"client returned {len(messages_uids)} message ids: {messages_uids=}")
+
+        if len(messages_uids) > limit:  # If there's any reason to shorten the list
+            if uid_to_fetch_from == 0:
+                # first fetch takes last page only (workaround as first_fetch filter is date accurate)
+                messages_uids = messages_uids[-limit:]
+                demisto.debug(f"limiting to the LAST {limit=} messages since uid_to_fetch_from == 0")
+            else:
+                messages_uids = messages_uids[:limit]
+                demisto.debug(f"limiting to the first {limit=} messages")
+        demisto.debug(f"{messages_uids=}")
+
+    fetched_email_objects = []
     demisto.debug(f'Messages to fetch: {messages_uids}')
+
     for mail_id, message_data in client.fetch(messages_uids, 'RFC822').items():
+        demisto.debug(f"Starting to parse the mail with {mail_id=}")
         message_bytes = message_data.get(b'RFC822')
+        # For cases the message_bytes is returned as a string. If failed, will try to use the message_bytes returned.
+        try:
+            message_bytes = bytes(message_bytes)
+        except Exception as e:
+            demisto.debug(f"{mail_id=}: Converting to bytest failed. {message_data=}. Error: {e}")
+
         if not message_bytes:
+            demisto.debug(f"{mail_id=}: Skipping because did not managed to convert to bytes")
             continue
-        email_message_object = Email(message_bytes, include_raw_body, save_file, mail_id)
-        if (not time_to_fetch_from or time_to_fetch_from < email_message_object.date) and \
-                int(email_message_object.id) > int(uid_to_fetch_from):
-            mails_fetched.append(email_message_object)
-            messages_fetched.append(email_message_object.id)
+
+        try:
+            demisto.debug("Creating email object")
+            email_message_object = Email(message_bytes, include_raw_body, save_file, mail_id)
+            demisto.debug(f"{mail_id=}: Created email object.")
+        except Exception as e:
+            demisto.debug(f"{mail_id=}: Failed creating Email object, skipping. {message_data=}. Error: {e}")
+            continue
+
+        demisto.debug(f"{mail_id=}: Created email object successfully.")
+        # Add mails if the current email UID is higher than the previous incident UID
+        if int(email_message_object.id) > uid_to_fetch_from:
+            fetched_email_objects.append(email_message_object)
+            demisto.debug(f"{mail_id=}: Collecting {email_message_object.id=} since it's > {uid_to_fetch_from=}")
         else:
-            demisto.debug(f'Skipping {email_message_object.id} with date {email_message_object.date}. '
-                          f'uid_to_fetch_from: {uid_to_fetch_from}, first_fetch_time: {time_to_fetch_from}')
-    last_message_in_current_batch = uid_to_fetch_from
+            demisto.debug(f"{mail_id=}: Skipping {email_message_object.id=} since it's <= {uid_to_fetch_from=}."
+                          f"{email_message_object.date=}")
     if messages_uids:
-        last_message_in_current_batch = messages_uids[-1]
+        next_uid_to_fetch_from = max(messages_uids[-1], uid_to_fetch_from)
+        demisto.debug(f"messages_uids NOT empty, setting {next_uid_to_fetch_from=}")
+    else:
+        next_uid_to_fetch_from = uid_to_fetch_from
+        demisto.debug(f"messages_uids IS empty, setting {next_uid_to_fetch_from=}")
 
-    return mails_fetched, messages_fetched, last_message_in_current_batch
+    ids_fetched = [mail.id for mail in fetched_email_objects]
+    demisto.debug(f"fetched {len(fetched_email_objects)} emails, {ids_fetched=}")
+    return fetched_email_objects, ids_fetched, next_uid_to_fetch_from
 
 
-def generate_search_query(time_to_fetch_from: Optional[datetime],
+def generate_search_query(time_to_fetch_from: datetime | None,
+                          with_headers: bool,
                           permitted_from_addresses: str,
                           permitted_from_domains: str,
                           uid_to_fetch_from: int) -> list:
     """
     Generates a search query for the IMAP client 'search' method. with the permitted domains, email addresses and the
     starting date from which mail should be fetched.
-    Input example:
-    time_to_fetch_from: datetime.datetime(2020, 8, 7, 12, 14, 32, 918634, tzinfo=datetime.timezone.utc)
-    permitted_from_addresses: ['test1@mail.com', 'test2@mail.com']
-    permitted_from_domains: ['test1.com', 'domain2.com']
-    output example:
-    ['OR',
-     'OR',
-     'OR',
-     'FROM',
-     'test1@mail.com',
-     'FROM',
-     'test2@mail.com',
-     'FROM',
-     'test1.com',
-     'FROM',
-     'domain2.com',
-     'SINCE',
-     datetime.datetime(2020, 8, 7, 12, 14, 32, 918634, tzinfo=datetime.timezone.utc)]
+    Input example #1:
+        time_to_fetch_from: datetime.datetime(2020, 8, 7, 12, 14, 32, 918634, tzinfo=datetime.timezone.utc)
+        with_headers: True
+        permitted_from_addresses: ['test1@mail.com']
+        permitted_from_domains: ['test1.com']
+    output example #1:
+        ['OR',
+         'HEADER',
+         'FROM',
+         'test1.com',
+         'HEADER',
+         'FROM',
+         'test1@mail.com',
+         'SINCE',
+         datetime.datetime(2020, 8, 7, 12, 14, 32, 918634, tzinfo=datetime.timezone.utc)]
+    Input example #2:
+        time_to_fetch_from: datetime.datetime(2020, 8, 7, 12, 14, 32, 918634, tzinfo=datetime.timezone.utc)
+        with_headers: False
+        permitted_from_addresses: ['test1@mail.com']
+        permitted_from_domains: ['test1.com']
+    output example #2:
+        ['OR',
+         'FROM',
+         'test1.com',
+         'FROM',
+         'test1@mail.com',
+         'SINCE',
+         datetime.datetime(2020, 8, 7, 12, 14, 32, 918634, tzinfo=datetime.timezone.utc)]
     Args:
         time_to_fetch_from: The greatest incident created_time we fetched from last fetch
+        with_headers: Whether to add headers to the search query
         permitted_from_addresses: A string representation of list of mail addresses to fetch from
         permitted_from_domains: A string representation list of domains to fetch from
         uid_to_fetch_from: The email message UID to start the fetch from as offset
@@ -313,6 +473,7 @@ def generate_search_query(time_to_fetch_from: Optional[datetime],
     Returns:
         A list with arguments for the email search query
     """
+    logger(generate_search_query)
     permitted_from_addresses_list = argToList(permitted_from_addresses)
     permitted_from_domains_list = argToList(permitted_from_domains)
     messages_query = ''
@@ -320,6 +481,8 @@ def generate_search_query(time_to_fetch_from: Optional[datetime],
         messages_query = OR(from_=permitted_from_addresses_list + permitted_from_domains_list).format()
         # Removing Parenthesis and quotes
         messages_query = messages_query.strip('()').replace('"', '')
+        if with_headers:
+            messages_query = messages_query.replace('FROM', 'HEADER FROM')
     # Creating a list of the OR query words
     messages_query_list = messages_query.split()
     if time_to_fetch_from:
@@ -329,7 +492,7 @@ def generate_search_query(time_to_fetch_from: Optional[datetime],
     return messages_query_list
 
 
-def test_module(client: IMAPClient) -> str:
+def script_test_module(client: IMAPClient) -> str:
     yesterday = parse('1 day UTC')
     client.search(['SINCE', yesterday])
     return 'ok'
@@ -337,15 +500,19 @@ def test_module(client: IMAPClient) -> str:
 
 def list_emails(client: IMAPClient,
                 first_fetch_time: str,
+                with_headers: bool,
                 permitted_from_addresses: str,
-                permitted_from_domains: str) -> CommandResults:
+                permitted_from_domains: str,
+                _limit: int, ) -> CommandResults:
     """
     Lists all emails that can be fetched with the given configuration and return a preview version of them.
     Args:
         client: IMAP client
         first_fetch_time: Fetch all incidents since first_fetch_time
+        with_headers: Whether to add headers to the search query
         permitted_from_addresses: A string representation of list of mail addresses to fetch from
         permitted_from_domains: A string representation list of domains to fetch from
+        _limit: Upper limit as set in the integration params.
 
     Returns:
         The Subject, Date, To, From and ID of the fetched mails wrapped in command results object.
@@ -354,10 +521,12 @@ def list_emails(client: IMAPClient,
 
     mails_fetched, _, _ = fetch_mails(client=client,
                                       time_to_fetch_from=fetch_time,
+                                      with_headers=with_headers,
                                       permitted_from_addresses=permitted_from_addresses,
-                                      permitted_from_domains=permitted_from_domains)
+                                      permitted_from_domains=permitted_from_domains,
+                                      limit=_limit)
     results = [{'Subject': email.subject,
-                'Date': email.date.isoformat(),
+                'Date': email.date.isoformat() if email.date else datetime.now(timezone.utc).isoformat(),  # noqa: UP017
                 'To': email.to,
                 'From': email.from_,
                 'ID': email.id} for email in mails_fetched]
@@ -369,7 +538,7 @@ def list_emails(client: IMAPClient,
 
 def get_email(client: IMAPClient, message_id: int) -> CommandResults:
     mails_fetched, _, _ = fetch_mails(client, message_id=message_id)
-    mails_json = [mail.generate_raw_json(parse_attachments=True) for mail in mails_fetched]
+    mails_json = [mail.generate_raw_json(parse_attachments=True, output_to_warroom=True) for mail in mails_fetched]
     return CommandResults(outputs_prefix='MailListener.Email',
                           outputs_key_field='ID',
                           outputs=mails_json)
@@ -381,57 +550,114 @@ def get_email_as_eml(client: IMAPClient, message_id: int) -> dict:
     return mail_file[0] if mail_file else {}
 
 
-def main():
+def replace_spaces_in_credentials(credentials: str | None) -> str | None:
+    """
+    This function is used in case of credential from type: 9 is in the wrong format
+    of one line with spaces instead of multiple lines.
+
+    :param credentials: the credentials to replace spaces in.
+    :return: the credential with spaces replaced with new lines if the credential is in the correct format,
+             otherwise the credential will be returned as is.
+    """
+    if not credentials:
+        return credentials
+
+    return re.sub(
+        r'(?P<lseps>\s*)(?P<begin>-----BEGIN(.*?)-----)(?P<body>.*?)(?P<end>-----END(.*?)-----)(?P<tseps>\s*)',
+        lambda m: m.group('lseps').replace(' ', '\n')
+        + m.group('begin')
+        + m.group('body').replace(' ', '\n')
+        + m.group('end')
+        + m.group('tseps').replace(' ', '\n'),
+        credentials,
+        flags=re.DOTALL)
+
+
+def load_client_cert_and_key(ssl_context: ssl.SSLContext, params: dict[str, Any]) -> bool:
+    """ Load client certificates and private keys to the SSL context.
+
+    :param ssl_context: The SSL context to which client certs/keys will be loaded.
+    :param params: The integration parameters.
+    :return: True if certificates and private keys are loaded, otherwise False.
+    """
+    cred_params = params.get('clientCertAndKey') or {}
+    if cert_and_pkey_pem := cred_params.get('password'):
+        cert_and_pkey_pem = replace_spaces_in_credentials(cert_and_pkey_pem)
+    else:
+        cert_and_pkey_pem = demisto.get(cred_params, 'credentials.sshkey')
+        if not cert_and_pkey_pem:
+            # No client certificates and private keys
+            return False
+
+    # Load client certificates and private keys
+    with NamedTemporaryFile(mode='w') as pem_file:
+        pem_file.write(cert_and_pkey_pem)
+        pem_file.flush()
+        pem_file.seek(0)
+        ssl_context.load_cert_chain(certfile=pem_file.name, keyfile=None)
+        return True
+
+
+def main():     # pragma: no cover
     params = demisto.params()
     mail_server_url = params.get('MailServerURL')
-    port = int(params.get('port'))
+    port = arg_to_number(params.get('port'))
     folder = params.get('folder')
-    username = demisto.params().get('credentials').get('identifier')
-    password = demisto.params().get('credentials').get('password')
+    username = params.get('credentials').get('identifier')
+    password = params.get('credentials').get('password')
     verify_ssl = not params.get('insecure', False)
     tls_connection = params.get('TLS_connection', True)
-    include_raw_body = demisto.params().get('Include_raw_body', False)
-    permitted_from_addresses = demisto.params().get('permittedFromAdd', '')
-    permitted_from_domains = demisto.params().get('permittedFromDomain', '')
-    delete_processed = demisto.params().get("delete_processed", False)
-    limit = min(int(demisto.params().get('limit', '50')), 200)
-    save_file = params.get('save_file', False)
-    first_fetch_time = demisto.params().get('first_fetch', '3 days').strip()
+    include_raw_body = params.get('Include_raw_body', False)
+    permitted_from_addresses = params.get('permittedFromAdd', '')
+    permitted_from_domains = params.get('permittedFromDomain', '')
+    with_headers = params.get('with_headers')
+    delete_processed = params.get("delete_processed") or False
+    limit = arg_to_number(params.get('limit')) or 50
+    demisto.debug(f"{limit=}")
+    save_file = params.get('save_file') or False
+    first_fetch_time = (params.get('first_fetch') or '3 days').strip()
     ssl_context = ssl.create_default_context()
 
     args = demisto.args()
     if not verify_ssl:
         ssl_context.check_hostname = False
         ssl_context.verify_mode = ssl.CERT_NONE
-    LOG(f'Command being called is {demisto.command()}')
+    demisto.debug(f'Command being called is {demisto.command()}')
     try:
+        load_client_cert_and_key(ssl_context, params)
+
         with IMAPClient(mail_server_url, ssl=tls_connection, port=port, ssl_context=ssl_context) as client:
             client.login(username, password)
             client.select_folder(folder)
             if demisto.command() == 'test-module':
-                result = test_module(client)
-                demisto.results(result)
+                result = script_test_module(client)
+                return_results(result)
             elif demisto.command() == 'mail-listener-list-emails':
                 return_results(list_emails(client=client,
                                            first_fetch_time=first_fetch_time,
+                                           with_headers=with_headers,
                                            permitted_from_addresses=permitted_from_addresses,
-                                           permitted_from_domains=permitted_from_domains))
+                                           permitted_from_domains=permitted_from_domains,
+                                           _limit=limit))
             elif demisto.command() == 'mail-listener-get-email':
                 return_results(get_email(client=client,
-                                         message_id=args.get('message-id')))
+                                         message_id=arg_to_number(args.get('message-id')) or 0))
             elif demisto.command() == 'mail-listener-get-email-as-eml':
                 return_results(get_email_as_eml(client=client,
-                                                message_id=args.get('message-id')))
+                                                message_id=arg_to_number(args.get('message-id')) or 0))
             elif demisto.command() == 'fetch-incidents':
                 next_run, incidents = fetch_incidents(client=client, last_run=demisto.getLastRun(),
                                                       first_fetch_time=first_fetch_time,
                                                       include_raw_body=include_raw_body,
+                                                      with_headers=with_headers,
                                                       permitted_from_addresses=permitted_from_addresses,
                                                       permitted_from_domains=permitted_from_domains,
                                                       delete_processed=delete_processed, limit=limit,
                                                       save_file=save_file)
-
-                demisto.setLastRun(next_run)
+                demisto.debug(f"{next_run=}")
+                # if next_run is None, we will not update last_run
+                if next_run:
+                    demisto.setLastRun(next_run)
                 demisto.incidents(incidents)
     except Exception as e:
         return_error(f'Failed to execute {demisto.command()} command. Error: {str(e)}')

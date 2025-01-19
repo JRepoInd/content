@@ -1,10 +1,10 @@
 import json
 import pytest
 import requests
-import requests_mock
-import sys
-import io
 import demistomock as demisto
+from pytest_mock import MockerFixture
+from CommonServerPython import *
+from AutofocusV2 import Client
 
 IP_ADDRESS = '127.0.0.1'
 
@@ -202,15 +202,32 @@ TAGS_FOR_GENERIC_CONTEXT_OUTPUT = [
 
 @pytest.fixture(autouse=True)
 def init_tests(mocker):
-    params = {
-        'api_key': '1234'
-    }
+    params = {'api_key': '1234'}
     mocker.patch.object(demisto, 'params', return_value=params)
 
 
+@pytest.fixture
+def autofocusv2_client():
+    return Client(url='url', verify=False)
+
+
 def util_load_json(path):
-    with io.open(path, mode='r', encoding='utf-8') as f:
+    with open(path) as f:
         return json.loads(f.read())
+
+
+class ResMocker:
+    def __init__(self, http_response, status_code):
+        self.http_response = http_response
+        self.status_code = status_code
+        self.ok = False
+        self.headers = {}
+
+    def json(self):
+        return self.http_response
+
+    def raise_for_status(self):
+        return
 
 
 def test_parse_indicator_response():
@@ -235,24 +252,34 @@ def test_calculate_dbot_score_file():
     assert score == 3
 
 
-def test_connection_error(mocker):
+def test_connection_error(mocker, autofocusv2_client):
     import AutofocusV2
 
-    RETURN_ERROR_TARGET = 'AutofocusV2.return_error'
-    BASE_URL = 'https://autofocus.paloaltonetworks.com/api/v1.0'
+    def raise_connection_error(url_suffix, method, ok_codes, headers, params, data={}, err_operation=None):
+        assert url_suffix == '/tic'
+        assert method == 'GET'
+        assert headers == {
+            'Content-Type': 'application/json',
+            'apiKey': '1234'
+        }
+        assert params == {
+            'indicatorType': 'ip',
+            'indicatorValue': '8.8.8.8',
+            'includeTags': 'true',
+        }
+        assert ok_codes == (200, 404, 409, 503)
+        raise requests.exceptions.ConnectionError
 
-    return_error_mock = mocker.patch(RETURN_ERROR_TARGET, side_effect=sys.exit)
+    mocker.patch.object(autofocusv2_client, 'http_request', side_effect=raise_connection_error)
 
-    with requests_mock.Mocker() as m:
-        m.get(f'{BASE_URL}/tic', exc=requests.exceptions.ConnectionError)
-
-        with pytest.raises(SystemExit):
-            AutofocusV2.search_indicator('ip', '8.8.8.8')
-        assert 'Error connecting to server. Check your URL/Proxy/Certificate settings' \
-               in return_error_mock.call_args[0][0]
+    with pytest.raises(
+        AutofocusV2.DemistoException,
+        match='Error connecting to server. Check your URL/Proxy/Certificate settings'
+    ):
+        AutofocusV2.search_indicator(autofocusv2_client, 'ip', '8.8.8.8')
 
 
-def test_tag_details(mocker):
+def test_tag_details(mocker, autofocusv2_client):
     """
 
      Given:
@@ -267,7 +294,7 @@ def test_tag_details(mocker):
     mocker.patch.object(demisto, 'args', return_value={'tag_name': 'Anon015b57.MYNEWTAGNAME'})
     mocker.patch.object(AutofocusV2, 'autofocus_tag_details', return_value=TAGS_DETAILS_RES)
     mocker.patch.object(demisto, 'results')
-    AutofocusV2.tag_details_command()
+    AutofocusV2.tag_details_command(autofocusv2_client)
     assert demisto.results.call_args[0][0] == util_load_json('test_data/teg_details_command_outputs.json')
 
 
@@ -287,7 +314,7 @@ def test_get_tags_for_generic_context():
     assert AutofocusV2.get_tags_for_generic_context(TAGS_FROM_FILE_RES) == TAGS_FOR_GENERIC_CONTEXT_OUTPUT
 
 
-def test_reliability(mocker):
+def test_reliability(mocker, autofocusv2_client):
     import AutofocusV2
     import CommonServerPython
     from CommonServerPython import DBotScoreReliability
@@ -299,7 +326,7 @@ def test_reliability(mocker):
     mocker.patch.object(AutofocusV2, 'search_indicator', return_value=mock_data)
     mocked_dbot = mocker.patch.object(CommonServerPython.Common, 'DBotScore')
     mocker.patch.object(CommonServerPython.Common, 'IP')
-    AutofocusV2.search_ip_command('1.1.1.1', DBotScoreReliability.B, False)
+    AutofocusV2.search_ip_command(autofocusv2_client, '1.1.1.1', DBotScoreReliability.B, False)
     assert mocked_dbot.call_args[1].get('reliability') == 'B - Usually reliable'
 
 
@@ -385,7 +412,7 @@ def test_create_relationships_list():
          - The relationships that are created contain the expected types and names.
      """
     from AutofocusV2 import create_relationships_list
-    expected_entity_b_types = ['STIX Threat Actor', 'Campaign', 'STIX Malware', 'STIX Attack Pattern']
+    expected_entity_b_types = ['Threat Actor', 'Campaign', 'Malware', 'Attack Pattern']
     expected_name = 'indicator-of'
     expected_name_entity_b = ['Upatre1', 'Upatre2', 'Upatre3', 'Upatre5']
 
@@ -393,8 +420,370 @@ def test_create_relationships_list():
                                               tags=RAW_TAGS, reliability='B - Usually reliable')
     relation_entry = [relation.to_entry() for relation in relationships]
 
-    for relation, i in zip(relation_entry, range(len(relation_entry))):
+    for i, relation in enumerate(relation_entry):
         assert relation.get('name') == expected_name
         assert relation.get('entityA') == 'Test'
         assert relation.get('entityB') == expected_name_entity_b[i]
         assert relation.get('entityBType') == expected_entity_b_types[i]
+
+
+URLS_LIST = [
+    ("www.München.com", "www.Mxn--tdanchen.com"),
+    ("www.example.com", "www.example.com"),
+    ("www.Mününchen.com", "www.Mxn--tdanxn--tdanchen.com"),
+    ("www.Müünchen.com", "www.Mxn--tdaanchen.com"),
+    ("www.MükÖnchen.com", "www.Mxn--tdakxn--ndanchen.com"),
+    ("www.こんにちは.com", 'www.xn--28j2a3ar1p.com'),
+    ("https://paloaltonetworks–test.com", "https://paloaltonetworksxn--7ugtest.com")    # noqa: RUF001
+]
+
+
+@pytest.mark.parametrize("url, result", URLS_LIST)
+def test_convert_url_to_ascii_character(url, result):
+    from AutofocusV2 import convert_url_to_ascii_character
+    converted = convert_url_to_ascii_character(url)
+    assert converted == result
+
+
+def test_search_url_command(mocker, autofocusv2_client):
+    from AutofocusV2 import search_url_command
+
+    mock_response = {
+        'indicator': {
+            'indicatorValue': 'www.こんにちは.com',
+            'indicatorType': 'URL',
+            'latestPanVerdicts': {'PAN_DB': 'BENIGN'}
+        },
+        'tags': []
+    }
+
+    status_code = 200
+    response = ResMocker(mock_response, status_code)
+    mocker.patch.object(autofocusv2_client, 'http_request', return_value=response)
+
+    result = search_url_command(autofocusv2_client, "www.こんにちは.com", 'B - Usually reliable', True)
+
+    assert result[0].indicator.url == "www.こんにちは.com"
+    assert result[0].raw_response["indicator"]["indicatorValue"] == mock_response["indicator"]["indicatorValue"]
+
+
+@pytest.mark.parametrize('separator, expected_value', [('|', ["https:firstpart,connectedpart"]),
+                                                       (None, ["https:firstpart", "connectedpart"])])
+def test_search_url_custom_separator(mocker, autofocusv2_client, separator, expected_value):
+    from AutofocusV2 import search_url_command
+    from CommonServerPython import remove_empty_elements
+
+    # Mock response
+    mock_response = {
+        'indicator': {
+        },
+        'tags': []
+    }
+    status_code = 200
+    response = ResMocker(mock_response, status_code)
+    mocker.patch.object(autofocusv2_client, 'http_request', return_value=response)
+
+    # Mock argToList
+    return_value = []
+
+    def side_effect_function(*args, **kwargs):
+        result = argToList(*args, **kwargs)  # Call the original function
+        return_value.append(result)
+        return result
+
+    mocker.patch('AutofocusV2.argToList', side_effect=side_effect_function)
+
+    # Mock args
+    args = {'url': 'https:firstpart,connectedpart',
+            'reliability': 'B - Usually reliable',
+            'create_relationships': False,
+            'separator': separator
+            }
+    args: dict = remove_empty_elements(args)    # type: ignore
+    search_url_command(autofocusv2_client, **args)
+    assert return_value[0] == expected_value
+
+
+def test_search_url_command_args(mocker, autofocusv2_client):
+    from AutofocusV2 import search_url_command
+
+    mock_response = {
+        'indicator': {
+            'indicatorValue': 'www.test.com',
+            'indicatorType': 'URL',
+            'latestPanVerdicts': {'PAN_DB': 'BENIGN'}
+        },
+        'tags': []
+    }
+
+    status_code = 200
+
+    expected_headers = {'Content-Type': 'application/json', 'apiKey': '1234'}
+    expected_params = {'indicatorType': 'url', 'indicatorValue': 'www.test.com', 'includeTags': 'true'}
+    expected_ok_codes = (200, 404, 409, 503)
+
+    response = ResMocker(mock_response, status_code)
+    http_request = mocker.patch.object(autofocusv2_client, '_http_request', return_value=response)
+
+    search_url_command(autofocusv2_client, "www.test.com", 'B - Usually reliable', True)
+
+    http_request.assert_called_with(method='GET',
+                                    url_suffix='/tic',
+                                    data=json.dumps({}),
+                                    headers=expected_headers,
+                                    params=expected_params,
+                                    retries=3,
+                                    resp_type='response',
+                                    ok_codes=expected_ok_codes)
+
+
+TEST_DATA = [
+    (
+        'autofocus_md5_response',
+        '123456789012345678901234567890ab',
+        ['123456789012345678901234567890ab', None, None]
+    ),
+    (
+        'autofocus_sha1_response',
+        '1234567890123456789012345678901234567890',
+        [None, '1234567890123456789012345678901234567890', None]
+    ),
+    (
+        'autofocus_sha256_response',
+        '123456789012345678901234567890123456789012345678901234567890abcd',
+        [None, None, '123456789012345678901234567890123456789012345678901234567890abcd']
+    ),
+    (
+        'autofocus_sha256_response_wf_sample_has_null',
+        '6833e945695d2609de175c5f67693594748229962759f366b822be5fd568f292',
+        [None, None, '6833e945695d2609de175c5f67693594748229962759f366b822be5fd568f292']
+    ),
+]
+
+
+@pytest.mark.parametrize('mock_response, file_hash, expected_results', TEST_DATA)
+def test_search_file_command(mocker, mock_response, file_hash, expected_results, autofocusv2_client):
+    """
+     Given:
+         - A file hash (md5, sha1, sha256).
+     When:
+         - When running search_file_command.
+     Then:
+         - Ensure the indicator contains the correct hash type.
+     """
+
+    from AutofocusV2 import search_file_command
+
+    with open(f'test_data/{mock_response}.json') as f:
+        response_json = json.load(f)
+
+    status_code = 200
+    response = ResMocker(response_json, status_code)
+    mocker.patch.object(autofocusv2_client, 'http_request', return_value=response)
+
+    results = search_file_command(autofocusv2_client, file_hash, None, False)
+
+    assert results[0].indicator.md5 == expected_results[0]
+    assert results[0].indicator.sha1 == expected_results[1]
+    assert results[0].indicator.sha256 == expected_results[2]
+    assert results[0].outputs.get('IndicatorValue') in expected_results
+
+
+@pytest.mark.parametrize(argnames='mock_response, domain',
+                         argvalues=[('autofocus_domain_response', 'mail16.amadeus.net')])
+def test_search_domain_command(mock_response, domain, mocker, autofocusv2_client):
+    """
+     Given:
+         - A domain.
+     When:
+         - When running search_domain_command.
+     Then:
+         - Ensure the indicator contains the correct domain.
+     """
+
+    from AutofocusV2 import search_domain_command
+
+    with open(f'test_data/{mock_response}.json') as f:
+        response_json = json.load(f)
+
+    status_code = 200
+    response = ResMocker(response_json, status_code)
+    mocker.patch.object(autofocusv2_client, 'http_request', return_value=response)
+
+    results = search_domain_command(autofocusv2_client, domain, None, False)
+
+    assert results[0].indicator.domain == domain
+
+
+@pytest.mark.parametrize(argnames='ioc_type, ioc_val',
+                         argvalues=[('domain', 'test_domain'),
+                                    ('ipv4_address', 'test_ipv4_address'),
+                                    ('filehash', '123456789012345678901234567890ab'),
+                                    ])
+def test_search_indicator_command__no_indicator(mocker, autofocusv2_client, ioc_type, ioc_val):
+    """
+    Given:
+        - Indicator not exist in AutoFocus
+
+    When:
+        - Run the reputation command
+
+    Then:
+        - Validate the expected result is return with detailed information
+    """
+
+    # prepare
+    from AutofocusV2 import search_ip_command, search_domain_command, search_file_command
+    ioc_type_to_command = {
+        'domain': search_domain_command,
+        'ipv4_address': search_ip_command,
+        'filehash': search_file_command,
+    }
+    no_indicator_response = {
+        'tags': []
+    }
+
+    status_code = 200
+    response = ResMocker(no_indicator_response, status_code)
+    mocker.patch.object(autofocusv2_client, 'http_request', return_value=response)
+
+    # run
+    result = ioc_type_to_command[ioc_type](autofocusv2_client, ioc_val, 'B - Usually reliable', True)
+
+    # validate
+    assert f'{ioc_val} was not found in AutoFocus' in result[0].readable_output
+
+
+def test_search_url_command__no_indicator(mocker, autofocusv2_client):
+    """
+    Given:
+        - url not exist in AutoFocus
+
+    When:
+        - Run the reputation command
+
+    Then:
+        - Validate the expected result is return with detailed information
+    """
+
+    # prepare
+    from AutofocusV2 import search_url_command
+    no_indicator_response = {
+        'tags': []
+    }
+    status_code = 200
+    response = ResMocker(no_indicator_response, status_code)
+    mocker.patch.object(autofocusv2_client, 'http_request', return_value=response)
+
+    # run
+    result = search_url_command(autofocusv2_client, 'test_url', 'B - Usually reliable', True)
+
+    # validate
+    assert 'test_url was not found in AutoFocus' in result[0].readable_output
+
+
+@pytest.mark.parametrize('range_num,res_count', [(98, 1), (250, 3)])
+def test_search_session(mocker, autofocusv2_client, range_num, res_count):
+    """
+    Given:
+        - Large amount of IPs to search sessions on.
+
+    When:
+        - Running the search_session.
+
+    Then:
+        - Validate the search is done for each batch of 100 IPs and the cookies are returned accordingly.
+    """
+
+    from AutofocusV2 import search_sessions
+
+    status_code = 200
+    response = ResMocker({'af_cookie': 'auto-focus-cookie'}, status_code)
+    mocker.patch.object(autofocusv2_client, '_http_request', return_value=response)
+
+    ips = [f'{i}.{i}.{i}.{i}' for i in range(range_num)]
+    res = search_sessions(client=autofocusv2_client, ip=ips)
+
+    assert len(res) == res_count
+    for r in res:
+        assert r.get('AFCookie') == 'auto-focus-cookie'
+
+
+@pytest.mark.parametrize('range_num,res_count', [(98, 1), (250, 3)])
+def test_search_samples(mocker, autofocusv2_client, range_num, res_count):
+    """
+    Given:
+        - Large amount of IPs to search samples on.
+
+    When:
+        - Running the search_samples.
+
+    Then:
+        - Validate the search is done for each batch of 100 IPs and the cookies are returned accordingly.
+    """
+
+    from AutofocusV2 import search_samples
+
+    status_code = 200
+    response = ResMocker({'af_cookie': 'auto-focus-cookie'}, status_code)
+    mocker.patch.object(autofocusv2_client, '_http_request', return_value=response)
+
+    ips = [f'{i}.{i}.{i}.{i}' for i in range(range_num)]
+    res = search_samples(client=autofocusv2_client, ip=ips)
+
+    assert len(res) == res_count
+    for r in res:
+        assert r.get('AFCookie') == 'auto-focus-cookie'
+
+
+def test_metrics(mocker: MockerFixture, autofocusv2_client):
+    import AutofocusV2
+
+    bucket_info = {
+        'bucket_info': {
+            "minute_points": 200,
+            "daily_points": 30000,
+            "minute_points_remaining": 0,
+            "daily_points_remaining": 4578,
+            "minute_bucket_start": "2015-09-02 10:55:33",
+            "daily_bucket_start": "2015-09-01 17:08:40",
+            "wait_in_seconds": 20.5,
+        }
+    }
+
+    mocker.patch.object(demisto, 'command', return_value='autofocus-top-tags-search')
+    mocker.patch.object(demisto, 'args', return_value={'unit42': 'True', 'class': 'Actor', 'retry_on_rate_limit': 'true'})
+    mocker.patch.object(demisto, 'demistoVersion', return_value={'version': '6.9.0', 'buildNumber': '12345'})
+    response = ResMocker(bucket_info, 503)
+    mocker.patch.object(autofocusv2_client, '_http_request', return_value=response)
+    mocker.patch('AutofocusV2.Client', return_value=autofocusv2_client)
+
+    return_results_mock = mocker.patch('AutofocusV2.return_results')
+    AutofocusV2.EXECUTION_METRICS = ExecutionMetrics()
+
+    AutofocusV2.main()
+
+    autofocusv2_client._http_request.assert_called_with(
+        method='POST',
+        headers={'Content-Type': 'application/json'},
+        data=json.dumps({
+            "query": {"operator": "all", "children": [{"field": "sample.tag_class", "operator": "is", "value": "actor"}]},
+            "scope": None, "tagScopes": ["unit42"], "apiKey": "1234"
+        }),
+        url_suffix='/top-tags/search/',
+        ok_codes=(200, 409, 503),
+        resp_type='response',
+        retries=3,
+        params={}
+    )
+    assert return_results_mock.call_args_list[0][0][0].readable_output == 'API Rate limit exceeded, rerunning command.'
+    assert return_results_mock.call_args_list[0][0][0].scheduled_command._args == {
+        'unit42': 'True', 'class': 'Actor', 'retry_on_rate_limit': 'false',
+    }
+    assert return_results_mock.call_args_list[0][0][0].scheduled_command._next_run == '40'
+    assert return_results_mock.call_args_list[1][0][0].execution_metrics == [{'APICallsCount': 1, 'Type': 'QuotaError'}]
+    assert return_results_mock.call_args_list[2][0][0].readable_output == '''### Autofocus API Points
+|Daily allotment started|Daily points used|Minute allotment started|Minute points used|
+|---|---|---|---|
+| 2015-09-01 17:08:40 | 4578/30000 | 2015-09-02 10:55:33 | 0/200 |
+'''

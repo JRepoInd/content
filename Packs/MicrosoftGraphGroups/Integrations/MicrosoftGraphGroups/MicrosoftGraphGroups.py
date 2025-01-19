@@ -1,7 +1,7 @@
-from typing import Dict, Tuple, Optional, Any
 import demistomock as demisto
 import urllib3
 from CommonServerPython import *
+from MicrosoftApiModule import *  # noqa: E402
 
 # Disable insecure warnings
 
@@ -26,7 +26,7 @@ def camel_case_to_readable(text: str) -> str:
     return ''.join(' ' + char if char.isupper() else char.strip() for char in text).strip().title()
 
 
-def parse_outputs(groups_data: Dict[str, str]) -> Tuple[dict, dict]:
+def parse_outputs(groups_data: dict[str, str]) -> tuple[dict, dict]:
     """Parse group data as received from Microsoft Graph API into Demisto's conventions
 
     Args:
@@ -66,9 +66,23 @@ class MsGraphClient:
       Microsoft Graph Mail Client enables authorized access to a user's Office 365 mail data in a personal account.
       """
 
-    def __init__(self, tenant_id, auth_id, enc_key, app_name, base_url, verify, proxy, self_deployed):
+    def __init__(self, tenant_id, auth_id, enc_key, app_name, base_url, verify, proxy,
+                 self_deployed, handle_error, redirect_uri=None, auth_code=None,
+                 certificate_thumbprint: str | None = None, private_key: str | None = None,
+                 managed_identities_client_id: str | None = None):
+        grant_type = AUTHORIZATION_CODE if auth_code and redirect_uri else CLIENT_CREDENTIALS
+        resource = None if self_deployed else ''
         self.ms_client = MicrosoftClient(tenant_id=tenant_id, auth_id=auth_id, enc_key=enc_key, app_name=app_name,
-                                         base_url=base_url, verify=verify, proxy=proxy, self_deployed=self_deployed)
+                                         base_url=base_url, verify=verify, proxy=proxy, self_deployed=self_deployed,
+                                         redirect_uri=redirect_uri, auth_code=auth_code, grant_type=grant_type,
+                                         resource=resource, certificate_thumbprint=certificate_thumbprint,
+                                         private_key=private_key,
+                                         managed_identities_client_id=managed_identities_client_id,
+                                         managed_identities_resource_uri=Resources.graph,
+                                         command_prefix="msgraph-groups",
+                                         )
+
+        self.handle_error = handle_error
 
     def test_function(self):
         """Performs basic GET request to check if the API is reachable and authentication is successful.
@@ -104,7 +118,7 @@ class MsGraphClient:
             url_suffix='groups',
             params=params)
 
-    def get_group(self, group_id: str) -> Dict:
+    def get_group(self, group_id: str) -> dict:
         """Returns a single group by sending a GET request.
 
         Args:
@@ -116,7 +130,7 @@ class MsGraphClient:
         group = self.ms_client.http_request(method='GET', url_suffix=f'groups/{group_id}')
         return group
 
-    def create_group(self, properties: Dict[str, Optional[Any]]) -> Dict:
+    def create_group(self, properties: dict[str, Any | None]) -> dict:
         """Create a single group by sending a POST request.
 
         Args:
@@ -151,18 +165,26 @@ class MsGraphClient:
         Returns:
             Response from API.
         """
+        headers = {}
+
         if next_link:  # pagination
             return self.ms_client.http_request(method='GET', full_url=next_link)
         params = {'$top': top}
+
         if filter_:
             params['$filter'] = filter_  # type: ignore
+
+        if count := demisto.args().get('count'):
+            params['$count'] = count
+            headers['ConsistencyLevel'] = 'eventual'
 
         return self.ms_client.http_request(
             method='GET',
             url_suffix=f'groups/{group_id}/members',
-            params=params)
+            params=params,
+            headers=headers)
 
-    def add_member(self, group_id: str, properties: Dict[str, str]):
+    def add_member(self, group_id: str, properties: dict[str, str]):
         """Add a single member to a group by sending a POST request.
         Args:
             group_id: the group id to add the member to.
@@ -191,17 +213,33 @@ class MsGraphClient:
             url_suffix=f'groups/{group_id}/members/{user_id}/$ref', resp_type="text")
 
 
-def test_function_command(client: MsGraphClient, args: Dict):
+def suppress_errors_with_404_code(func):
+    def wrapper(client: MsGraphClient, args: dict):
+        try:
+            return func(client, args)
+        except NotFoundError:
+            if client.handle_error:
+                human_readable = f'#### Group id -> {args.get("group_id")} does not exist'
+                return human_readable, None, None
+            raise
+    return wrapper
+
+
+def test_function_command(client: MsGraphClient, args: dict) -> tuple[str, dict, dict]:
     """Performs a basic GET request to check if the API is reachable and authentication is successful.
 
     Args:
         client: Client object with request
         args: Usually demisto.args()
+
+    Returns:
+        Tuple.
     """
     client.test_function()
+    return 'ok', {}, {}
 
 
-def list_groups_command(client: MsGraphClient, args: Dict) -> Tuple[str, Dict, Dict]:
+def list_groups_command(client: MsGraphClient, args: dict) -> tuple[str, dict, dict]:
     """Lists all groups and return outputs in Demisto's format.
 
     Args:
@@ -224,9 +262,10 @@ def list_groups_command(client: MsGraphClient, args: Dict) -> Tuple[str, Dict, D
         next_link_response = groups['@odata.nextLink']
 
     if next_link_response:
-        entry_context = {f'{INTEGRATION_CONTEXT_NAME}(val.ID === obj.ID).NextLink': next_link_response,
+        entry_context = {f'{INTEGRATION_CONTEXT_NAME}NextLink': {'GroupsNextLink': next_link_response},
                          f'{INTEGRATION_CONTEXT_NAME}(val.ID === obj.ID)': groups_outputs}
-        title = 'Groups (Note that there are more results. Please use the next_link argument to see them.):'
+        title = 'Groups (Note that there are more results. Please use the next_link argument to see them. The value ' \
+                'can be found in the context under MSGraphGroupsNextLink.GroupsNextLink): '
     else:
         entry_context = {f'{INTEGRATION_CONTEXT_NAME}(val.ID === obj.ID)': groups_outputs}
         title = 'Groups:'
@@ -238,7 +277,8 @@ def list_groups_command(client: MsGraphClient, args: Dict) -> Tuple[str, Dict, D
     return human_readable, entry_context, groups
 
 
-def get_group_command(client: MsGraphClient, args: Dict) -> Tuple[str, Dict, Dict]:
+@suppress_errors_with_404_code
+def get_group_command(client: MsGraphClient, args: dict) -> tuple[str, dict, dict]:
     """Get a group by group id and return outputs in Demisto's format.
 
     Args:
@@ -260,7 +300,7 @@ def get_group_command(client: MsGraphClient, args: Dict) -> Tuple[str, Dict, Dic
     return human_readable, entry_context, group
 
 
-def create_group_command(client: MsGraphClient, args: Dict) -> Tuple[str, Dict, Dict]:
+def create_group_command(client: MsGraphClient, args: dict) -> tuple[str, dict, dict]:
     """Create a group and return outputs in Demisto's format.
 
     Args:
@@ -291,7 +331,8 @@ def create_group_command(client: MsGraphClient, args: Dict) -> Tuple[str, Dict, 
     return human_readable, entry_context, group
 
 
-def delete_group_command(client: MsGraphClient, args: Dict) -> Tuple[str, Dict, Dict]:
+@suppress_errors_with_404_code
+def delete_group_command(client: MsGraphClient, args: dict) -> tuple[str, dict, dict]:
     """Delete a group by group id and return outputs in Demisto's format
 
     Args:
@@ -317,7 +358,8 @@ def delete_group_command(client: MsGraphClient, args: Dict) -> Tuple[str, Dict, 
     return human_readable, entry_context, NO_OUTPUTS
 
 
-def list_members_command(client: MsGraphClient, args: Dict) -> Tuple[str, Dict, Dict]:
+@suppress_errors_with_404_code
+def list_members_command(client: MsGraphClient, args: dict) -> tuple[str, dict, dict]:
     """List a group members by group id. return outputs in Demisto's format.
 
     Args:
@@ -341,16 +383,19 @@ def list_members_command(client: MsGraphClient, args: Dict) -> Tuple[str, Dict, 
 
     # get the group data from the context
     group_data = demisto.dt(demisto.context(), f'{INTEGRATION_CONTEXT_NAME}(val.ID === "{group_id}")')
+    if not group_data:
+        return_error('Could not find group data in the context, please run "!msgraph-groups-get-group" to retrieve group data.')
     if isinstance(group_data, list):
         group_data = group_data[0]
 
     if '@odata.nextLink' in members:
         next_link_response = members['@odata.nextLink']
         group_data['Members'] = members_outputs  # add a field with the members to the group
-        group_data['Members']['NextLink'] = next_link_response
+        group_data['MembersNextLink'] = next_link_response
         entry_context = {f'{INTEGRATION_CONTEXT_NAME}(val.ID === obj.ID)': group_data}
         title = f'Group {group_id} members ' \
-                f'(Note that there are more results. Please use the next_link argument to see them.):'
+                f'(Note that there are more results. Please use the next_link argument to see them. The value can be ' \
+                f'found in the context under {INTEGRATION_CONTEXT_NAME}.MembersNextLink): '
     else:
         group_data['Members'] = members_outputs  # add a field with the members to the group
         entry_context = {f'{INTEGRATION_CONTEXT_NAME}(val.ID === obj.ID)': group_data}
@@ -363,7 +408,8 @@ def list_members_command(client: MsGraphClient, args: Dict) -> Tuple[str, Dict, 
     return human_readable, entry_context, members
 
 
-def add_member_command(client: MsGraphClient, args: Dict) -> Tuple[str, Dict, Dict]:
+@suppress_errors_with_404_code
+def add_member_command(client: MsGraphClient, args: dict) -> tuple[str, dict, dict]:
     """Add a member to a group by group id and user id. return outputs in Demisto's format.
 
     Args:
@@ -383,7 +429,8 @@ def add_member_command(client: MsGraphClient, args: Dict) -> Tuple[str, Dict, Di
     return human_readable, NO_OUTPUTS, NO_OUTPUTS
 
 
-def remove_member_command(client: MsGraphClient, args: Dict) -> Tuple[str, Dict, Dict]:
+@suppress_errors_with_404_code
+def remove_member_command(client: MsGraphClient, args: dict) -> tuple[str, dict, dict]:
     """Remove a member from a group by group id and user id. return outputs in Demisto's format.
 
     Args:
@@ -407,12 +454,33 @@ def main():
     """
     params: dict = demisto.params()
     base_url = params.get('url', '').rstrip('/') + '/v1.0/'
-    tenant = params.get('tenant_id')
-    auth_and_token_url = params.get('auth_id')
-    enc_key = params.get('enc_key')
+    tenant = params.get('creds_tenant_id', {}).get('password', '') or params.get('tenant_id') or params.get('_tenant_id')
+    auth_and_token_url = params.get('creds_auth_id', {}).get('password', '') or params.get('auth_id') or params.get('_auth_id')
+    enc_key = params.get('enc_key') or params.get('credentials', {}).get('password')
     verify = not params.get('insecure', False)
+    redirect_uri = params.get('redirect_uri', '')
+    auth_code = params.get('creds_auth_code', {}).get('password', '') or params.get('auth_code', '')
     proxy = params.get('proxy')
-    self_deployed: bool = params.get('self_deployed', False)
+    handle_error: bool = argToBoolean(params.get('handle_error', 'true'))
+    certificate_thumbprint = params.get('credentials_certificate_thumbprint', {}).get(
+        'password', '') or params.get('certificate_thumbprint')
+    private_key = params.get('private_key')
+    managed_identities_client_id = get_azure_managed_identities_client_id(params)
+    self_deployed: bool = params.get('self_deployed', False) or managed_identities_client_id is not None
+
+    if not managed_identities_client_id:
+        if not self_deployed and not enc_key:
+            raise DemistoException('Key must be provided. For further information see '
+                                   'https://xsoar.pan.dev/docs/reference/articles/microsoft-integrations---authentication')
+        elif self_deployed and auth_code and not redirect_uri:
+            raise DemistoException('Please provide both Application redirect URI and Authorization code '
+                                   'for Authorization Code flow, or None for the Client Credentials flow')
+        elif not enc_key and not (certificate_thumbprint and private_key):
+            raise DemistoException('Key or Certificate Thumbprint and Private Key must be provided.')
+        if not auth_and_token_url:
+            raise Exception('Authentication ID must be provided.')
+        if not tenant:
+            raise Exception('Token must be provided.')
 
     commands = {
         'test-module': test_function_command,
@@ -428,18 +496,24 @@ def main():
     LOG(f'Command being called is {command}')
 
     try:
-        client = MsGraphClient(base_url=base_url, tenant_id=tenant, auth_id=auth_and_token_url, enc_key=enc_key,
-                               app_name=APP_NAME, verify=verify, proxy=proxy, self_deployed=self_deployed)
-        # Run the command
-        human_readable, entry_context, raw_response = commands[command](client, demisto.args())
-        # create a war room entry
-        return_outputs(readable_output=human_readable, outputs=entry_context, raw_response=raw_response)
+        client: MsGraphClient = MsGraphClient(tenant_id=tenant, auth_id=auth_and_token_url, enc_key=enc_key,
+                                              app_name=APP_NAME, base_url=base_url, verify=verify, proxy=proxy,
+                                              self_deployed=self_deployed, redirect_uri=redirect_uri,
+                                              auth_code=auth_code, handle_error=handle_error,
+                                              certificate_thumbprint=certificate_thumbprint,
+                                              private_key=private_key,
+                                              managed_identities_client_id=managed_identities_client_id)
+        if command == 'msgraph-groups-generate-login-url':
+            return_results(generate_login_url(client.ms_client))
+        elif command == 'msgraph-groups-auth-reset':
+            return_results(reset_auth())
+        else:
+            human_readable, entry_context, raw_response = commands[command](client, demisto.args())  # type: ignore
+            return_outputs(readable_output=human_readable, outputs=entry_context, raw_response=raw_response)
 
     except Exception as err:
         return_error(str(err))
 
-
-from MicrosoftApiModule import *  # noqa: E402
 
 if __name__ in ['__main__', 'builtin', 'builtins']:
     main()

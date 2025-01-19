@@ -1,5 +1,5 @@
 <!-- HTML_DOC -->
-<p>Use the Microsoft Graph Calendar integration to create, and manage different calendars and events according to your requirements.</p>
+<p>Use the O365 Outlook Calendar integration to create, and manage different calendars and events according to your requirements.</p>
 
 <h2>Authentication</h2>
 For more details about the authentication used in this integration, see <a href="https://xsoar.pan.dev/docs/reference/articles/microsoft-integrations---authentication">Microsoft Integrations - Authentication</a>.
@@ -14,18 +14,20 @@ For more details about the authentication used in this integration, see <a href=
 <li>Calendars.ReadWrite - Delegated</li>
 <li>Calendars.ReadWrite - Application</li>
 </ul>
-<h2>Configure Microsoft Graph Calendar on Cortex XSOAR</h2>
+<h2>Configure O365 Outlook Calendar on Cortex XSOAR</h2>
 <ol>
 <li>Navigate to <strong>Settings</strong> &gt; <strong>Integrations</strong>  &gt; <strong>Servers &amp; Services</strong>.</li>
-<li>Search for Microsoft Graph Calendar.</li>
+<li>Search for O365 Outlook Calendar.</li>
 <li>Click <strong>Add instance</strong> to create and configure a new integration instance.
 <ul>
 <li>
 <strong>Name</strong>: a textual name for the integration instance.</li>
 <li><strong>Server URL</strong></li>
-<li><strong>ID (<a href="#h_d0642479-95d1-4f92-b2da-f6c16c3e48b2" target="_self">from the admin consent - see Detailed Instructions</a>)</strong></li>
-<li><strong>Token (<a href="#h_d0642479-95d1-4f92-b2da-f6c16c3e48b2" target="_self">from the admin consent - see Detailed Instructions</a>)</strong></li>
-<li><strong>Key (<a href="#h_d0642479-95d1-4f92-b2da-f6c16c3e48b2" target="_self">from the admin consent - see Detailed Instructions</a>)</strong></li>
+<li><strong>ID for more details see cortex xsoar platform when configuring the integration instance</strong></li>
+<li><strong>Token for more details see cortex xsoar platform when configuring the integration instance</strong></li>
+<li><strong>Key for more details see cortex xsoar platform when configuring the integration instance</strong></li>
+<li><strong>Certificate Thumbprint</strong></li>
+<li><strong>Private Key</strong></li>
 <li><strong>Default user</strong></li>
 <li><strong>Trust any certificate (not secure)</strong></li>
 <li><strong>Use system proxy settings</strong></li>
@@ -207,10 +209,6 @@ For more details about the authentication used in this integration, see <a href=
 </tr>
 </tbody>
 </table>
-<p><!-- remove the following comments to manually add an image: --> <!--
-<a href="insert URL to your image" target="_blank" rel="noopener noreferrer"><img src="insert URL to your image"
- alt="image" width="749" height="412"></a>
- --></p>
 <h3 id="msgraph-calendar-get-calendar">2. Get one user's calendar</h3>
 <hr>
 <p>Returns a specific user's calendar.</p>
@@ -290,10 +288,6 @@ For more details about the authentication used in this integration, see <a href=
 <h5>Command Example</h5>
 <pre>!msgraph-calendar-get-calendar</pre>
 <h5>Human Readable Output</h5>
-<p><!-- remove the following comments to manually add an image: --> <!--
-<a href="insert URL to your image" target="_blank" rel="noopener noreferrer"><img src="insert URL to your image"
- alt="image" width="749" height="412"></a>
- --></p>
 <h3 id="msgraph-calendar-list-events">3. Get a calendar's list of events</h3>
 <hr>
 <p>Returns a list of events from a calendar.</p>
@@ -413,10 +407,6 @@ For more details about the authentication used in this integration, see <a href=
 <h5>Command Example</h5>
 <pre>!msgraph-calendar-list-events</pre>
 <h5>Human Readable Output</h5>
-<p><!-- remove the following comments to manually add an image: --> <!--
-<a href="insert URL to your image" target="_blank" rel="noopener noreferrer"><img src="insert URL to your image"
- alt="image" width="749" height="412"></a>
- --></p>
 <h3 id="msgraph-calendar-get-event">4. Get an event by ID</h3>
 <hr>
 <p>Returns an event based on its ID.</p>
@@ -641,10 +631,6 @@ For more details about the authentication used in this integration, see <a href=
 </tr>
 </tbody>
 </table>
-<p><!-- remove the following comments to manually add an image: --> <!--
-<a href="insert URL to your image" target="_blank" rel="noopener noreferrer"><img src="insert URL to your image"
- alt="image" width="749" height="412"></a>
- --></p>
 <h3 id="msgraph-calendar-create-event">5. Create a new event</h3>
 <hr>
 <p>Creates a new event.</p>
@@ -980,10 +966,6 @@ For more details about the authentication used in this integration, see <a href=
 </tr>
 </tbody>
 </table>
-<p><!-- remove the following comments to manually add an image: --> <!--
-<a href="insert URL to your image" target="_blank" rel="noopener noreferrer"><img src="insert URL to your image"
- alt="image" width="749" height="412"></a>
- --></p>
 <h3 id="msgraph-calendar-update-event">6. Update an existing event</h3>
 <hr>
 <p>Updates an existing event.</p>
@@ -1311,10 +1293,6 @@ For more details about the authentication used in this integration, see <a href=
 </tr>
 </tbody>
 </table>
-<p><!-- remove the following comments to manually add an image: --> <!--
-<a href="insert URL to your image" target="_blank" rel="noopener noreferrer"><img src="insert URL to your image"
- alt="image" width="749" height="412"></a>
- --></p>
 <h3 id="msgraph-calendar-delete-event">7. Delete an existing event</h3>
 <hr>
 <p>Deletes an existing event.</p>
@@ -1578,7 +1556,18 @@ For more details about the authentication used in this integration, see <a href=
 </pre>
 <h5>Human Readable Output</h5>
 <p>Event was deleted successfully.</p>
-<p><!-- remove the following comments to manually add an image: --> <!--
-<a href="insert URL to your image" target="_blank" rel="noopener noreferrer"><img src="insert URL to your image"
- alt="image" width="749" height="412"></a>
- --></p>
+
+<h3 id="msgraph-calendar-auth-reset">8. msgraph-calendar-auth-reset</h3>
+<hr>
+<p>Run this command if for some reason you need to rerun the authentication process.</p>
+<h5>Base Command</h5>
+<p>
+  <code>msgraph-calendar-auth-reset</code>
+</p>
+
+<h5>Input</h5>
+
+<p>There are no input arguments for this command.&nbsp;</p>
+<h5>Context Output</h5>
+There are no context output for this command.
+<p>&nbsp;</p>
